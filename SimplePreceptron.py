@@ -12,26 +12,27 @@ class SimplePerceptron:
             raise ValueError();
 
         X = np.hstack((np.ones((dataSet.shape[0], 1)), dataSet[:, :-1]));
-        y = dataSet[:, -1].T * self.__alpha;
-        n = np.mat(np.zeros((1, dataSet.shape[0])));
+        y = dataSet[:, -1] * self.__alpha;
+        n = np.mat(np.zeros((dataSet.shape[0], 1)));
         gram = X * X.T;
 
         count = range(0, X.shape[0]);
 
         while True:
             hasError = False;
+            a = np.multiply(n, y);
 
             for i in count:
-                if y[0, i] * np.multiply(np.multiply(gram[i, :], y), n).sum(axis = 1)[0, 0] <= 0:
+                if y[i, 0] * (gram[i, :] * a) <= 0:
                     hasError = True;
                     break;
 
             if hasError:
-                n[0, i] += 1;
+                n[i, 0] += 1;
             else:
                 break;
 
-        self.__theta = np.multiply(np.multiply(X, y.T), n.T).sum(axis = 0).T;
+        self.__theta = np.multiply(X, a).sum(axis = 0).T;
 
 
     def predict(self, dataSet):
