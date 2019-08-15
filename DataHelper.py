@@ -37,13 +37,20 @@ def performNormalize(X, mu, sigma):
 
 
 # for common dataset
-def calcDistance(X, v, p = 2):
+def calcMinkowskiDistance(X, v, p = 2):
     return np.power(np.power(np.abs(X - v), p).sum(1), 1/p);
+
+
+# only for normal distribution
+def calcMahalanobisDistance(X, v, inverseSigma):
+    Y = X - v;
+
+    return np.sqrt(np.multiply(Y * inverseSigma, Y).sum(1));
 
 
 # only for binary dataset
 def calcJaccardCoefficient(X, v):
-    return (X & v).sum(axis = 1) / (X | v).sum(axis = 1);
+    return (X & v).sum(1) / (X | v).sum(1);
 
 
 # for sparse dataset

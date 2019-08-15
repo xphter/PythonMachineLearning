@@ -14,7 +14,7 @@ class KNN:
             featureCount = dataSet.shape[1];
 
         if distanceCalculator is None:
-            distanceCalculator = (lambda X, v: DataHelper.calcDistance(X, v));
+            distanceCalculator = (lambda X, v: DataHelper.calcMinkowskiDistance(X, v));
 
         if isNormalizeFeatures:
             if featureCount < dataSet.shape[1]:
