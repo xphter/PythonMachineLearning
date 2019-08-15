@@ -100,7 +100,7 @@ class NaiveBayes:
             else:
                 allProbability = continuousProbability;
 
-            result[:, c] = allProbability.sum(axis = 1);
+            result[:, c] = allProbability.sum(1);
 
         result = result + self.__classProbability;
 
