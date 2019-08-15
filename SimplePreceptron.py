@@ -32,7 +32,7 @@ class SimplePerceptron:
             else:
                 break;
 
-        self.__theta = np.multiply(X, a).sum(axis = 0).T;
+        self.__theta = np.multiply(X, a).sum(0).T;
 
 
     def predict(self, dataSet):
