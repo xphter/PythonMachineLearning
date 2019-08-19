@@ -41,11 +41,17 @@ def calcMinkowskiDistance(X, v, p = 2):
     return np.power(np.power(np.abs(X - v), p).sum(1), 1/p);
 
 
+def calcEuclideanDistance(X, v):
+    Y = X - v;
+
+    return np.power(Y, 2).sum(1);
+
+
 # only for normal distribution
 def calcMahalanobisDistance(X, v, inverseSigma):
     Y = X - v;
 
-    return np.sqrt(np.multiply(Y * inverseSigma, Y).sum(1));
+    return np.multiply(Y * inverseSigma, Y).sum(1);
 
 
 # only for binary dataset
