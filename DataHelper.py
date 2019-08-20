@@ -88,6 +88,20 @@ def getExistingMedian(X, floor = False):
     return np.mat(medianList);
 
 
+def choiceProportional(proportions):
+    total, index = 0, -1;
+    r = proportions.sum() * np.random.random();
+
+    if r == 0:
+        return 0;
+
+    while total < r:
+        index += 1;
+        total += proportions[index];
+
+    return index;
+
+
 def holdOutSampling(X, proportion):
     indices = None;
     trainSet, testSet = [], [];

@@ -10,7 +10,23 @@ class KMeans:
 
 
     def __randomInitialCenter(self, dataSet, k):
-        return dataSet[np.random.randint(0, dataSet.shape[0], k), :];
+        index = np.random.randint(0, dataSet.shape[0], 1);
+        center = dataSet[index, :];
+
+        if k == 1:
+            return center;
+
+        for i in range(1, k):
+            dataSet = np.delete(dataSet, index, 0);
+            index = self.__randomFindCenter(dataSet, center);
+            center = np.vstack((center, dataSet[index, :]));
+
+        return center;
+
+
+    def __randomFindCenter(self, dataSet, center):
+        cluster, distance = self.__findCluster(dataSet, center);
+        return DataHelper.choiceProportional(distance);
 
 
     def __findCluster(self, dataSet, center):
