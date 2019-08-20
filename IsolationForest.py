@@ -94,7 +94,7 @@ class IsolationForest:
         if len(features) == 1:
             return features[0];
 
-        return features[np.random.random_integers(0, len(features) - 1)];
+        return features[np.random.randint(0, len(features))];
 
 
     def __choiceFeatureValue(self, dataSet, featureIndex):
@@ -128,7 +128,7 @@ class IsolationForest:
 
 
     def __createTree(self, dataSet, subSamplingSize, heightLimit):
-        indices = np.random.random_integers(0, dataSet.shape[0] - 1, subSamplingSize);
+        indices = np.random.randint(0, dataSet.shape[0], subSamplingSize);
         subSet = dataSet[indices, :];
 
         return self.__createNode(subSet, list(range(0, dataSet.shape[1])), 0, heightLimit);

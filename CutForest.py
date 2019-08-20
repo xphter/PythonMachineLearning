@@ -141,7 +141,7 @@ class CutForest:
 
 
     def __createTree(self, dataSet, subSamplingSize):
-        indices = np.random.random_integers(0, dataSet.shape[0] - 1, subSamplingSize);
+        indices = np.random.randint(0, dataSet.shape[0], subSamplingSize);
         subSet = dataSet[indices, :];
 
         return self.__createNode(subSet, list(range(0, dataSet.shape[1])));

@@ -10,7 +10,7 @@ class KMeans:
 
 
     def __randomInitialCenter(self, dataSet, k):
-        return dataSet[np.random.random_integers(0, dataSet.shape[0] - 1, k), :];
+        return dataSet[np.random.randint(0, dataSet.shape[0], k), :];
 
 
     def __findCluster(self, dataSet, center):
