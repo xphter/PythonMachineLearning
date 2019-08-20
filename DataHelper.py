@@ -42,7 +42,7 @@ def calcMinkowskiDistance(X, v, p = 2):
 
 
 def calcManhattanDistance(X, v):
-    return np.power(np.abs(X - v), p).sum(1);
+    return np.abs(X - v).sum(1);
 
 
 def calcEuclideanDistance(X, v):
