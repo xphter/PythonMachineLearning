@@ -1,6 +1,10 @@
 import math;
 import numpy as np;
 
+from Event import *;
+from Errors import  *;
+from KMeans import *;
+
 
 class _Node:
     def __init__(self, samplesCount, featureIndex = None, featureValue = None, leftChild = None, rightChild = None):
@@ -35,10 +39,16 @@ class _Node:
 
 
 class IsolationForest:
-    def __init__(self, treeCount = 100, subSamplingSize = 256):
+    def __init__(self, treeCount = 100, subSamplingSize = 256, trainProcessChangedFrequency = 1000):
         self.__treeCount = treeCount;
         self.__subSamplingSize = subSamplingSize;
         self.__treesList = [];
+
+        self.__threshold = None;
+        self.__trainProcessChangedFrequency = trainProcessChangedFrequency;
+
+        self.fillProcessChanged = Event("fillProcessChanged");
+        self.trainProcessChanged = Event("trainProcessChanged");
 
 
     def __calcHarmonicNumber(self, i):
@@ -134,6 +144,14 @@ class IsolationForest:
         return self.__createNode(subSet, list(range(0, dataSet.shape[1])), 0, heightLimit);
 
 
+    def __onFillProcessChanged(self, count):
+        return any(self.fillProcessChanged.trigger(count, self.__treeCount));
+
+
+    def __onTrainProcessChanged(self, count, total):
+        return any(self.trainProcessChanged.trigger(count, total));
+
+
     def fill(self, dataSet, heightLimit = None):
         if dataSet is None or not isinstance(dataSet, np.matrix):
             raise ValueError();
@@ -144,9 +162,39 @@ class IsolationForest:
         for i in range(0, self.__treeCount):
             self.__treesList.append(self.__createTree(dataSet, self.__subSamplingSize, heightLimit));
 
+            if self.__onFillProcessChanged(i + 1):
+                return False;
+
+        return True;
+
 
     def getAnomalyScore(self, instance):
         if instance is None:
             raise ValueError();
 
         return self.__getAnomalyScore(instance, self.__subSamplingSize);
+
+
+    def train(self, dataSet, scores = None):
+        if dataSet is None or not isinstance(dataSet, np.matrix):
+            raise ValueError();
+        if len(self.__treesList) != self.__treeCount:
+            raise InvalidOperationError();
+
+        if scores is None:
+            scores = [];
+
+        totalCount = dataSet.shape[0];
+
+        for i in range(0, totalCount):
+            scores.append(self.getAnomalyScore(dataSet[i, :]));
+
+            if (i + 1) % self.__trainProcessChangedFrequency == 0 and self.__onTrainProcessChanged(i + 1, totalCount):
+                break;
+
+        scores = np.mat(scores).T;
+        indices, distances, center = KMeans(lambda X, k: np.mat([X.min(), X.max()]).T).clustering(scores, 2, 1);
+
+        self.__threshold = center[1, 0];
+
+        return scores;
