@@ -208,7 +208,7 @@ class CutForest:
         return max(displacement);
 
 
-    def train(self, dataSet):
+    def fill(self, dataSet):
         if dataSet is None or not isinstance(dataSet, np.matrix):
             raise ValueError();
 

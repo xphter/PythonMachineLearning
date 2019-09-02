@@ -16,7 +16,7 @@ def testIsolationForest():
 
     index = 9;
     forest = IsolationForest.IsolationForest(treeCount = 200, subSamplingSize = 2 ** index);
-    forest.train(trainSet, heightLimit = index);
+    forest.fill(trainSet, heightLimit = index);
 
     print("train completed");
 

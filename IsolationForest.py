@@ -134,7 +134,7 @@ class IsolationForest:
         return self.__createNode(subSet, list(range(0, dataSet.shape[1])), 0, heightLimit);
 
 
-    def train(self, dataSet, heightLimit = None):
+    def fill(self, dataSet, heightLimit = None):
         if dataSet is None or not isinstance(dataSet, np.matrix):
             raise ValueError();
 

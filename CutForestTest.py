@@ -20,7 +20,7 @@ def testCutForest():
 
     index = 9;
     forest = CutForest.CutForest(treeCount = 200, subSamplingSize = 2 ** index);
-    forest.train(trainSet);
+    forest.fill(trainSet);
 
     print("train completed");
 
