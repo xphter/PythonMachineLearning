@@ -35,6 +35,10 @@ class Event:
         self.__listeners.remove(listener);
 
 
+    def clearListeners(self):
+        self.__listeners.clear();
+
+
     def trigger(self, *args):
         result = [];
 
