@@ -1,0 +1,3 @@
+install scipy packages:    python -m pip install -U numpy scipy matplotlib ipython jupyter pandas sympy nose
+install pywin32:           python -m pip install -U pywin32
+install requests:          python -m pip install -U requests
