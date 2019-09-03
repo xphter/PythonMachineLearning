@@ -85,10 +85,9 @@ class CutForest:
         self.__treeCount = treeCount;
         self.__subSamplingSize = subSamplingSize;
         self.__treesList = [];
-
-        self.__threshold = None;
         self.__trainProcessChangedFrequency = trainProcessChangedFrequency;
 
+        self.threshold = None;
         self.fillProcessChanged = Event("fillProcessChanged");
         self.trainProcessChanged = Event("trainProcessChanged");
 
@@ -268,11 +267,8 @@ class CutForest:
             if (i + 1) % self.__trainProcessChangedFrequency == 0 and self.__onTrainProcessChanged(i + 1, totalCount):
                 break;
 
-        scores = np.mat(scores).T;
-        indices, distances, center = KMeans(lambda X, k: np.mat([X.min(), X.max()]).T).clustering(scores, 2, 1);
+        indices, distances, center = KMeans(lambda X, k: np.mat([X.min(), X.max()]).T).clustering(np.mat(scores).T, 2, 1);
 
-        self.__threshold = center[1, 0];
+        self.threshold = center[1, 0];
 
         return scores;
-
-
