@@ -2,7 +2,7 @@ import math;
 import numpy as np;
 
 from Event import *;
-from Errors import  *;
+from Errors import *;
 from KMeans import *;
 
 
@@ -88,8 +88,8 @@ class CutForest:
         self.__trainProcessChangedFrequency = trainProcessChangedFrequency;
 
         self.threshold = None;
-        self.fillProcessChanged = Event("fillProcessChanged");
-        self.trainProcessChanged = Event("trainProcessChanged");
+        self.fillProgressChanged = Event("fillProcessChanged");
+        self.trainProgressChanged = Event("trainProcessChanged");
 
 
     def __calcBox(self, dataSet):
@@ -217,12 +217,12 @@ class CutForest:
         return max(displacement);
 
 
-    def __onFillProcessChanged(self, count):
-        return any(self.fillProcessChanged.trigger(count, self.__treeCount));
+    def __onFillProgressChanged(self, count):
+        return any(self.fillProgressChanged.trigger(count, self.__treeCount));
 
 
-    def __onTrainProcessChanged(self, count, total):
-        return any(self.trainProcessChanged.trigger(count, total));
+    def __onTrainProgressChanged(self, count, total):
+        return any(self.trainProgressChanged.trigger(count, total));
 
 
     def fill(self, dataSet):
@@ -232,7 +232,7 @@ class CutForest:
         for i in range(0, self.__treeCount):
             self.__treesList.append(self.__createTree(dataSet, self.__subSamplingSize));
 
-            if self.__onFillProcessChanged(i + 1):
+            if self.__onFillProgressChanged(i + 1):
                 return False;
 
         return True;
@@ -259,16 +259,18 @@ class CutForest:
         if scores is None:
             scores = [];
 
+        requestStop = False;
         totalCount = dataSet.shape[0];
 
         for i in range(0, totalCount):
             scores.append(self.getAnomalyScore(dataSet[i, :]));
 
-            if (i + 1) % self.__trainProcessChangedFrequency == 0 and self.__onTrainProcessChanged(i + 1, totalCount):
+            if (i + 1) % self.__trainProcessChangedFrequency == 0 and self.__onTrainProgressChanged(i + 1, totalCount):
+                requestStop = True;
                 break;
 
-        indices, distances, center = KMeans(lambda X, k: np.mat([X.min(), X.max()]).T).clustering(np.mat(scores).T, 2, 1);
-
-        self.threshold = center[1, 0];
+        if not requestStop:
+            indices, distances, center = KMeans(lambda X, k: np.mat([X.min(), X.max()]).T).clustering(np.mat(scores).T, 2, 1);
+            self.threshold = center[1, 0];
 
         return scores;

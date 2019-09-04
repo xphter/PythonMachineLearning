@@ -11,13 +11,13 @@ import IsolationForest;
 g_stop = False;
 
 
-def __onFillProcessChange(count, total):
+def __onFillProgressChange(count, total):
     global g_stop;
     print("fill process: %d / %d" % (count, total));
     return g_stop;
 
 
-def __onTrainProcessChange(count, total):
+def __onTrainProgressChange(count, total):
     global g_stop;
     stop = g_stop;
     print("train process: %d / %d" % (count, total));
@@ -37,8 +37,8 @@ def testIsolationForest():
 
     index = 9;
     forest = IsolationForest.IsolationForest(treeCount = 200, subSamplingSize = 2 ** index);
-    forest.fillProcessChanged.addListener(__onFillProcessChange);
-    forest.trainProcessChanged.addListener(__onTrainProcessChange);
+    forest.fillProgressChanged.addListener(__onFillProgressChange);
+    forest.trainProgressChanged.addListener(__onTrainProgressChange);
     forest.fill(trainSet, heightLimit = index);
     print("fill completed");
 
