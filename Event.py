@@ -16,7 +16,7 @@ class Event:
 
 
     def addListener(self, listener):
-        if listener is None or not inspect.isfunction(listener):
+        if listener is None or (not inspect.isfunction(listener) and not inspect.ismethod(listener)):
             raise ValueError();
 
         if listener in self.__listeners:
@@ -26,7 +26,7 @@ class Event:
 
 
     def removeListener(self, listener):
-        if listener is None or not inspect.isfunction(listener):
+        if listener is None or (not inspect.isfunction(listener) and not inspect.ismethod(listener)):
             raise ValueError();
 
         if listener not in self.__listeners:
