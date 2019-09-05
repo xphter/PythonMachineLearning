@@ -43,10 +43,9 @@ class IsolationForest:
         self.__treeCount = treeCount;
         self.__subSamplingSize = subSamplingSize;
         self.__treesList = [];
-
-        self.__threshold = None;
         self.__trainProcessChangedFrequency = trainProcessChangedFrequency;
 
+        self.threshold = None;
         self.fillProgressChanged = Event("fillProcessChanged");
         self.trainProgressChanged = Event("trainProcessChanged");
 
@@ -196,6 +195,6 @@ class IsolationForest:
 
         if not requestStop:
             indices, distances, center = KMeans(lambda X, k: np.mat([X.min(), X.max()]).T).clustering(np.mat(scores).T, 2, 1);
-            self.__threshold = center[1, 0];
+            self.threshold = center[1, 0];
 
         return scores;
