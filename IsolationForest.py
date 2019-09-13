@@ -2,7 +2,7 @@ import math;
 import numpy as np;
 
 from Event import *;
-from Errors import  *;
+from Errors import *;
 from KMeans import *;
 
 
