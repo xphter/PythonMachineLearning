@@ -1,3 +1,6 @@
 install scipy packages:    python -m pip install -U numpy scipy matplotlib ipython jupyter pandas sympy nose
-install pywin32:           python -m pip install -U pywin32
-install requests:          python -m pip install -U requests
+install pywin32:              python -m pip install -U pywin32
+install requests:              python -m pip install -U requests
+install pyinstaller:           python -m pip install -U pyinstaller
+install Cython:                python -m pip install -U Cython
+install psutil:                   python -m pip install -U psutil
