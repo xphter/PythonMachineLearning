@@ -1,9 +1,17 @@
 #!/usr/bin/python3
+import math;
 import os;
+import time;
+import threading;
+import json;
+import sys;
+import multiprocessing;
+
 from DecisionTree import *;
 from Sampling import *;
 from PCA import *;
 from IsolationForest import *;
+from scipy import stats;
 import numpy as np;
 import numpy.matlib as npm;
 import numpy.linalg as npl;
@@ -11,28 +19,81 @@ import matplotlib.pyplot as plt;
 
 import IsolationForestTest;
 import CutForestTest;
+import KMeansTest;
+import KMeans;
+import KMediansTest;
+import KMedians;
+import LogisticRegressionTest;
+
+from ThresholdFinder import ThresholdFinder;
+
+LogisticRegressionTest.testLogisticRegression();
 
 
-data = np.mat(np.loadtxt(r"E:\Data\PARS\JNLH\YuanLiaoDaiShui\数据分析\砍伐森林\75_200_512.txt"));
-q1, q2, q3 = np.quantile(data, [0.25, 0.5, 0.75]);
-iqr = 1.5 * (q3 - q1);
+# data = np.mat(np.loadtxt("/media/WindowsE/Data/PARS/JNLH/Models/653483c8783c4b3ea04060ac02054912/isolation_scores.txt")).T * 100;
+# indices, distances, center = KMeans.KMeans(lambda X, k: np.mat([X.min(), X.mean(), X.max()]).T).clustering(data, 3, 1);
+# print(center);
+#
+# threshold = center[2, 0];
+# if threshold > 70:
+#     threshold = max(65, data[(indices == 2).A.flatten(), :].min(0)[0, 0]);
+# print(threshold);
+#
+# i = None;
+# finder = ThresholdFinder();
+#
+# for j in range(0, data.shape[0]):
+#     if data[j, 0] >= threshold and i is None:
+#         i = j;
+#
+#     if data[j, 0] < threshold and i is not None:
+#         if j - i > 20:
+#             x, y = finder.fit(data[i:j, 0]);
+#
+#             plt.figure(1, (16, 10));
+#             plt.plot(list(range(0, j - i)), data[i:j, 0].A.flatten().tolist(), marker = "x");
+#             if x is not None and y is not None:
+#                 plt.plot(x, y, color = "r");
+#             plt.show();
+#
+#         i = None;
+#
+#
+# print(finder.threshold);
 
-result1 = data[:, (data >= q3 + iqr).A.flatten()];
-result2 = data[:, (data >= data.mean() + 3 * data.std()).A.flatten()];
+
+# plt.figure(1, (12, 8));
+# plt.scatter(X.A.flatten(), Y.A.flatten());
+# plt.plot([X.min(), X.max()], [beta0 + beta1 * X.min(), beta0 + beta1 * X.max()]);
+# plt.show();
 
 
-def getPageNumber(ordinal):
-    pageNumber, totalCount = 0, 0;
-    numbers = np.mat(np.loadtxt(r"E:\Data\PARS\JNLH\YuanLiaoDaiShui\testSet\numbers.txt", delimiter = ",")).T;
 
-    for i in range(0, numbers.shape[0]):
-        if (i == numbers.shape[0] - 1) or (ordinal > totalCount) and (ordinal <= totalCount + numbers[i + 1, 0]):
-            pageNumber = i + 1;
-            break;
 
-        totalCount += numbers[i, 0];
+# lr2 = LogisticRegression.LogisticRegression();
+# lr2.train(dataSet, 0.000001, 0.0000001, None, 0);
 
-    return pageNumber, ordinal - totalCount;
+
+# data = np.mat(np.load(r"D:\BrightWay\PARS\Code\Backend\Brightway.PARS.IntelligentModel.AppHost\bin\Debug\Models\1d389eb979a647e3ad22f95448bfad74\dataSet.npy"));
+# np.savetxt(r"D:\BrightWay\PARS\Code\Backend\Brightway.PARS.IntelligentModel.AppHost\bin\Debug\Models\1d389eb979a647e3ad22f95448bfad74\dataSet.txt", data, delimiter = ",");
+
+
+# data1 = np.mat(np.loadtxt(r"E:\Data\PARS\JNLH\Models\c9735c8842ad4ad0a2740b20c5c4e92f\isolation_scores.txt"));
+# data2 = np.mat(np.loadtxt(r"E:\Data\PARS\JNLH\Models\c9735c8842ad4ad0a2740b20c5c4e92f\cut_scores.txt"));
+
+
+# def getPageNumber(ordinal):
+#     pageNumber, totalCount = 0, 0;
+#     numbers = np.mat(np.loadtxt(r"E:\Data\PARS\JNLH\YuanLiaoDaiShui\testSet\numbers.txt", delimiter = ",")).T;
+#
+#     for i in range(0, numbers.shape[0]):
+#         if (i == numbers.shape[0] - 1) or (ordinal > totalCount) and (ordinal <= totalCount + numbers[i + 1, 0]):
+#             pageNumber = i + 1;
+#             break;
+#
+#         totalCount += numbers[i, 0];
+#
+#     return pageNumber, ordinal - totalCount;
 
 
 # print(getPageNumber(263541));
