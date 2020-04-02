@@ -17,7 +17,10 @@ class UnaryLinearRegression:
         self.__rss = None;
         self.__r2 = None;
         self.__beta0Std = None;
+        self.__beta0T = None;
+        self.__beta0P = None;
         self.__beta1Std = None;
+        self.__beta1T = None;
         self.__beta1P = None;
 
 
@@ -26,7 +29,10 @@ class UnaryLinearRegression:
 
 
     def __str__(self):
-        return "Y = beta0 + beta1 * (X - avgX)\r\nbeta0 = {0}, std = {1}\r\nbeta1 = {2}, std = {3}, p = {4}\r\nsigma = {5}, R^2 = {6}".format(self.__beta0, self.__beta0Std, self.__beta1, self.__beta1Std, self.__beta1P, self.__sigma, self.__r2);
+        return "Y = beta0 + beta1 * (X - avgX)\r\n{0}\r\n{1}\r\n{2}".format(
+            "beta0 = {0}, std = {1}, t-value = {2}, p-value = {3}".format(self.__beta0, self.__beta0Std, self.__beta0T, self.__beta0P),
+            "beta1 = {0}, std = {1}, t-value = {2}, p-value = {3}".format(self.__beta1, self.__beta1Std, self.__beta1T, self.__beta1P),
+            "sigma = {0}, R^2 = {1}".format(self.__sigma, self.__r2));
 
 
     @property
@@ -49,25 +55,29 @@ class UnaryLinearRegression:
         return self.__r2;
 
 
-    def fit(self, X, Y, sigLevel = None):
-        if X is None or Y is None:
+    def __getP(self, value, degree):
+        return 2 * (1 - t.cdf(value, degree));
+
+
+    def fit(self, x, y, sigLevel = None):
+        if x is None or y is None:
             raise ValueError();
 
         if sigLevel is None:
             sigLevel = UnaryLinearRegression.__DEFAULT_SIG_LEVEL;
 
-        n = X.shape[0];
-        avgX, avgY = X.mean(), Y.mean();
-        centralizedX = X - avgX;
-        centralizedY = Y - avgY;
+        n = x.shape[0];
+        avgX, avgY = x.mean(), y.mean();
+        centralizedX = x - avgX;
+        centralizedY = y - avgY;
         sx2 = (centralizedX.T * centralizedX)[0, 0];
 
         self.__n = n;
         self.__avgX = avgX;
         self.__beta0 = avgY;
-        self.__beta1 = (centralizedX.T * Y)[0, 0] / sx2;
+        self.__beta1 = (centralizedX.T * y)[0, 0] / sx2;
 
-        residual = Y - self.__beta0 - self.__beta1 * centralizedX;
+        residual = y - self.__beta0 - self.__beta1 * centralizedX;
         rss = (residual.T * residual)[0, 0];
         tss = (centralizedY.T * centralizedY)[0, 0];
 
@@ -75,28 +85,34 @@ class UnaryLinearRegression:
         self.__rss = rss;
         self.__r2 = 1 - rss/tss if tss != 0 else 0;
         self.__beta0Std = self.__sigma / math.sqrt(n);
+        self.__beta0T = math.fabs(self.__beta0 / self.__beta0Std) if self.__beta0Std != 0 else math.nan;
+        self.__beta0P = self.__getP(self.__beta0T, n - 2) if self.__beta0Std != 0 else 0;
+        if self.__beta0P > sigLevel:
+            self.__beta0 = 0;
+
         self.__beta1Std = self.__sigma / math.sqrt(sx2);
-        self.__beta1P = 2 * (1 - t.cdf(math.fabs(self.__beta1 / self.__beta1Std), n - 2)) if self.__beta1Std != 0 else 0;
+        self.__beta1T = math.fabs(self.__beta1 / self.__beta1Std) if self.__beta1Std != 0 else math.nan;
+        self.__beta1P = self.__getP(self.__beta1T, n - 2) if self.__beta1Std != 0 else 0;
         if self.__beta1P > sigLevel:
             self.__beta1 = 0;
 
 
-    def predict(self, X):
-        if X is None:
+    def predict(self, x):
+        if x is None:
             raise ValueError();
 
-        return self.__beta0 + self.__beta1 * (X - self.__avgX);
+        return self.__beta0 + self.__beta1 * (x - self.__avgX);
 
 
-    def inverse(self, Y):
-        if Y is None:
+    def inverse(self, y):
+        if y is None:
             raise ValueError();
         if self.__beta1 == 0:
             raise NotImplementedError();
 
-        return (Y - self.__beta0) / self.__beta1 + self.__avgX;
+        return (y - self.__beta0) / self.__beta1 + self.__avgX;
 
 
-    def calcRss(self, X, Y):
-        residual = Y - self.predict(X);
+    def calcRss(self, x, y):
+        residual = y - self.predict(x);
         return (residual.T * residual)[0, 0];
