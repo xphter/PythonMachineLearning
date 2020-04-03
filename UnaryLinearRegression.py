@@ -56,7 +56,7 @@ class UnaryLinearRegression:
 
 
     def __getP(self, value, degree):
-        return 2 * (1 - t.cdf(value, degree));
+        return 2 * (1 - t.cdf(math.fabs(value), degree));
 
 
     def fit(self, x, y, sigLevel = None):
@@ -85,13 +85,13 @@ class UnaryLinearRegression:
         self.__rss = rss;
         self.__r2 = 1 - rss/tss if tss != 0 else 0;
         self.__beta0Std = self.__sigma / math.sqrt(n);
-        self.__beta0T = math.fabs(self.__beta0 / self.__beta0Std) if self.__beta0Std != 0 else math.nan;
+        self.__beta0T = self.__beta0 / self.__beta0Std if self.__beta0Std != 0 else math.nan;
         self.__beta0P = self.__getP(self.__beta0T, n - 2) if self.__beta0Std != 0 else 0;
         if self.__beta0P > sigLevel:
             self.__beta0 = 0;
 
         self.__beta1Std = self.__sigma / math.sqrt(sx2);
-        self.__beta1T = math.fabs(self.__beta1 / self.__beta1Std) if self.__beta1Std != 0 else math.nan;
+        self.__beta1T = self.__beta1 / self.__beta1Std if self.__beta1Std != 0 else math.nan;
         self.__beta1P = self.__getP(self.__beta1T, n - 2) if self.__beta1Std != 0 else 0;
         if self.__beta1P > sigLevel:
             self.__beta1 = 0;
