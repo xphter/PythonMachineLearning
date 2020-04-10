@@ -51,6 +51,11 @@ class UnaryLinearRegression:
 
 
     @property
+    def sigma(self):
+        return self.__sigma;
+
+
+    @property
     def rss(self):
         return self.__rss;
 
