@@ -1,9 +1,14 @@
+import os;
+import abc;
 import math;
+import multiprocessing;
 import numpy as np;
+import matplotlib.pyplot as plt;
 
 from Event import *;
 from Errors import *;
 from KMeans import *;
+from UnaryLinearRegression import *;
 
 
 class _Node:
@@ -39,15 +44,21 @@ class _Node:
 
 
 class IsolationForest:
-    def __init__(self, treeCount = 100, subSamplingSize = 256, trainProcessChangedFrequency = 1000):
+    def __init__(self, treeCount = 100, subSamplingSize = 256, thresholdFinder = None):
+        if thresholdFinder is None or not isinstance(thresholdFinder, ThresholdFinder):
+            raise ValueError();
+
         self.__treeCount = treeCount;
         self.__subSamplingSize = subSamplingSize;
         self.__treesList = [];
-        self.__trainProcessChangedFrequency = trainProcessChangedFrequency;
 
-        self.threshold = None;
-        self.fillProgressChanged = Event("fillProcessChanged");
-        self.trainProgressChanged = Event("trainProcessChanged");
+        self.__threshold = None;
+        self.__thresholdFinder = thresholdFinder;
+
+
+    @property
+    def threshold(self):
+        return self.__threshold;
 
 
     def __calcHarmonicNumber(self, i):
@@ -68,7 +79,7 @@ class IsolationForest:
         if node.isLeaf() or currentLength >= lengthLimit:
             return currentLength + self.__calcAveragePathLength(node.samplesCount);
 
-        if instance[0, node.featureIndex] <= node.featureValue:
+        if instance[0, node.featureIndex] < node.featureValue:
             return self.__getPathLength(instance, node.leftChild, currentLength + 1, lengthLimit);
         else:
             return self.__getPathLength(instance, node.rightChild, currentLength + 1, lengthLimit);
@@ -113,13 +124,13 @@ class IsolationForest:
         return minValue + (maxValue - minValue) * np.random.random();
 
 
-    def __createNode(self, dataSet, features, currentHeight, heightLimit):
+    def __createNode(self, dataSet, features, currentHeight):
         samplesCount = dataSet.shape[0];
 
         if samplesCount == 0:
             return None;
 
-        if samplesCount == 1 or currentHeight >= heightLimit:
+        if samplesCount == 1:
             return _Node(samplesCount);
 
         for index in [item for item in features if self.__hasSameFeatureValues(dataSet, item)]:
@@ -132,37 +143,21 @@ class IsolationForest:
         featureValue = self.__choiceFeatureValue(dataSet, featureIndex);
 
         return _Node(samplesCount, featureIndex, featureValue,
-                     self.__createNode(dataSet[(dataSet[:, featureIndex] <= featureValue).A.flatten(), :], features[:], currentHeight + 1, heightLimit),
-                     self.__createNode(dataSet[(dataSet[:, featureIndex] > featureValue).A.flatten(), :], features[:], currentHeight + 1, heightLimit));
+                     self.__createNode(dataSet[(dataSet[:, featureIndex] < featureValue).A.flatten(), :], features[:], currentHeight + 1),
+                     self.__createNode(dataSet[(dataSet[:, featureIndex] >= featureValue).A.flatten(), :], features[:], currentHeight + 1));
 
 
-    def __createTree(self, dataSet, subSamplingSize, heightLimit):
-        indices = np.random.randint(0, dataSet.shape[0], subSamplingSize);
-        subSet = dataSet[indices, :];
-
-        return self.__createNode(subSet, list(range(0, dataSet.shape[1])), 0, heightLimit);
+    def _createTree(self, subSet):
+        return self.__createNode(subSet, list(range(0, subSet.shape[1])), 0);
 
 
-    def __onFillProgressChanged(self, count):
-        return any(self.fillProgressChanged.trigger(count, self.__treeCount));
-
-
-    def __onTrainProgressChanged(self, count, total):
-        return any(self.trainProgressChanged.trigger(count, total));
-
-
-    def fill(self, dataSet, heightLimit = None):
+    def fill(self, dataSet):
         if dataSet is None or not isinstance(dataSet, np.matrix):
             raise ValueError();
 
-        if heightLimit is None:
-            heightLimit = self.__subSamplingSize;
-
-        for i in range(0, self.__treeCount):
-            self.__treesList.append(self.__createTree(dataSet, self.__subSamplingSize, heightLimit));
-
-            if self.__onFillProgressChanged(i + 1):
-                return False;
+        n = dataSet.shape[0];
+        with multiprocessing.Pool() as pool:
+            self.__treesList = pool.map(self._createTree, [dataSet[np.random.randint(0, n, self.__subSamplingSize), :] for i in range(0, self.__treeCount)]);
 
         return True;
 
@@ -171,30 +166,247 @@ class IsolationForest:
         if instance is None:
             raise ValueError();
 
-        return self.__getAnomalyScore(instance, self.__subSamplingSize);
+        return self.__getAnomalyScore(instance, self.__subSamplingSize - 1);
 
 
-    def train(self, dataSet, scores = None):
+    def train(self, dataSet):
         if dataSet is None or not isinstance(dataSet, np.matrix):
             raise ValueError();
         if len(self.__treesList) != self.__treeCount:
             raise InvalidOperationError();
 
-        if scores is None:
-            scores = [];
+        scores = None;
+        with multiprocessing.Pool() as pool:
+            scores = pool.map(self.getAnomalyScore, [item for item in dataSet]);
 
-        requestStop = False;
-        totalCount = dataSet.shape[0];
-
-        for i in range(0, totalCount):
-            scores.append(self.getAnomalyScore(dataSet[i, :]));
-
-            if (i + 1) % self.__trainProcessChangedFrequency == 0 and self.__onTrainProgressChanged(i + 1, totalCount):
-                requestStop = True;
-                break;
-
-        if not requestStop:
-            indices, distances, center = KMeans(lambda X, k: np.mat([X.min(), X.max()]).T).clustering(np.mat(scores).T, 2, 1);
-            self.threshold = center[1, 0];
+        self.__threshold = self.__thresholdFinder.find(scores);
 
         return scores;
+
+
+class ThresholdFinder(metaclass = abc.ABCMeta):
+    @abc.abstractmethod
+    def find(self, scores):
+        pass;
+
+
+class ProportionThresholdFinder(ThresholdFinder):
+    def __init__(self, proportion):
+        self.__proportion = max(0, max(1, proportion));
+
+
+    def find(self, scores):
+        scores.sort(reverse = True);
+        return np.quantile(scores, self.__proportion);
+
+
+class CurvesThresholdFinder(ThresholdFinder):
+    MIN_SAMPLES_NUMBER = 10;
+    MIN_PARALLEL_NUMBER = 10000;
+
+    def __init__(self, minCheckValue, maxCheckValue, minThreshold, maxThreshold, defaultThreshold, showPlot = False):
+        self.__minCheckValue = minCheckValue;
+        self.__maxCheckValue = maxCheckValue;
+        self.__minThreshold = minThreshold;
+        self.__maxThreshold = maxThreshold;
+        self.__defaultThreshold = defaultThreshold;
+        self.__showPlot = showPlot;
+
+        self.__values = [];
+        self.__curves = None;
+        self.__leftLines = None;
+        self.__rightLines = None;
+
+
+    def __leftOnly(self, y):
+        maxValue = y.max();
+        value, residual = None, None;
+
+        for i in range(CurvesThresholdFinder.MIN_SAMPLES_NUMBER, y.shape[0]):
+            line = UnaryLinearRegression();
+            line.fit(np.mat(np.arange(i)).T, y[:i, 0]);
+            if line.slop <= 0:
+                continue;
+
+            value = line.predictValue(i - 1);
+            if value > maxValue:
+                continue;
+
+            residual = y[i:, 0] - value;
+
+            self.__leftLines[i] = (line, value);
+            self.__curves.append([line, i - 1, None, None, value, line.rss + (residual.T * residual)[0, 0]]);
+
+
+    def __rightOnly(self, y):
+        n, maxValue = y.shape[0], y.max();
+        value, residual = None, None;
+
+        for j in range(n - CurvesThresholdFinder.MIN_SAMPLES_NUMBER, 0, -1):
+            line = UnaryLinearRegression();
+            line.fit(np.mat(np.arange(j, n)).T, y[j:, 0]);
+            if line.slop >= 0:
+                continue;
+
+            value = line.predictValue(j);
+            if value > maxValue:
+                continue;
+
+            residual = y[:j, 0] - value;
+
+            self.__rightLines[j] = (line, value);
+            self.__curves.append([None, None, line, j, value, line.rss + (residual.T * residual)[0, 0]]);
+
+
+    def _processItem(self, i, j, y, maxValue):
+        leftLine, leftValue = self.__leftLines[i] if i in self.__leftLines else (None, None);
+        if leftLine is None:
+            return None;
+
+        rightLine, rightValue = self.__rightLines[j] if j in self.__rightLines else (None, None);
+        if rightLine is None:
+            return None;
+
+        value, residual = None, None;
+        endIndex, startIndex = None, None;
+
+        if leftValue < rightValue:
+            value = rightValue;
+            startIndex = j;
+            endIndex = math.floor(leftLine.inverse(rightValue));
+        elif rightValue < leftValue:
+            value = leftValue;
+            endIndex = i - 1;
+            startIndex = math.ceil(rightLine.inverse(leftValue));
+        else:
+            endIndex = i - 1;
+            startIndex = j;
+            value = leftValue;
+
+        if endIndex >= startIndex - 1 or value > maxValue:
+            return None;
+
+        residual = y[endIndex + 1:startIndex, 0] - value;
+        leftRss = (leftLine.calcRss(np.mat(np.arange(i, endIndex + 1)).T, y[i:endIndex + 1, 0]) if endIndex > i - 1 else 0) + leftLine.rss;
+        rightRss = (rightLine.calcRss(np.mat(np.arange(startIndex, j)).T, y[startIndex:j, 0]) if startIndex < j else 0) + rightLine.rss;
+
+        return [leftLine, endIndex, rightLine, startIndex, value, leftRss + rightRss + (residual.T * residual)[0, 0]];
+
+
+    def __bothSides(self, y):
+        points = [];
+        n, maxValue = y.shape[0], y.max();
+
+        for i in range(CurvesThresholdFinder.MIN_SAMPLES_NUMBER, n - CurvesThresholdFinder.MIN_SAMPLES_NUMBER - 1):
+            for j in range(n - CurvesThresholdFinder.MIN_SAMPLES_NUMBER, i, -1):
+                points.append((i, j, y, maxValue));
+
+        curves = None;
+        if len(points) >= CurvesThresholdFinder.MIN_PARALLEL_NUMBER:
+            with multiprocessing.Pool() as pool:
+                curves = pool.starmap(self._processItem, points);
+        else:
+            curves = list(map(lambda obj: self._processItem(*obj), points));
+
+        for item in curves:
+            if item is None:
+                continue;
+
+            self.__curves.append(item);
+
+
+    def __fit(self, y):
+        if y is None:
+            raise ValueError();
+
+        n = y.shape[0];
+        if n < CurvesThresholdFinder.MIN_SAMPLES_NUMBER * 2 + 1:
+            return None, None;
+
+        self.__curves = [];
+        self.__leftLines = {};
+        self.__rightLines = {};
+
+        self.__leftOnly(y);
+        self.__rightOnly(y);
+        self.__bothSides(y);
+
+        if len(self.__curves) == 0:
+            value = y.mean();
+            self.__values.append(value);
+            return [0, n - 1], [value, value];
+
+        self.__curves = np.mat(self.__curves);
+        leftLine, endIndex, rightLine, startIndex, value, rss = tuple(self.__curves[self.__curves[:, -1].argmin(0)[0, 0], :].A.flatten().tolist());
+        self.__values.append(value);
+
+        if leftLine is not None and rightLine is not None:
+            return [0, endIndex, endIndex + 1, startIndex - 1, startIndex, n - 1],\
+                   [leftLine.predictValue(0), leftLine.predictValue(endIndex), value, value, rightLine.predictValue(startIndex), rightLine.predictValue(n - 1)];
+        elif leftLine is not None:
+            return [0, endIndex, n - 1], [leftLine.predictValue(0), leftLine.predictValue(endIndex), leftLine.predictValue(endIndex)];
+        elif rightLine is not None:
+            return [0, startIndex, n - 1], [rightLine.predictValue(startIndex), rightLine.predictValue(startIndex), rightLine.predictValue(n - 1)];
+        else:
+            return None, None;
+
+
+    def find(self, scores):
+        scale = 100;
+        data = np.mat(scores).T * scale;
+        indices, distances, center = KMeans(lambda X, k: np.mat([X.min(), X.mean(), X.max()]).T).clustering(data, 3, 1);
+        print("anomaly score centers:{0}".format(center.T));
+
+        checkValue = center[2, 0];
+        minCheckValue = self.__minCheckValue * scale;
+        maxCheckValue = self.__maxCheckValue * scale;
+        minThreshold = self.__minThreshold * scale;
+        maxThreshold = self.__maxThreshold * scale;
+        defaultThreshold = self.__defaultThreshold * scale;
+        minValue = data[(indices == 2).A.flatten(), :].min(0)[0, 0];
+        maxValue = data[(indices == 2).A.flatten(), :].max(0)[0, 0];
+
+        if maxValue <= defaultThreshold:
+            return defaultThreshold / scale;
+
+        if checkValue >= defaultThreshold:
+            checkValue = (minValue + checkValue) / 2;
+        elif checkValue <= minCheckValue:
+            checkValue = (checkValue + maxValue) / 2;
+        if checkValue < minCheckValue:
+            checkValue = minCheckValue;
+        elif checkValue > maxCheckValue:
+            checkValue = maxCheckValue;
+        print("threshold check value: {0}".format(checkValue));
+
+        i = None;
+        for j in range(0, data.shape[0]):
+            if data[j, 0] >= checkValue and i is None:
+                i = j;
+
+            if data[j, 0] < checkValue and i is not None:
+                if j - i > CurvesThresholdFinder.MIN_SAMPLES_NUMBER * 2:
+                    x, y = self.__fit(data[i:j, 0]);
+
+                    if self.__showPlot:
+                        plt.figure(1, (16, 10));
+                        plt.plot(list(range(0, j - i)), data[i:j, 0].A.flatten().tolist(), color = "b", marker = "x");
+                        if x is not None and y is not None:
+                            plt.plot(x, y, color = "r");
+                        plt.show();
+
+                i = None;
+        print("threshold all values: {0}".format(self.__values));
+
+        if len(self.__values) > 2:
+            if min(self.__values) < minThreshold:
+                self.__values.remove(min(self.__values));
+            if max(self.__values) > maxThreshold:
+                self.__values.remove(max(self.__values));
+        threshold = np.mean(self.__values);
+        print("threshold found: {0}".format(threshold));
+
+        threshold = (threshold if minThreshold <= threshold <= maxThreshold else defaultThreshold) / scale;
+        print("final threshold: {0}".format(threshold));
+
+        return threshold;
