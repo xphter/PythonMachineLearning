@@ -14,6 +14,7 @@ class UnaryLinearRegression:
         self.__beta1 = None;
 
         self.__sigma = None;
+        self.__residual = None;
         self.__rss = None;
         self.__r2 = None;
         self.__sx2 = None;
@@ -56,6 +57,11 @@ class UnaryLinearRegression:
 
 
     @property
+    def residual(self):
+        return self.__residual;
+
+
+    @property
     def rss(self):
         return self.__rss;
 
@@ -92,6 +98,7 @@ class UnaryLinearRegression:
         tss = (centralizedY.T * centralizedY)[0, 0];
 
         self.__sigma = math.sqrt(rss / (n - 2));
+        self.__residual = residual;
         self.__rss = rss;
         self.__r2 = 1 - rss/tss if tss != 0 else 0;
         self.__sx2 = sx2;
@@ -113,7 +120,7 @@ class UnaryLinearRegression:
         return self.__beta0Value + self.__beta1Value * (x - self.__avgX);
 
 
-    def predictInterval(self, x, confidence = None):
+    def predictInterval(self, x, confidence = None, prediction = True):
         if x is None:
             raise ValueError();
         if confidence is not None and (confidence <= 0 or confidence >= 1):
@@ -121,7 +128,7 @@ class UnaryLinearRegression:
 
         alpha = 1 - confidence if confidence is not None else UnaryLinearRegression.__DEFAULT_SIG_LEVEL;
         tValue = t.ppf(1 - alpha / 2, self.__n - 2);
-        interval = np.sqrt(1 + 1 / self.__n + np.power(x - self.__avgX, 2) / self.__sx2) * self.__sigma * tValue;
+        interval = np.sqrt((1 if prediction else 0) + 1 / self.__n + np.power(x - self.__avgX, 2) / self.__sx2) * self.__sigma * tValue;
         value = self.predictValue(x);
 
         return np.mat(np.hstack((value - interval, value, value + interval)));

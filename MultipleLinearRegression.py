@@ -15,6 +15,7 @@ class MultipleLinearRegression:
         self.__beta = None;
 
         self.__sigma = None;
+        self.__residual = None;
         self.__rss = None;
         self.__r2 = None;
         self.__c = None;
@@ -60,6 +61,11 @@ class MultipleLinearRegression:
 
 
     @property
+    def residual(self):
+        return self.__residual;
+
+
+    @property
     def rss(self):
         return self.__rss;
 
@@ -100,6 +106,7 @@ class MultipleLinearRegression:
         tss = (centralizedY.T * centralizedY)[0, 0];
 
         self.__sigma = math.sqrt(rss / (n - p - 1));
+        self.__residual = residual;
         self.__rss = rss;
         self.__r2 = 1 - rss/tss if tss != 0 else 0;
         self.__c = C;
@@ -129,7 +136,7 @@ class MultipleLinearRegression:
         return self.__beta0Value + (X - self.__avgX) * self.__betaValue;
 
 
-    def predictInterval(self, X, confidence = None):
+    def predictInterval(self, X, confidence = None, prediction = True):
         if X is None:
             raise ValueError();
         if confidence is not None and (confidence <= 0 or confidence >= 1):
@@ -138,7 +145,7 @@ class MultipleLinearRegression:
         centralizedX = X - self.__avgX;
         alpha = 1 - confidence if confidence is not None else MultipleLinearRegression.__DEFAULT_SIG_LEVEL;
         tValue = t.ppf(1 - alpha / 2, self.__n - self.__p - 1);
-        interval = np.sqrt(1 + 1 / self.__n + np.multiply(centralizedX * self.__c, centralizedX).sum(1)) * self.__sigma * tValue;
+        interval = np.sqrt((1 if prediction else 0) + 1 / self.__n + np.multiply(centralizedX * self.__c, centralizedX).sum(1)) * self.__sigma * tValue;
         value = self.predictValue(X);
 
         return np.mat(np.hstack((value - interval, value, value + interval)));
