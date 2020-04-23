@@ -45,7 +45,7 @@ class _Node:
 
 class IsolationForest:
     def __init__(self, treeCount = 100, subSamplingSize = 256, thresholdFinder = None):
-        if thresholdFinder is None or not isinstance(thresholdFinder, ThresholdFinder):
+        if thresholdFinder is None or not isinstance(thresholdFinder, IThresholdFinder):
             raise ValueError();
 
         self.__treeCount = treeCount;
@@ -184,13 +184,13 @@ class IsolationForest:
         return scores;
 
 
-class ThresholdFinder(metaclass = abc.ABCMeta):
+class IThresholdFinder(metaclass = abc.ABCMeta):
     @abc.abstractmethod
     def find(self, scores):
         pass;
 
 
-class ProportionThresholdFinder(ThresholdFinder):
+class ProportionThresholdFinder(IThresholdFinder):
     def __init__(self, proportion):
         self.__proportion = max(0, max(1, proportion));
 
@@ -200,15 +200,13 @@ class ProportionThresholdFinder(ThresholdFinder):
         return np.quantile(scores, self.__proportion);
 
 
-class CurvesThresholdFinder(ThresholdFinder):
+class CurvesThresholdFinder(IThresholdFinder):
     MIN_SAMPLES_NUMBER = 10;
     MIN_PARALLEL_NUMBER = 10000;
 
-    def __init__(self, minCheckValue, maxCheckValue, minThreshold, maxThreshold, defaultThreshold, showPlot = False):
+    def __init__(self, minCheckValue, maxCheckValue, defaultThreshold, showPlot = False):
         self.__minCheckValue = minCheckValue;
         self.__maxCheckValue = maxCheckValue;
-        self.__minThreshold = minThreshold;
-        self.__maxThreshold = maxThreshold;
         self.__defaultThreshold = defaultThreshold;
         self.__showPlot = showPlot;
 
@@ -360,8 +358,6 @@ class CurvesThresholdFinder(ThresholdFinder):
         checkValue = center[2, 0];
         minCheckValue = self.__minCheckValue * scale;
         maxCheckValue = self.__maxCheckValue * scale;
-        minThreshold = self.__minThreshold * scale;
-        maxThreshold = self.__maxThreshold * scale;
         defaultThreshold = self.__defaultThreshold * scale;
         minValue = data[(indices == 2).A.flatten(), :].min(0)[0, 0];
         maxValue = data[(indices == 2).A.flatten(), :].max(0)[0, 0];
@@ -398,15 +394,7 @@ class CurvesThresholdFinder(ThresholdFinder):
                 i = None;
         print("threshold all values: {0}".format(self.__values));
 
-        if len(self.__values) > 2:
-            if min(self.__values) < minThreshold:
-                self.__values.remove(min(self.__values));
-            if max(self.__values) > maxThreshold:
-                self.__values.remove(max(self.__values));
-        threshold = np.mean(self.__values);
+        threshold = np.mean(self.__values) / scale;
         print("threshold found: {0}".format(threshold));
-
-        threshold = (threshold if minThreshold <= threshold <= maxThreshold else defaultThreshold) / scale;
-        print("final threshold: {0}".format(threshold));
 
         return threshold;
