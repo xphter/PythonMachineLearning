@@ -1,17 +1,18 @@
 import os;
+import time;
+import threading;
 import numpy as np;
+import matplotlib.pyplot as plt;
 
-import Optimizer;
-import LogisticRegression;
+import LDAClassifier;
+import QDAClassifier;
 
 
-def __testCore(trainingData, testData, optimizer):
-    lr = LogisticRegression.LogisticRegression(optimizer);
-    costValue = lr.train(trainingData);
-    print("theta: {0}, value of cost: {1}".format(lr.theta, costValue));
+def __testCore(trainingData, testData, classifier):
+    classifier.train(trainingData);
 
     actualValue = testData[:, -1];
-    predictValue = lr.predict(testData[:, :-1]);
+    predictValue = classifier.predict(testData[:, :-1]);
 
     tp = predictValue[(actualValue == 1).A.flatten(), :].sum();
     fp = predictValue[(actualValue == 0).A.flatten(), :].sum();
@@ -26,10 +27,9 @@ def __testCore(trainingData, testData, optimizer):
     print("accuracy: {0}, precision: {1}, recall: {2}, f1: {3}".format(accuracy, precision, recall, f1));
 
 
-def testLogisticRegression():
-    epsilon = 0.000001;
+def testLDAClassifier():
     testData = np.mat(np.loadtxt("data/horseColicTest.txt"));
     trainingData = np.mat(np.loadtxt("data/horseColicTraining.txt"));
 
-    __testCore(trainingData, testData, Optimizer.GradientDescent(epsilon));
-    __testCore(trainingData, testData, Optimizer.NewtonMethod(epsilon));
+    __testCore(testData, trainingData, LDAClassifier.LDAClassifier());
+    __testCore(testData, trainingData, QDAClassifier.QDAClassifier());
