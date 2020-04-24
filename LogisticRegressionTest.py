@@ -26,7 +26,7 @@ def __testCore(optimizer):
     recall = tp / (tp + fn);
     f1 = 2 * tp / (2 * tp + fp + fn);
 
-    print("accuracy: {0}, precision: {0}, recall: {1}, f1: {2}".format(accuracy, precision, recall, f1));
+    print("accuracy: {0}, precision: {1}, recall: {2}, f1: {3}".format(accuracy, precision, recall, f1));
 
 
 def testLogisticRegression():
