@@ -36,7 +36,7 @@ class MultipleLinearRegression:
             self.__beta0Value,
             "".join([" {0} {1} * (x{2:.0f} - {3})".format("+" if item[1] >= 0 else "-", math.fabs(item[1]), item[0], item[2])
                      for item in
-                     np.hstack((np.mat(range(1, self.__p + 1)).T, self.__beta, self.__avgX.T)).tolist()])
+                     np.hstack((np.mat(range(1, self.__p + 1)).T, self.__betaValue, self.__avgX.T)).tolist()])
         );
 
 
