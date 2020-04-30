@@ -5,14 +5,13 @@ import numpy as np;
 import matplotlib.pyplot as plt;
 
 import LDAClassifier;
-import QDAClassifier;
 
 
 def __testCore(trainingData, testData, classifier):
-    classifier.train(trainingData);
+    classifier.train(trainingData[:, :-1], trainingData[:, -1]);
 
     actualValue = testData[:, -1];
-    predictValue = classifier.predict(testData[:, :-1]);
+    predictValue, posterior = classifier.predict(testData[:, :-1]);
 
     tp = predictValue[(actualValue == 1).A.flatten(), :].sum();
     fp = predictValue[(actualValue == 0).A.flatten(), :].sum();
@@ -31,5 +30,5 @@ def testLDAClassifier():
     testData = np.mat(np.loadtxt("data/horseColicTest.txt"));
     trainingData = np.mat(np.loadtxt("data/horseColicTraining.txt"));
 
-    __testCore(testData, trainingData, LDAClassifier.LDAClassifier());
-    __testCore(testData, trainingData, QDAClassifier.QDAClassifier());
+    __testCore(trainingData, testData, LDAClassifier.LDAClassifier());
+    __testCore(trainingData, testData, LDAClassifier.QDAClassifier());
