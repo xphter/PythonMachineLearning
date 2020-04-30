@@ -1,11 +1,13 @@
 import sys;
 import math;
 import numpy as np;
+from scipy.stats import norm;
 
 from Optimizer import *;
 
 
 class LogisticRegression(IOptimizerTarget, IGradientProvider, IHessianMatrixProvider):
+    __DEFAULT_SIG_LEVEL = 0.05;
     __MAX_POWER = math.log(sys.float_info.max) - 1;
 
     def __init__(self, optimizer):
@@ -14,15 +16,43 @@ class LogisticRegression(IOptimizerTarget, IGradientProvider, IHessianMatrixProv
 
         self.__X = None;
         self.__y = None;
-        self.__theta = None;
         self.__lambda = None;
         self.__optimizer = optimizer;
         self.__optimizer.setTarget(self);
 
+        self.__theta = None;
+        self.__thetaStd = None;
+        self.__thetaZ = None;
+        self.__thetaP = None;
+        self.__thetaValue = None;
+
+
+    def __repr__(self):
+        p = self.__theta.shape[0];
+
+        return "logit = {0} * x0{1}".format(
+            self.__thetaValue[0, 0],
+            "".join([" {0} {1} * x{2:.0f}".format("+" if item[1] >= 0 else "-", math.fabs(item[1]), item[0])
+                     for item in
+                     np.hstack((np.mat(range(1, p)).T, self.__thetaValue[1:, :])).tolist()])
+        );
+
+
+    def __str__(self):
+        p = self.__theta.shape[0];
+
+        return "P(y=1|X) = e^z / (1 + e^z); z = θ0 * x0{0}\r\n{1}".format(
+            "".join([" + θ{0:.0f} * x{0:.0f}".format(i) for i in range(1, p)]),
+            "\r\n".join(
+                ["θ{0:.0f} = {1}, std = {2}, z-value = {3}, p-value = {4}".format(*item)
+                 for item in
+                 np.hstack((np.mat(range(0, p)).T, self.__theta, self.__thetaStd, self.__thetaZ, self.__thetaP)).tolist()])
+        );
+
 
     @property
     def theta(self):
-        return self.__theta;
+        return self.__thetaValue;
 
 
     def __sigmoid(self, X, theta):
@@ -60,22 +90,31 @@ class LogisticRegression(IOptimizerTarget, IGradientProvider, IHessianMatrixProv
         return np.multiply(self.__X, h).T * self.__X;
 
 
-    def train(self, dataSet, lmd = 1):
-        if dataSet is None or not isinstance(dataSet, np.matrix):
+    def train(self, X, y, lmd = 1, sigLevel = None):
+        if X is None or y is None:
             raise ValueError();
 
-        self.__X = np.hstack((np.mat(np.ones((dataSet.shape[0], 1))), dataSet[:, :-1]));
-        self.__y = dataSet[:, -1];
-        self.__theta = np.mat(np.zeros((dataSet.shape[1], 1)));
+        if sigLevel is None:
+            sigLevel = LogisticRegression.__DEFAULT_SIG_LEVEL;
+
+        n, p = X.shape[0], X.shape[1] + 1;
+        self.__X = np.hstack((np.mat(np.ones((n, 1))), X));
+        self.__y = y;
+        self.__theta = np.mat(np.zeros((p, 1)));
         self.__lambda = max(0, lmd);
 
         self.__theta, costValue, gradient = self.__optimizer.search(self.__theta);
+        self.__thetaStd = np.sqrt(self.getHessianMatrix(self.__theta).I)[range(0, p), range(0, p)].T;
+        self.__thetaZ = np.divide(self.__theta, self.__thetaStd);
+        self.__thetaP = np.mat(2 * (1 - norm.cdf(np.abs(self.__thetaZ))));
+        self.__thetaValue = self.__theta.copy();
+        # self.__thetaValue[(self.__thetaP >= sigLevel).A.flatten(), :] = 0;
 
         return costValue;
 
 
-    def predict(self, dataSet):
-        if dataSet is None or not isinstance(dataSet, np.matrix):
+    def predictValue(self, X):
+        if X is None or not isinstance(X, np.matrix):
             raise ValueError();
 
-        return (self.__sigmoid(np.hstack((np.mat(np.ones((dataSet.shape[0], 1))), dataSet)), self.__theta) > 0.5) + 0;
+        return self.__sigmoid(np.hstack((np.mat(np.ones((X.shape[0], 1))), X)), self.__thetaValue);

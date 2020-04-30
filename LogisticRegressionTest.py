@@ -7,11 +7,11 @@ import LogisticRegression;
 
 def __testCore(trainingData, testData, optimizer):
     lr = LogisticRegression.LogisticRegression(optimizer);
-    costValue = lr.train(trainingData);
+    costValue = lr.train(trainingData[:, :-1], trainingData[:, -1]);
     print("theta: {0}, value of cost: {1}".format(lr.theta, costValue));
 
     actualValue = testData[:, -1];
-    predictValue = lr.predict(testData[:, :-1]);
+    predictValue = (lr.predictValue(testData[:, :-1]) > 0.5) - 0;
 
     tp = predictValue[(actualValue == 1).A.flatten(), :].sum();
     fp = predictValue[(actualValue == 0).A.flatten(), :].sum();
