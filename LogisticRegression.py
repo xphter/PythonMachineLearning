@@ -30,7 +30,7 @@ class LogisticRegression(IOptimizerTarget, IGradientProvider, IHessianMatrixProv
     def __repr__(self):
         p = self.__theta.shape[0];
 
-        return "logit = {0} * x0{1}".format(
+        return "logit = {0}{1}".format(
             self.__thetaValue[0, 0],
             "".join([" {0} {1} * x{2:.0f}".format("+" if item[1] >= 0 else "-", math.fabs(item[1]), item[0])
                      for item in
@@ -41,7 +41,7 @@ class LogisticRegression(IOptimizerTarget, IGradientProvider, IHessianMatrixProv
     def __str__(self):
         p = self.__theta.shape[0];
 
-        return "P(y=1|X) = e^z / (1 + e^z); z = θ0 * x0{0}\r\n{1}".format(
+        return "P(y=1|X) = e^z / (1 + e^z); z = θ0{0}\r\n{1}".format(
             "".join([" + θ{0:.0f} * x{0:.0f}".format(i) for i in range(1, p)]),
             "\r\n".join(
                 ["θ{0:.0f} = {1}, std = {2}, z-value = {3}, p-value = {4}".format(*item)
@@ -53,6 +53,11 @@ class LogisticRegression(IOptimizerTarget, IGradientProvider, IHessianMatrixProv
     @property
     def theta(self):
         return self.__thetaValue;
+
+
+    @property
+    def thetaP(self):
+        return self.__thetaP;
 
 
     def __sigmoid(self, X, theta):
