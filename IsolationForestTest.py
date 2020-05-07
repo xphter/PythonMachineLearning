@@ -11,8 +11,8 @@ import IsolationForest;
 
 def testIsolationForest():
     trainSet = np.mat(np.load("data/IsolationForest.npy"));
-    # trainSet = np.mat(np.load("/media/WindowsE/Data/PARS/JNLH/Models/d77d645a6e204fe4b5fd606db3749ba9/data.npy"));
-    # trainSet = np.mat(np.load("Z:/e/Data/PARS/JNLH/Models/d77d645a6e204fe4b5fd606db3749ba9/data.npy"));
+    # trainSet = np.mat(np.load("/media/WindowsE/Data/PARS/JNLH/Models/58e3466ab1b24e6591ba8c4ed28a11cf/data.npy"));
+    # trainSet = np.mat(np.load("Z:/e/Data/PARS/JNLH/Models/58e3466ab1b24e6591ba8c4ed28a11cf/data.npy"));
     print("load completed");
     print("");
 

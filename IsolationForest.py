@@ -205,18 +205,18 @@ class CurvesThresholdFinder(IThresholdFinder):
     MIN_PARALLEL_NUMBER = 10000;
 
     def __init__(self, minCheckValue, maxCheckValue, defaultThreshold, showPlot = False):
-        self.__minCheckValue = minCheckValue;
-        self.__maxCheckValue = maxCheckValue;
-        self.__defaultThreshold = defaultThreshold;
+        self._minCheckValue = minCheckValue;
+        self._maxCheckValue = maxCheckValue;
+        self._defaultThreshold = defaultThreshold;
         self.__showPlot = showPlot;
 
-        self.__values = [];
-        self.__curves = None;
-        self.__leftLines = None;
-        self.__rightLines = None;
+        self._values = [];
+        self._curves = None;
+        self._leftLines = None;
+        self._rightLines = None;
 
 
-    def __leftOnly(self, y):
+    def _leftOnly(self, y):
         maxValue = y.max();
         value, residual = None, None;
 
@@ -232,11 +232,11 @@ class CurvesThresholdFinder(IThresholdFinder):
 
             residual = y[i:, 0] - value;
 
-            self.__leftLines[i] = (line, value);
-            self.__curves.append([line, i - 1, None, None, value, line.rss + (residual.T * residual)[0, 0]]);
+            self._leftLines[i] = (line, value);
+            self._curves.append([line, i - 1, None, None, value, line.rss + (residual.T * residual)[0, 0]]);
 
 
-    def __rightOnly(self, y):
+    def _rightOnly(self, y):
         n, maxValue = y.shape[0], y.max();
         value, residual = None, None;
 
@@ -252,16 +252,16 @@ class CurvesThresholdFinder(IThresholdFinder):
 
             residual = y[:j, 0] - value;
 
-            self.__rightLines[j] = (line, value);
-            self.__curves.append([None, None, line, j, value, line.rss + (residual.T * residual)[0, 0]]);
+            self._rightLines[j] = (line, value);
+            self._curves.append([None, None, line, j, value, line.rss + (residual.T * residual)[0, 0]]);
 
 
     def _processItem(self, i, j, y, maxValue):
-        leftLine, leftValue = self.__leftLines[i] if i in self.__leftLines else (None, None);
+        leftLine, leftValue = self._leftLines[i] if i in self._leftLines else (None, None);
         if leftLine is None:
             return None;
 
-        rightLine, rightValue = self.__rightLines[j] if j in self.__rightLines else (None, None);
+        rightLine, rightValue = self._rightLines[j] if j in self._rightLines else (None, None);
         if rightLine is None:
             return None;
 
@@ -291,7 +291,7 @@ class CurvesThresholdFinder(IThresholdFinder):
         return [leftLine, endIndex, rightLine, startIndex, value, leftRss + rightRss + (residual.T * residual)[0, 0]];
 
 
-    def __bothSides(self, y):
+    def _bothSides(self, y):
         points = [];
         n, maxValue = y.shape[0], y.max();
 
@@ -310,10 +310,10 @@ class CurvesThresholdFinder(IThresholdFinder):
             if item is None:
                 continue;
 
-            self.__curves.append(item);
+            self._curves.append(item);
 
 
-    def __fit(self, y):
+    def _fit(self, y):
         if y is None:
             raise ValueError();
 
@@ -321,22 +321,22 @@ class CurvesThresholdFinder(IThresholdFinder):
         if n < CurvesThresholdFinder.MIN_SAMPLES_NUMBER * 2 + 1:
             return None, None;
 
-        self.__curves = [];
-        self.__leftLines = {};
-        self.__rightLines = {};
+        self._curves = [];
+        self._leftLines = {};
+        self._rightLines = {};
 
-        self.__leftOnly(y);
-        self.__rightOnly(y);
-        self.__bothSides(y);
+        self._leftOnly(y);
+        self._rightOnly(y);
+        self._bothSides(y);
 
-        if len(self.__curves) == 0:
+        if len(self._curves) == 0:
             value = y.mean();
-            self.__values.append(value);
+            self._values.append(value);
             return [0, n - 1], [value, value];
 
-        self.__curves = np.mat(self.__curves);
-        leftLine, endIndex, rightLine, startIndex, value, rss = tuple(self.__curves[self.__curves[:, -1].argmin(0)[0, 0], :].A.flatten().tolist());
-        self.__values.append(value);
+        self._curves = np.mat(self._curves);
+        leftLine, endIndex, rightLine, startIndex, value, rss = tuple(self._curves[self._curves[:, -1].argmin(0)[0, 0], :].A.flatten().tolist());
+        self._values.append(value);
 
         if leftLine is not None and rightLine is not None:
             return [0, endIndex, endIndex + 1, startIndex - 1, startIndex, n - 1],\
@@ -356,9 +356,9 @@ class CurvesThresholdFinder(IThresholdFinder):
         print("anomaly score centers:{0}".format(center.T));
 
         checkValue = center[2, 0];
-        minCheckValue = self.__minCheckValue * scale;
-        maxCheckValue = self.__maxCheckValue * scale;
-        defaultThreshold = self.__defaultThreshold * scale;
+        minCheckValue = self._minCheckValue * scale;
+        maxCheckValue = self._maxCheckValue * scale;
+        defaultThreshold = self._defaultThreshold * scale;
         minValue = data[(indices == 2).A.flatten(), :].min(0)[0, 0];
         maxValue = data[(indices == 2).A.flatten(), :].max(0)[0, 0];
 
@@ -382,7 +382,7 @@ class CurvesThresholdFinder(IThresholdFinder):
 
             if data[j, 0] < checkValue and i is not None:
                 if j - i > CurvesThresholdFinder.MIN_SAMPLES_NUMBER * 2:
-                    x, y = self.__fit(data[i:j, 0]);
+                    x, y = self._fit(data[i:j, 0]);
 
                     if self.__showPlot:
                         plt.figure(1, (16, 10));
@@ -392,9 +392,9 @@ class CurvesThresholdFinder(IThresholdFinder):
                         plt.show();
 
                 i = None;
-        print("threshold all values: {0}".format(self.__values));
+        print("threshold all values: {0}".format(self._values));
 
-        threshold = np.mean(self.__values) / scale;
+        threshold = np.mean(self._values) / scale;
         print("threshold found: {0}".format(threshold));
 
         return threshold;
