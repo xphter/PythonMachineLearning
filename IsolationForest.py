@@ -157,7 +157,7 @@ class IsolationForest:
 
         n = dataSet.shape[0];
         with multiprocessing.Pool() as pool:
-            self.__treesList = pool.map(self._createTree, [dataSet[np.random.randint(0, n, self.__subSamplingSize), :] for i in range(0, self.__treeCount)]);
+            self.__treesList = pool.map(self._createTree, [dataSet[np.random.choice(n, self.__subSamplingSize, False), :] for i in range(0, self.__treeCount)]);
 
         return True;
 
