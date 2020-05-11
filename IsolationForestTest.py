@@ -26,7 +26,7 @@ def testIsolationForest():
         forest.fill(trainSet);
         print("fill completed");
 
-        scores = forest.train(trainSet);
+        forest.train(trainSet);
         print("train completed");
         print("");
 

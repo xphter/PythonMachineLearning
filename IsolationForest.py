@@ -52,8 +52,14 @@ class IsolationForest:
         self.__subSamplingSize = subSamplingSize;
         self.__treesList = [];
 
+        self.__scores = None;
         self.__threshold = None;
         self.__thresholdFinder = thresholdFinder;
+
+
+    @property
+    def scores(self):
+        return self.__scores;
 
 
     @property
@@ -170,18 +176,18 @@ class IsolationForest:
 
 
     def train(self, dataSet):
+        if self.__threshold is not None and self.__scores is not None:
+            return;
+
         if dataSet is None or not isinstance(dataSet, np.matrix):
             raise ValueError();
         if len(self.__treesList) != self.__treeCount:
             raise InvalidOperationError();
 
-        scores = None;
         with multiprocessing.Pool() as pool:
-            scores = pool.map(self.getAnomalyScore, [item for item in dataSet]);
+            self.__scores = pool.map(self.getAnomalyScore, [item for item in dataSet]);
 
-        self.__threshold = self.__thresholdFinder.find(scores);
-
-        return scores;
+        self.__threshold = self.__thresholdFinder.find(self.__scores);
 
 
 class IThresholdFinder(metaclass = abc.ABCMeta):
