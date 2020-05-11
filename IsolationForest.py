@@ -229,6 +229,7 @@ class CurvesThresholdFinder(IThresholdFinder):
         for i in range(CurvesThresholdFinder.MIN_SAMPLES_NUMBER, y.shape[0]):
             line = UnaryLinearRegression();
             line.fit(np.mat(np.arange(i)).T, y[:i, 0]);
+            line.sigLevel = None;
             if line.slop <= 0:
                 continue;
 
@@ -249,6 +250,7 @@ class CurvesThresholdFinder(IThresholdFinder):
         for j in range(n - CurvesThresholdFinder.MIN_SAMPLES_NUMBER, 0, -1):
             line = UnaryLinearRegression();
             line.fit(np.mat(np.arange(j, n)).T, y[j:, 0]);
+            line.sigLevel = None;
             if line.slop >= 0:
                 continue;
 
