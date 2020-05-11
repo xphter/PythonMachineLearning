@@ -8,6 +8,7 @@ import LogisticRegression;
 def __testCore(trainingData, testData, optimizer):
     lr = LogisticRegression.LogisticRegression(optimizer);
     costValue = lr.train(trainingData[:, :-1], trainingData[:, -1]);
+    lr.sigLevel = None;
     print("theta: {0}, value of cost: {1}".format(lr.theta, costValue));
 
     actualValue = testData[:, -1];

@@ -30,6 +30,8 @@ class MultipleLinearRegression:
         self.__betaP = None;
         self.__betaValue = None;
 
+        self.__sigLevel = None;
+
 
     def __repr__(self):
         return "y = {0}{1}".format(
@@ -75,6 +77,26 @@ class MultipleLinearRegression:
         return self.__r2;
 
 
+    @property
+    def sigLevel(self):
+        return self.__sigLevel;
+
+
+    @sigLevel.setter
+    def sigLevel(self, value):
+        if self.__beta0P is None or self.__betaP is None or self.__allP is None:
+            return;
+
+        if value is None:
+            value = MultipleLinearRegression.__DEFAULT_SIG_LEVEL;
+
+        self.__sigLevel = value;
+        self.__beta0Value = self.__beta0 if self.__beta0P < value else 0;
+        self.__betaValue[(self.__betaP >= value).A.flatten(), :] = 0;
+        if self.__allP >= value:
+            self.__betaValue[:, :] = 0;
+
+
     def __getP(self, value, degree):
         if isinstance(value, np.matrix):
             return np.mat(2 * (1 - t.cdf(np.abs(value.A.flatten()), degree))).T;
@@ -82,12 +104,9 @@ class MultipleLinearRegression:
             return 2 * (1 - t.cdf(math.fabs(value), degree));
 
 
-    def fit(self, X, y, sigLevel = None):
+    def fit(self, X, y):
         if X is None or y is None:
             raise ValueError();
-
-        if sigLevel is None:
-            sigLevel = MultipleLinearRegression.__DEFAULT_SIG_LEVEL;
 
         n, p = X.shape;
         avgX, avgY = X.mean(0), y.mean();
@@ -114,19 +133,16 @@ class MultipleLinearRegression:
         self.__beta0Std = self.__sigma / math.sqrt(n);
         self.__beta0T = self.__beta0 / self.__beta0Std if self.__beta0Std != 0 else math.nan;
         self.__beta0P = self.__getP(self.__beta0T, n - p - 1) if self.__beta0Std != 0 else 0;
-        self.__beta0Value = self.__beta0 if self.__beta0P < sigLevel else 0;
+        self.__beta0Value = self.__beta0;
 
         diagonal = C[range(0, p), range(0, p)].T;
         self.__betaStd = self.__sigma * np.sqrt(diagonal);
         self.__betaT = np.divide(self.__beta, self.__betaStd);
         self.__betaP = self.__getP(self.__betaT, n - p - 1);
         self.__betaValue = self.__beta.copy();
-        self.__betaValue[(self.__betaP >= sigLevel).A.flatten(), :] = 0;
 
         self.__allF = (tss - rss) / p / self.__sigma ** 2;
         self.__allP = 1 - f.cdf(self.__allF, p, n - p - 1);
-        if self.__allP >= sigLevel:
-            self.__betaValue[:, :] = 0;
 
 
     def predictValue(self, X):
@@ -149,3 +165,8 @@ class MultipleLinearRegression:
         value = self.predictValue(X);
 
         return np.mat(np.hstack((value - interval, value, value + interval)));
+
+
+    def calcRss(self, X, y):
+        residual = y - self.predictValue(X);
+        return (residual.T * residual)[0, 0];

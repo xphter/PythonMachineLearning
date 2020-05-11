@@ -7,6 +7,7 @@ from UnaryLinearRegression import *;
 def __run(x, y):
     lr = UnaryLinearRegression();
     lr.fit(x, y);
+    lr.sigLevel = None;
     return lr;
 
 

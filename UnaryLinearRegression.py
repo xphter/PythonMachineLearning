@@ -27,6 +27,8 @@ class UnaryLinearRegression:
         self.__beta1P = None;
         self.__beta1Value = None;
 
+        self.__sigLevel = None;
+
 
     def __repr__(self):
         return "y = {0} {3} {1} * (x - {2})".format(self.__beta0Value, math.fabs(self.__beta1Value), self.__avgX, "+" if self.__beta1Value >= 0 else "-");
@@ -71,16 +73,31 @@ class UnaryLinearRegression:
         return self.__r2;
 
 
+    @property
+    def sigLevel(self):
+        return self.__sigLevel;
+
+
+    @sigLevel.setter
+    def sigLevel(self, value):
+        if self.__beta0P is None or self.__beta1P is None:
+            return;
+
+        if value is None:
+            value = UnaryLinearRegression.__DEFAULT_SIG_LEVEL;
+
+        self.__sigLevel = value;
+        self.__beta0Value = self.__beta0 if self.__beta0P < value else 0;
+        self.__beta1Value = self.__beta1 if self.__beta1P < value else 0;
+
+
     def __getP(self, value, degree):
         return 2 * (1 - t.cdf(math.fabs(value), degree));
 
 
-    def fit(self, x, y, sigLevel = None):
+    def fit(self, x, y):
         if x is None or y is None:
             raise ValueError();
-
-        if sigLevel is None:
-            sigLevel = UnaryLinearRegression.__DEFAULT_SIG_LEVEL;
 
         n = x.shape[0];
         avgX, avgY = x.mean(), y.mean();
@@ -105,12 +122,12 @@ class UnaryLinearRegression:
         self.__beta0Std = self.__sigma / math.sqrt(n);
         self.__beta0T = self.__beta0 / self.__beta0Std if self.__beta0Std != 0 else math.nan;
         self.__beta0P = self.__getP(self.__beta0T, n - 2) if self.__beta0Std != 0 else 0;
-        self.__beta0Value = self.__beta0 if self.__beta0P < sigLevel else 0;
+        self.__beta0Value = self.__beta0;
 
         self.__beta1Std = self.__sigma / math.sqrt(sx2);
         self.__beta1T = self.__beta1 / self.__beta1Std if self.__beta1Std != 0 else math.nan;
         self.__beta1P = self.__getP(self.__beta1T, n - 2) if self.__beta1Std != 0 else 0;
-        self.__beta1Value = self.__beta1 if self.__beta1P < sigLevel else 0;
+        self.__beta1Value = self.__beta1;
 
 
     def predictValue(self, x):

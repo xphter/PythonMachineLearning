@@ -26,6 +26,8 @@ class LogisticRegression(IOptimizerTarget, IGradientProvider, IHessianMatrixProv
         self.__thetaP = None;
         self.__thetaValue = None;
 
+        self.__sigLevel = None;
+
 
     def __repr__(self):
         p = self.__theta.shape[0];
@@ -58,6 +60,23 @@ class LogisticRegression(IOptimizerTarget, IGradientProvider, IHessianMatrixProv
     @property
     def thetaP(self):
         return self.__thetaP;
+
+
+    @property
+    def sigLevel(self):
+        return self.__sigLevel;
+
+
+    @sigLevel.setter
+    def sigLevel(self, value):
+        if self.__thetaP is None:
+            return;
+
+        if value is None:
+            value = LogisticRegression.__DEFAULT_SIG_LEVEL;
+
+        self.__sigLevel = value;
+        self.__thetaValue[(self.__thetaP >= value).A.flatten(), :] = 0;
 
 
     def __sigmoid(self, X, theta):
@@ -113,7 +132,6 @@ class LogisticRegression(IOptimizerTarget, IGradientProvider, IHessianMatrixProv
         self.__thetaZ = np.divide(self.__theta, self.__thetaStd);
         self.__thetaP = np.mat(2 * (1 - norm.cdf(np.abs(self.__thetaZ))));
         self.__thetaValue = self.__theta.copy();
-        # self.__thetaValue[(self.__thetaP >= sigLevel).A.flatten(), :] = 0;
 
         return costValue;
 

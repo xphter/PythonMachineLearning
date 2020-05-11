@@ -9,6 +9,7 @@ from MultipleLinearRegression import *;
 def __run(X, y):
     lr = MultipleLinearRegression();
     lr.fit(X, y);
+    lr.sigLevel = None;
     return lr;
 
 
