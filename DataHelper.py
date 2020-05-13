@@ -20,6 +20,18 @@ def __groupByLabel(X):
     return classes;
 
 
+# get a random arrangement
+def __getArrangement(n):
+    array = list(range(n));
+
+    for i in range(n-1, -1, -1):
+        j = math.ceil(random.random() * (i + 1) % (i + 1));
+
+        array[i], array[j] = array[j], array[i];
+
+    return array;
+
+
 # transfer to standard variable, mean is 0, std is 1
 def normalizeFeatures(X):
     mu = np.mat(X.mean(0));
@@ -153,3 +165,42 @@ def groupBy(X, featureIndex):
     return result;
 
 
+# Leave One Out Cross Validation
+def oneOutSampling(X, y):
+    result = [];
+    n = X.shape[0];
+    current = None;
+    indices = list(range(0, n));
+
+    for i in range(0, n):
+        current = indices[0: i] + indices[i + 1:];
+
+        result.append((X[current, :], y[current, :], X[i, :], y[i, :]));
+
+    return result;
+
+
+# k Fold Cross Validation
+def foldOutSampling(X, y, k):
+    n = X.shape[0];
+    if n / k < 1:
+        raise ValueError();
+
+    indices = None;
+    XFolds, yFolds = [], [];
+    foldSize = math.ceil(n / k);
+    arrangement = __getArrangement(n);
+    for i in range(0, k):
+        indices = arrangement[i * foldSize: (i + 1) * foldSize] if i < k - 1 else arrangement[i * foldSize:];
+        XFolds.append(X[indices, :]);
+        yFolds.append(y[indices, :]);
+
+    result = [];
+
+    for i in range(0, k):
+        result.append((np.vstack(tuple(XFolds[0: i] + XFolds[i + 1:])),
+                       np.vstack(tuple(yFolds[0: i] + yFolds[i + 1:])),
+                       XFolds[i],
+                       yFolds[i]));
+
+    return result;
