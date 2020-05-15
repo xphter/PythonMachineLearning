@@ -18,7 +18,7 @@ def testIsolationForest():
 
     index = 9;
     thresholds = [];
-    for i in range(0, 10):
+    for i in range(0, 1):
         print("/********** forest {0} **********\\".format(i + 1));
         finder = IsolationForest.CurvesThresholdFinder(0.63, 0.68, 0.73, False);
         forest = IsolationForest.IsolationForest(treeCount = 200, subSamplingSize = 2 ** index, thresholdFinder = finder);
@@ -27,6 +27,7 @@ def testIsolationForest():
         print("fill completed");
 
         forest.train(trainSet);
+        forest.threshold = forest.threshold;
         print("train completed");
         print("");
 

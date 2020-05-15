@@ -67,6 +67,14 @@ class IsolationForest:
         return self.__threshold;
 
 
+    @threshold.setter
+    def threshold(self, value):
+        if value <= 0.5 or value >= 1:
+            raise ValueError();
+
+        self.__threshold = value;
+
+
     def __calcHarmonicNumber(self, i):
         return np.log(i) + np.euler_gamma;
 
