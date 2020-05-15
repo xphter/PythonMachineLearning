@@ -54,6 +54,11 @@ class UnaryLinearRegression:
 
 
     @property
+    def slopP(self):
+        return self.__beta1P;
+
+
+    @property
     def sigma(self):
         return self.__sigma;
 

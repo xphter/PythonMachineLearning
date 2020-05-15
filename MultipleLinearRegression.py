@@ -58,6 +58,21 @@ class MultipleLinearRegression:
 
 
     @property
+    def intercept(self):
+        return self.__beta0Value - np.multiply(self.__betaValue, self.__avgX).sum();
+
+
+    @property
+    def beta(self):
+        return self.__betaValue;
+
+
+    @property
+    def betaP(self):
+        return self.__betaP;
+
+
+    @property
     def sigma(self):
         return self.__sigma;
 
