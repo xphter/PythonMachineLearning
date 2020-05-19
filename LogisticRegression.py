@@ -103,7 +103,6 @@ class LogisticRegression(IOptimizerTarget, IGradientProvider, IHessianMatrixProv
                (theta.T * theta)[0, 0] * self.__lambda / 2;
 
 
-    def getGradient(self, theta):
         return self.__X.T * (self.__sigmoid(self.__X, theta) - self.__y) + self.__lambda * theta;
 
 
@@ -114,12 +113,9 @@ class LogisticRegression(IOptimizerTarget, IGradientProvider, IHessianMatrixProv
         return np.multiply(self.__X, h).T * self.__X;
 
 
-    def train(self, X, y, lmd = 1, sigLevel = None):
+    def train(self, X, y, lmd = 1):
         if X is None or y is None:
             raise ValueError();
-
-        if sigLevel is None:
-            sigLevel = LogisticRegression.__DEFAULT_SIG_LEVEL;
 
         n, p = X.shape[0], X.shape[1] + 1;
         self.__X = np.hstack((np.mat(np.ones((n, 1))), X));
