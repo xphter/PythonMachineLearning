@@ -204,3 +204,35 @@ def foldOutSampling(X, y, k):
                        yFolds[i]));
 
     return result;
+
+
+# C(n, r) = A(n, r) / r! = n! / (n - r)! / r!
+def combinations(n, r):
+    if n <= 0 or r < 0 or r > n:
+        raise ValueError();
+
+    if r == 0:
+        return [];
+    if r == n:
+        return [list(range(0, n))];
+
+    first = list(range(0, r));
+    result, previous, current = [first], first, None;
+
+    while True:
+        indices = [i for i in first if previous[i] < n - r + i];
+        if len(indices) == 0:
+            break;
+
+        j = max(indices);
+        value = previous[j];
+        current = previous[:];
+
+        for i in range(j, r):
+            value += 1;
+            current[i] = value;
+
+        previous = current;
+        result.append(current);
+
+    return result;
