@@ -213,6 +213,8 @@ def combinations(n, r):
 
     if r == 0:
         return [];
+    if r == 1:
+        return [[i] for i in range(0, n)];
     if r == n:
         return [list(range(0, n))];
 
