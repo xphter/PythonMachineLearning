@@ -413,7 +413,7 @@ class CurvesThresholdFinder(IThresholdFinder):
                 i = None;
         print("threshold all values: {0}".format(self._values));
 
-        threshold = np.mean(self._values) / scale;
+        threshold = (np.mean(self._values) if len(self._values) > 0 else defaultThreshold) / scale;
         print("threshold found: {0}".format(threshold));
 
         return threshold;
