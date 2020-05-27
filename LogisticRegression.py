@@ -103,6 +103,7 @@ class LogisticRegression(IOptimizerTarget, IGradientProvider, IHessianMatrixProv
                (theta.T * theta)[0, 0] * self.__lambda / 2;
 
 
+    def getGradient(self, theta):
         return self.__X.T * (self.__sigmoid(self.__X, theta) - self.__y) + self.__lambda * theta;
 
 
