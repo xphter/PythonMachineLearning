@@ -18,6 +18,9 @@ class MultipleLinearRegression:
         self.__residual = None;
         self.__rss = None;
         self.__r2 = None;
+        self.__aic = None;
+        self.__bic = None;
+        self.__adjustedR2 = None;
         self.__c = None;
         self.__allF = None;
         self.__allP = None;
@@ -53,7 +56,7 @@ class MultipleLinearRegression:
                 ["β{0:.0f} = {1}, std = {2}, t-value = {3}, p-value = {4}".format(*item)
                  for item in
                  np.hstack((np.mat(range(1, self.__p + 1)).T, self.__beta, self.__betaStd, self.__betaT, self.__betaP)).tolist()]),
-            "σ = {0}, R^2 = {1}, F-value = {2}, F p-value = {3}".format(self.__sigma, self.__r2, self.__allF, self.__allP)
+            "σ = {0}, R^2 = {1}, AIC = {2}, BIC = {3}, adjusted R^2 = {4}, F-value = {5}, F p-value = {6}".format(self.__sigma, self.__r2, self.__aic, self.__bic, self.__adjustedR2, self.__allF, self.__allP)
         );
 
 
@@ -90,6 +93,21 @@ class MultipleLinearRegression:
     @property
     def r2(self):
         return self.__r2;
+
+
+    @property
+    def aic(self):
+        return self.__aic;
+
+
+    @property
+    def bic(self):
+        return self.__bic;
+
+
+    @property
+    def adjustedR2(self):
+        return self.__adjustedR2;
 
 
     @property
@@ -138,11 +156,15 @@ class MultipleLinearRegression:
         residual = y - self.__beta0 - centralizedX * self.__beta;
         rss = (residual.T * residual)[0, 0];
         tss = (centralizedY.T * centralizedY)[0, 0];
+        sigma2 = rss / (n - p - 1);
 
-        self.__sigma = math.sqrt(rss / (n - p - 1));
+        self.__sigma = math.sqrt(sigma2);
         self.__residual = residual;
         self.__rss = rss;
-        self.__r2 = 1 - rss/tss if tss != 0 else 0;
+        self.__r2 = 1 - rss / tss if tss != 0 else 0;
+        self.__aic = (rss + 2 * p * sigma2) / (n * sigma2) + math.log(2 * math.pi * sigma2);
+        self.__bic = (rss + math.log(n) * p * sigma2) / (n * sigma2) + math.log(2 * math.pi * sigma2);
+        self.__adjustedR2 = 1 - rss * (n - 1) / (n - p - 1) / tss if tss != 0 else 0;
         self.__c = C;
 
         self.__beta0Std = self.__sigma / math.sqrt(n);
