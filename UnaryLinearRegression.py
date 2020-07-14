@@ -2,11 +2,20 @@ import math;
 import numpy as np;
 from scipy.stats import t;
 
+import warnings;
+
+
+'''
+centralized unary linear regression.
+'''
+
 
 class UnaryLinearRegression:
     __DEFAULT_SIG_LEVEL = 0.05;
 
     def __init__(self):
+        warnings.warn("this centralized unary linear regression is deprecated", DeprecationWarning);
+
         self.__n = None;
         self.__avgX = None;
 

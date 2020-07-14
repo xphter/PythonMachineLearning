@@ -2,11 +2,19 @@ import math;
 import numpy as np;
 from scipy.stats import t, f;
 
+import warnings;
+
+'''
+centralized multiple linear regression.
+'''
+
 
 class MultipleLinearRegression:
     __DEFAULT_SIG_LEVEL = 0.05;
 
     def __init__(self):
+        warnings.warn("this centralized multiple linear regression is deprecated", DeprecationWarning);
+
         self.__n = None;
         self.__p = None;
         self.__avgX = None;
