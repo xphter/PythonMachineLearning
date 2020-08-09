@@ -21,7 +21,7 @@ def __groupByLabel(X):
 
 
 # get a random arrangement
-def __getArrangement(n):
+def randomArrangement(n):
     array = list(range(n));
 
     for i in range(n-1, -1, -1):
@@ -165,19 +165,24 @@ def groupBy(X, featureIndex):
     return result;
 
 
+# create a matrix with columns: x^n1, x^n2, ..., x^np
+def vectorPoly(x, maxDegree, minDegree = 1):
+    return np.mat([np.power(x, i).A.flatten() for i in range(minDegree, maxDegree + 1)]).T if maxDegree > 1 else x;
+
+
+# Validation Set Approach
+def validationSetSampling(X, y, size = None):
+    if size is None:
+        size = math.ceil(X.shape[0] / 2);
+
+    indices = np.random.choice(X.shape[0], size, replace = False).tolist();
+
+    return X[indices, :], y[indices, :], np.delete(X, indices, 0), np.delete(y, indices, 0)
+
+
 # Leave One Out Cross Validation
 def oneOutSampling(X, y):
-    result = [];
-    n = X.shape[0];
-    current = None;
-    indices = list(range(0, n));
-
-    for i in range(0, n):
-        current = indices[0: i] + indices[i + 1:];
-
-        result.append((X[current, :], y[current, :], X[i, :], y[i, :]));
-
-    return result;
+    return [(np.delete(X, i, 0), np.delete(y, i, 0), X[i, :], y[i, :]) for i in range(0, X.shape[0])];
 
 
 # k Fold Cross Validation
@@ -186,22 +191,17 @@ def foldOutSampling(X, y, k):
     if n / k < 1:
         raise ValueError();
 
-    indices = None;
-    XFolds, yFolds = [], [];
-    foldSize = math.ceil(n / k);
-    arrangement = __getArrangement(n);
-    for i in range(0, k):
-        indices = arrangement[i * foldSize: (i + 1) * foldSize] if i < k - 1 else arrangement[i * foldSize:];
-        XFolds.append(X[indices, :]);
-        yFolds.append(y[indices, :]);
+    size = math.ceil(n / k);
+    arrangement = randomArrangement(n);
 
-    result = [];
-
-    for i in range(0, k):
-        result.append((np.vstack(tuple(XFolds[0: i] + XFolds[i + 1:])),
-                       np.vstack(tuple(yFolds[0: i] + yFolds[i + 1:])),
-                       XFolds[i],
-                       yFolds[i]));
+    result = [(np.delete(X, arrangement[i * size: (i + 1) * size], 0),
+               np.delete(y, arrangement[i * size: (i + 1) * size], 0),
+               X[arrangement[i * size: (i + 1) * size], :],
+               y[arrangement[i * size: (i + 1) * size], :]) for i in range(0, k - 1)];
+    result.append((np.delete(X, arrangement[(k - 1) * size:], 0),
+                   np.delete(y, arrangement[(k - 1) * size:], 0),
+                   X[arrangement[(k - 1) * size:], :],
+                   y[arrangement[(k - 1) * size:], :]));
 
     return result;
 
@@ -238,3 +238,11 @@ def combinations(n, r):
         result.append(current);
 
     return result;
+
+
+# return (x - value)^d when x > value, else 0.
+def truncatedPower(x, value, d):
+    if x is None:
+        raise ValueError("vector x is None");
+
+    return np.multiply((x > value) - 0, np.power(x - value, d));
