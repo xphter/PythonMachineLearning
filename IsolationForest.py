@@ -5,7 +5,6 @@ import multiprocessing;
 import numpy as np;
 import matplotlib.pyplot as plt;
 
-from Event import *;
 from Errors import *;
 from KMeans import *;
 from UnaryLinearRegression import *;
