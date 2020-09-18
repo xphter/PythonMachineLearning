@@ -46,7 +46,7 @@ class LinearRegression:
                 data.extend([(X, y, indices) for indices in DataHelper.combinations(p, k)]);
             data = list(map(tuple, np.array(data, np.object)[DataHelper.randomArrangement(len(data)), :].tolist()));
 
-            with multiprocessing.Pool(psutil.cpu_count(False) - 2) as pool:
+            with multiprocessing.Pool(max(1, psutil.cpu_count(False) - 2)) as pool:
                 models = pool.starmap(LinearRegression._optimalSubsetsCore, data);
 
             for k in range(1, p + 1):

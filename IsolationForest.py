@@ -173,7 +173,7 @@ class IsolationForest:
         self.__threshold = None;
 
         n = dataSet.shape[0];
-        with multiprocessing.Pool(psutil.cpu_count(False) - 2) as pool:
+        with multiprocessing.Pool(max(1, psutil.cpu_count(False) - 2)) as pool:
             self.__treesList = pool.map(self._createTree, [dataSet[np.random.choice(n, self.__subSamplingSize, False), :] for i in range(0, self.__treeCount)]);
 
 
@@ -193,7 +193,7 @@ class IsolationForest:
         if len(self.__treesList) != self.__treeCount:
             raise InvalidOperationError();
 
-        with multiprocessing.Pool(psutil.cpu_count(False) - 2) as pool:
+        with multiprocessing.Pool(max(1, psutil.cpu_count(False) - 2)) as pool:
             self.__scores = pool.map(self.getAnomalyScore, [item for item in dataSet]);
 
         self.__threshold = self.__thresholdFinder.find(self.__scores);
@@ -320,7 +320,7 @@ class CurvesThresholdFinder(IThresholdFinder):
 
         curves = None;
         if len(points) >= CurvesThresholdFinder.MIN_PARALLEL_NUMBER:
-            with multiprocessing.Pool(psutil.cpu_count(False) - 2) as pool:
+            with multiprocessing.Pool(max(1, psutil.cpu_count(False) - 2)) as pool:
                 curves = pool.starmap(self._processItem, points);
         else:
             curves = list(map(lambda obj: self._processItem(*obj), points));
