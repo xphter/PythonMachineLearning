@@ -233,8 +233,13 @@ class LinearRegression:
     def __getX(self, X):
         dataSet = X;
 
-        if self.__basisFunctions is not None:
-            dataSet = np.hstack(tuple([self.__basisFunctions[j].getX(X[:, j]) if self.__basisFunctions[j] is not None else X[:, j] for j in range(X.shape[1])]));
+        if self.__basisFunctions is not None and any(self.__basisFunctions):
+            sets = tuple([item for item in [self.__basisFunctions[j].getX(X[:, j]) if self.__basisFunctions[j] is not None else X[:, j] for j in range(X.shape[1])] if item is not None]);
+
+            if len(sets) > 0:
+                dataSet = np.hstack(sets);
+            else:
+                dataSet = np.mat(np.empty((X.shape[0], 0)));
 
         return np.hstack((np.mat(np.ones((dataSet.shape[0], 1))), dataSet));
 
@@ -293,8 +298,8 @@ class LinearRegression:
         self.__betaP = self.__getP(self.__betaT, n - p);
         self.__betaValue = self.__beta.copy();
 
-        self.__allF = (tss - rss) / (p - 1) / self.__sigma ** 2;
-        self.__allP = 1 - f.cdf(self.__allF, p - 1, n - p);
+        self.__allF = (tss - rss) / (p - 1) / self.__sigma ** 2 if p > 1 else 0;
+        self.__allP = 1 - f.cdf(self.__allF, p - 1, n - p) if p > 1 else 0;
 
         return self;
 
@@ -337,6 +342,12 @@ class LinearRegression:
 
 
 class IBasisFunction(metaclass = abc.ABCMeta):
+    @property
+    @abc.abstractmethod
+    def df(self):
+        pass;
+
+
     @abc.abstractmethod
     def getX(self, x):
         pass;
@@ -353,25 +364,39 @@ degree of freedom = d + 1
 class PolynomialFunction(IBasisFunction):
     # df excludes intercept
     def __init__(self, df):
-        if df < 1:
-            raise ValueError("df must be at least 1");
+        if df < 0:
+            raise ValueError("df is at least 0");
 
         self.__d = df;
+
+
+    @property
+    def df(self):
+        return self.__d;
+
 
     def getX(self, x):
         if x is None:
             raise ValueError("vector x is None");
 
-        return DataHelper.vectorPoly(x, self.__d);
+        return DataHelper.vectorPoly(x, self.__d) if self.__d > 0 else None;
 
 
 class KnottedFunction(IBasisFunction, metaclass = abc.ABCMeta):
-    def __init__(self, k):
-        if k < 0:
-            raise ValueError("number of knots must be at least 0");
+    def __init__(self, k = None, knots = None):
+        if k is None and knots is None:
+            raise ValueError("at least one of k and knots cannot be None");
+        if k is not None and k < 0:
+            raise ValueError("k is at least 0");
+        if knots is not None and not isinstance(knots, list):
+            raise ValueError("knots must be a list");
 
-        self._K = k;
-        self._knots = None;
+        if knots is not None:
+            self._K = len(knots);
+            self._knots = knots;
+        else:
+            self._K = k;
+            self._knots = None;
 
 
     @property
@@ -400,7 +425,7 @@ class KnottedFunction(IBasisFunction, metaclass = abc.ABCMeta):
 
 '''
             K
-f(x) = β0 + Σβk * I(Ck <= x < Ck+1)
+f(x) = β0 + Σβk * I(Ck < x <= Ck+1)
            k=1
 degree of freedom = K + 1
 '''
@@ -408,15 +433,20 @@ degree of freedom = K + 1
 
 class StepFunction(KnottedFunction):
     # df excludes intercept
-    def __init__(self, df):
-        if df < 1:
-            raise ValueError("df must be at least 1");
+    def __init__(self, df = None, knots = None):
+        if df is not None and df < 0:
+            raise Value("df is at least 0");
 
-        super().__init__(df);
+        super().__init__(df, knots);
+
+
+    @property
+    def df(self):
+        return self._K;
 
 
     def _getX(self, x):
-        return np.hstack(tuple([(np.logical_and(x >= self._knots[i], x < self._knots[i + 1]) if i < len(self._knots) - 1 else x >= self._knots[i]) - 0 for i in range(0, self._K)]));
+        return np.hstack(tuple([(np.logical_and(x > self._knots[i], x <= self._knots[i + 1]) if i < len(self._knots) - 1 else x > self._knots[i]) - 0 for i in range(0, self._K)])) if self._K > 0 else None;
 
 
 '''
@@ -424,34 +454,34 @@ class StepFunction(KnottedFunction):
 f(x) = Σ βj * x^(j-1) + Σ θk * (x-ξk)+^(M-1)
       j=0              k=1
 f, f', f'', ... d^(M-2)f is continuous at  ξk, k = 1, 2, ..., K
-degree of freedom = M + K
+degree of freedom = K + M
 the default is cubic spline with M = 4.
 '''
 
 
 class RegressionSplineFunction(KnottedFunction):
     # df excludes intercept
-    def __init__(self, df, m = 4):
+    def __init__(self, df = None, m = 4, knots = None):
         if m < 1:
-            raise ValueError("m must be at least 1");
-        if df < 1:
-            raise ValueError("df must be at least 1");
+            raise ValueError("m is at least 1");
 
-        super().__init__(max(df + 1 - m, 0));
+        super().__init__(max(df + 1 - m, 0) if df is not None else None, knots);
 
-        self.__M = m;
-        self.__df = df;
+        self.__d = m - 1;
+
+
+    @property
+    def df(self):
+        return self._K + self.__d;
 
 
     def _getX(self, x):
-        d = self.__M - 1;
-
         if self._K > 0:
-            Y = np.hstack(tuple([DataHelper.truncatedPower(x, self._knots[k], d) for k in range(0, self._K)]));
+            Y = np.hstack(tuple([DataHelper.truncatedPower(x, self._knots[k], self.__d) for k in range(0, self._K)]));
 
-            return np.hstack((DataHelper.vectorPoly(x, d), Y)) if d > 0 else Y;
+            return np.hstack((DataHelper.vectorPoly(x, self.__d), Y)) if self.__d > 0 else Y;
         else:
-            return DataHelper.vectorPoly(x, self.__df);
+            return DataHelper.vectorPoly(x, self.__d) if self.__d > 0 else None;
 
 
 '''
@@ -467,11 +497,13 @@ when K = 1 and 2, f(x) = β0 + β1x.
 
 class NatureCubicSplineFunction(KnottedFunction):
     # df excludes intercept
-    def __init__(self, df):
-        if df < 0:
-            raise ValueError("df must be at least 0");
+    def __init__(self, df = None, knots = None):
+        super().__init__(max(df + 1, 0) if df is not None else None, knots);
 
-        super().__init__(df + 1);
+
+    @property
+    def df(self):
+        return self._K - 1;
 
 
     def __d(self, k, x):
