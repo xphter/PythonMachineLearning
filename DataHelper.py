@@ -3,6 +3,9 @@ import random;
 import numpy as np;
 import numpy.linalg as npl;
 import numpy.matlib as npm;
+from scipy.stats import norm;
+from scipy.stats import chi2;
+from scipy.special import comb;
 
 
 def __groupByLabel(X):
@@ -78,6 +81,25 @@ def calcJaccardCoefficient(X, v):
 # for sparse dataset
 def calcCosine(X, v):
     return np.dot(X / np.mat(list(map(npl.norm, X))).T, v.T / npl.norm(v));
+
+
+def __calcAcf(x, n, k, sigma2):
+    # x must be centralized
+    if k == 0:
+        return 1;
+
+    x1 = x[:n - k, :];
+    x2 = x[k:, :];
+
+    return (x1.T * x2)[0, 0] / sigma2;
+
+
+def calcAcf(x, k):
+    n = x.shape[0];
+    centralizedX = x - x.mean();
+    sigma2 = (centralizedX.T * centralizedX)[0, 0];
+
+    return __calcAcf(centralizedX, n, k, sigma2);
 
 
 def getExistingMedian(X, floor = False):
@@ -246,3 +268,66 @@ def truncatedPower(x, value, d):
         raise ValueError("vector x is None");
 
     return np.multiply((x > value) - 0, np.power(x - value, d));
+
+
+# return p-value
+def testNormalDistribution(x):
+    if x is None:
+        raise ValueError("vector x is None");
+
+    n = x.shape[0];
+    mu, std = x.mean(), x.std();
+    skew = np.power(x - mu, 3).sum() / n / std ** 3;
+    kurt = np.power(x - mu, 4).sum() / n / std ** 4 - 3;
+    K = skew ** 2 * (n + 1) * (n + 3) / (6 * (n - 2));
+    K += (kurt + 6 / (n + 1)) ** 2 * (n + 1) ** 2 * (n + 3) * (n + 5) / (24 * n * (n - 2) * (n - 3));
+
+    return 1 - chi2.cdf(K, 2);
+
+
+# return p-value
+def testWhiteNoise(x, m):
+    # x must be centralized
+    n = x.shape[0];
+    sigma2 = (x.T * x)[0, 0];
+
+    if sigma2 == 0:
+        return 1;
+
+    rho = np.mat([__calcAcf(x, n, k, sigma2) for k in range(0, m + 1)]).T;
+
+    Q = n * (n + 2) * ((1 / np.mat(range(n - 1, n - m - 1, -1))) * np.power(rho[1:, 0], 2))[0, 0];
+
+    return 1 - chi2.cdf(Q, m);
+
+
+# return p-value
+def testRunsLeft(x):
+    if x is None or x.shape[0] == 0:
+        raise ValueError("x is none or empty");
+
+    if not np.all(np.logical_or(x == 0, x == 1)):
+        raise ValueError("x should only contains 0 or 1");
+
+    n, n0, n1 = x.shape[0], (x == 0).sum(), (x == 1).sum();
+    if n0 == 0 or n1 == 0:
+        return 0;
+
+    r, current = 1, x[0, 0];
+    for i in range(1, x.shape[0]):
+        if x[i, 0] != current:
+            r += 1;
+            current = x[i, 0];
+
+    p = 0;
+
+    if n0 <= 30 and n1 <= 30:
+        p += sum([2 * comb(n0 - 1, k - 1) * comb(n1 - 1, k - 1) for k in range(1, math.floor(r / 2) + 1)]);
+        p += sum([comb(n0 - 1, k - 1) * comb(n1 - 1, k) + comb(n0 - 1, k) * comb(n1 - 1, k - 1) for k in range(1, math.floor((r - 1) / 2) + 1)]);
+        p /= comb(n, n0);
+    else:
+        mu = 2 * n0 * n1 / n + 1;
+        sigma = math.sqrt(2 * n0 * n1 * (2 * n0 * n1 - n)/ n ** 2 / (n - 1));
+        p = norm.cdf((r - mu) / sigma, 0, 1);
+
+    return p;
