@@ -2,11 +2,13 @@
 import math;
 import os;
 import time;
+import datetime;
 import threading;
 import json;
 import sys;
 import random;
 import multiprocessing;
+import psutil;
 import pickle;
 
 from scipy.stats import t, f;
@@ -136,7 +138,8 @@ def showAnomaly(indices, j, size, data, marks):
                 points.append(i);
             else:
                 plt.figure(1, (12, 8));
-                plt.get_current_fig_manager().window.showMaximized();
+                # plt.get_current_fig_manager().window.showMaximized();
+                plt.get_current_fig_manager().window.maximize();
                 plotAnomaly(current, points, j, daySize, data, marks);
                 plt.show(block = True);
                 plt.close();
@@ -159,7 +162,7 @@ def showAnomaly2(indices1, indices2, j, size, data, marks):
             continue;
 
         plt.figure(1, (12, 8));
-        plt.get_current_fig_manager().window.showMaximized();
+        plt.get_current_fig_manager().window.maximize();
         plt.subplot(211);
         plotAnomaly(i, points1, j, daySize, data, marks);
         plt.subplot(212);
@@ -168,20 +171,18 @@ def showAnomaly2(indices1, indices2, j, size, data, marks):
         plt.close();
 
 
-
 def showDiff(y1, y2, size):
     x = list(range(0, size));
 
     for i in range(math.floor(len(y1) / size)):
         plt.figure(1, (12, 8));
-        plt.get_current_fig_manager().window.showMaximized();
+        plt.get_current_fig_manager().window.maximize();
         plt.title(str(i + 1));
         plt.axhline(0);
         plt.scatter(x, y1[i * size: (i + 1) * size], color = "black");
         plt.scatter(x, y2[i * size: (i + 1) * size], color = "red");
         plt.show(block = True);
         plt.close();
-
 
 
 def calcAmplitude(i, j, offset, size, h, M, data):
@@ -200,17 +201,17 @@ def detectAmplitude(j, f):
     marks = np.mat(np.load("/media/WindowsE/Data/PARS/JNLH/ReasonAnalysis/{0}/marks.npy".format(f)));
     y1 = data[:size * (h + 1), j];
     X1 = np.mat(np.arange(y1.shape[0])).T;
-    m1 = LinearRegression.LinearRegression().fit(X1, y1, [LinearRegression.RegressionSplineFunction(h + M - 1, M)]);
+    m1 = LinearRegression.LinearRegression().fit(X1, y1, [LinearRegression.RegressionSplineFunction((h + 1) + M - 2, M)]);
     sY1 = m1.predictValue(X1);
     X1 = X1[:-size, :];
     y1 = y1[:-size, :];
     sY1 = sY1[:-size, :];
     sY.extend(sY1.A.flatten().tolist());
 
-    for i in range(1, math.floor((data.shape[0] - size) / (size * 24))):
+    for i in range(1, math.floor((data.shape[0] - size) / (size * h))):
         y2 = data[i * size * h - size:(i + 1) * size * h + size, j];
         X2 = np.mat(np.arange(y2.shape[0])).T;
-        m2 = LinearRegression.LinearRegression().fit(X2, y2, [LinearRegression.RegressionSplineFunction(h + M, 3)]);
+        m2 = LinearRegression.LinearRegression().fit(X2, y2, [LinearRegression.RegressionSplineFunction((h + 2) + M - 2, 3)]);
         sY2 = m2.predictValue(X2);
         X2 = X2[size:-size, :];
         y2 = y2[size:-size, :];
@@ -218,7 +219,7 @@ def detectAmplitude(j, f):
         sY.extend(sY2.A.flatten().tolist());
 
         # plt.figure(1, (12, 8));
-        # plt.get_current_fig_manager().window.showMaximized();
+        # plt.get_current_fig_manager().window.maximize();
         # plt.subplot(211);
         # plt.title(str(i - 1));
         # plt.plot(X1.A.flatten(), y1.A.flatten(), "-x");
@@ -234,8 +235,9 @@ def detectAmplitude(j, f):
 
     amplitude = data[:len(sY), j] - np.mat(sY).T;
     amplitudeMean, amplitudeStd = amplitude.mean(), amplitude.std();
+    print(DataHelper.testNormalDistribution(amplitude));
     # plt.figure(1, (12, 8));
-    # plt.get_current_fig_manager().window.showMaximized();
+    # plt.get_current_fig_manager().window.maximize();
     # plt.hist(amplitude.A.flatten(), bins = 1000);
     # plt.show(block = True);
     # plt.close();
@@ -247,13 +249,13 @@ def detectAmplitude(j, f):
     h = 24;
     startIndex, offset, values = size * 24, int(12 * 60 / f), None;
     if not os.path.isfile("{0}/amplitude_{1}_values.npy".format(f, j)):
-        with multiprocessing.Pool() as pool:
+        with multiprocessing.Pool(psutil.cpu_count(False) - 2) as pool:
             values = pool.starmap(calcAmplitude, [(i, j, offset, size, h, M, data) for i in range(startIndex, data.shape[0] - offset)]);
         np.save("{0}/amplitude_{1}_values.npy".format(f, j), np.mat(values).T);
 
     values = np.mat(np.load("{0}/amplitude_{1}_values.npy".format(f, j)));
     # plt.figure(1, (12, 8));
-    # plt.get_current_fig_manager().window.showMaximized();
+    # plt.get_current_fig_manager().window.maximize();
     # plt.hist(values.A.flatten(), bins = 1000);
     # plt.show(block = True);
     # plt.close();
@@ -278,13 +280,13 @@ def detectAmplitude(j, f):
 
     scores = None;
     if not os.path.isfile("{0}/amplitude_{1}_scores.npy".format(f, j)):
-        with multiprocessing.Pool() as pool:
+        with multiprocessing.Pool(psutil.cpu_count(False) - 2) as pool:
             scores = pool.map(forest.getAnomalyScore, [np.mat([v]) for v in values.A.flatten().tolist()]);
         np.save("{0}/amplitude_{1}_scores.npy".format(f, j), np.mat(scores).T);
 
     scores = np.mat(np.load("{0}/amplitude_{1}_scores.npy".format(f, j)));
     # plt.figure(1, (12, 8));
-    # plt.get_current_fig_manager().window.showMaximized();
+    # plt.get_current_fig_manager().window.maximize();
     # plt.hist(scores.A.flatten(), bins = 1000);
     # plt.show(block = True);
     # plt.close();
@@ -296,7 +298,7 @@ def detectAmplitude(j, f):
     indices4 = (np.argwhere(values < (amplitudeMean - 3 * amplitudeStd))[:, 0].flatten()).tolist() + (np.argwhere(values > (amplitudeMean + 3 * amplitudeStd))[:, 0].flatten()).tolist();
     indices4 = [i + startIndex for i in indices4 if values[i, 0] < amplitudeMean - 6 * amplitudeStd or values[i, 0] > amplitudeMean + 6 * amplitudeStd or scores[i] >= forest.threshold];
     indices4.sort();
-    # showAnomaly(indices4, j, size, data, marks);
+    showAnomaly(indices4, j, size, data, marks);
 
     print("amplitude {0} completed".format(j));
 
@@ -327,10 +329,6 @@ def calcSpeedM3(i, j, offset, size, h, data, X, x, T):
     y = data[i + 1 + offset - size * h:i + 1 + offset, j];
     m = LinearRegression.LinearRegression().fit(X, y);
     return getSpeedM3Internal(m.beta, x, T)[0, 0];
-
-
-def calcDelta(i, j, data):
-    return data[i, j] - data[i - 1, j];
 
 
 def detectSpeed(j, f):
@@ -364,7 +362,7 @@ def detectSpeed(j, f):
         speed.extend(getSpeedM3(m2.beta, f2.knots, X2).A.flatten().tolist());
 
         # plt.figure(1, (12, 8));
-        # plt.get_current_fig_manager().window.showMaximized();
+        # plt.get_current_fig_manager().window.maximize();
         # plt.subplot(211);
         # plt.title(str(i - 1));
         # plt.plot(X1.A.flatten(), y1.A.flatten(), "-x");
@@ -381,11 +379,11 @@ def detectSpeed(j, f):
 
     speed = np.mat(speed).T;
     speedMean, speedStd = speed.mean(), speed.std();
-    plt.figure(1, (12, 8));
-    plt.get_current_fig_manager().window.showMaximized();
-    plt.hist(speed.A.flatten(), bins = 1000);
-    plt.show(block = True);
-    plt.close();
+    # plt.figure(1, (12, 8));
+    # plt.get_current_fig_manager().window.maximize();
+    # plt.hist(speed.A.flatten(), bins = 1000);
+    # plt.show(block = True);
+    # plt.close();
 
     indices1 = np.argwhere(speed < (speedMean - 6 * speedStd))[:, 0].flatten().tolist() + np.argwhere(speed > (speedMean + 6 * speedStd))[:, 0].flatten().tolist();
     indices1.sort();
@@ -398,7 +396,7 @@ def detectSpeed(j, f):
         X = ftn.getX(np.mat(np.arange(size * h)).T);
         x = np.mat([size * h - 1 - offset]);
 
-        with multiprocessing.Pool() as pool:
+        with multiprocessing.Pool(psutil.cpu_count(False) - 2) as pool:
             if M == 3:
                 T = np.multiply(np.hstack(tuple([x - k for k in ftn.knots])), np.hstack(tuple([(x > k) - 0 for k in ftn.knots])));
 
@@ -418,11 +416,11 @@ def detectSpeed(j, f):
 
     values = np.mat(np.load("{0}/speed_{1}_values.npy".format(f, j)));
     valuesMean, valuesStd = values.mean(), values.std();
-    plt.figure(1, (12, 8));
-    plt.get_current_fig_manager().window.showMaximized();
-    plt.hist(values.A.flatten(), bins = 1000);
-    plt.show(block = True);
-    plt.close();
+    # plt.figure(1, (12, 8));
+    # plt.get_current_fig_manager().window.maximize();
+    # plt.hist(values.A.flatten(), bins = 1000);
+    # plt.show(block = True);
+    # plt.close();
 
     indices2 = (np.argwhere(values < (speedMean - 6 * speedStd))[:, 0].flatten() + startIndex).tolist() + (np.argwhere(values > (speedMean + 6 * speedStd))[:, 0].flatten() + startIndex).tolist();
     indices2.sort();
@@ -444,14 +442,14 @@ def detectSpeed(j, f):
 
     scores = None;
     if not os.path.isfile("{0}/speed_{1}_scores.npy".format(f, j)):
-        with multiprocessing.Pool() as pool:
+        with multiprocessing.Pool(psutil.cpu_count(False) - 2) as pool:
             scores = pool.map(forest.getAnomalyScore, [np.mat([v]) for v in values.A.flatten().tolist()]);
         np.save("{0}/speed_{1}_scores.npy".format(f, j), np.mat(scores).T);
         print("realtime score completed.");
 
     scores = np.mat(np.load("{0}/speed_{1}_scores.npy".format(f, j)));
     # plt.figure(1, (12, 8));
-    # plt.get_current_fig_manager().window.showMaximized();
+    # plt.get_current_fig_manager().window.maximize();
     # plt.hist(scores.A.flatten(), bins = 1000);
     # plt.show(block = True);
     # plt.close();
@@ -468,14 +466,14 @@ def detectSpeed(j, f):
     deltaValues = np.diff(data[:, j], 1, 0);
     deltaMean, deltaStd = deltaValues.mean(), deltaValues.std();
     # plt.figure(1, (12, 8));
-    # plt.get_current_fig_manager().window.showMaximized();
+    # plt.get_current_fig_manager().window.maximize();
     # plt.hist(deltaValues.A.flatten(), bins = 1000);
     # plt.show(block = True);
     # plt.close();
 
     # deltaScores = None;
     # if not os.path.isfile("{0}/speed_{1}_delta_scores.npy".format(f, j)):
-    #     with multiprocessing.Pool() as pool:
+    #     with multiprocessing.Pool(psutil.cpu_count(False) - 2) as pool:
     #         deltaScores = pool.map(forest.getAnomalyScore, [np.mat([v]) for v in deltaValues.A.flatten().tolist()]);
     #     np.save("{0}/speed_{1}_delta_scores.npy".format(f, j), np.mat(deltaScores).T);
     #
@@ -484,12 +482,244 @@ def detectSpeed(j, f):
     indices5 = [i + 1 for i in range(0, deltaValues.shape[0]) if deltaValues[i, 0] < deltaMean - 6 * deltaStd or deltaValues[i, 0] > deltaMean + 6 * deltaStd];
     indices5.sort();
     showAnomaly2(indices4, indices5, j, size, data, marks);
+    # showAnomaly(indices4, j, size, data, marks);
 
     print("speed {0} completed".format(j));
 
 
+def detectChange(j, f):
+    print("change {0} started".format(j));
+
+    M = 2;
+    h = 12;
+    timespan = 12;
+    size, speed = int(3600 / f), [];
+    data = np.mat(np.load("/media/WindowsE/Data/PARS/JNLH/ReasonAnalysis/{0}/data.npy".format(f)));
+    marks = np.mat(np.load("/media/WindowsE/Data/PARS/JNLH/ReasonAnalysis/{0}/marks.npy".format(f)));
+    y1 = data[:size * (h + 1), j];
+    X1 = np.mat(np.arange(y1.shape[0])).T;
+    f1 = LinearRegression.RegressionSplineFunction(int((h + 1) * 60 / timespan) + M - 2, M);
+    m1 = LinearRegression.LinearRegression().fit(X1, y1, [f1]);
+    sY1 = m1.predictValue(X1);
+    X1 = X1[:-size, :];
+    y1 = y1[:-size, :];
+    sY1 = sY1[:-size, :];
+    if M == 3:
+        speed.extend(getSpeedM3(m1.beta, f1.knots, X1).A.flatten().tolist());
+    else:
+        speed.extend(getSpeedM2(m1.beta, f1.knots, X1).A.flatten().tolist());
+
+    for i in range(1, math.floor((data.shape[0] - size) / (size * h))):
+        y2 = data[i * size * h - size:(i + 1) * size * h + size, j];
+        X2 = np.mat(np.arange(y2.shape[0])).T;
+        f2 = LinearRegression.RegressionSplineFunction(int((h + 2) * 60 / timespan) + M - 2, M);
+        m2 = LinearRegression.LinearRegression().fit(X2, y2, [f2]);
+        sY2 = m2.predictValue(X2);
+        X2 = X2[size:-size, :];
+        y2 = y2[size:-size, :];
+        sY2 = sY2[size:-size, :];
+        if M == 3:
+            speed.extend(getSpeedM3(m2.beta, f2.knots, X2).A.flatten().tolist());
+        else:
+            speed.extend(getSpeedM2(m2.beta, f2.knots, X2).A.flatten().tolist());
+
+        plt.figure(1, (12, 8));
+        plt.get_current_fig_manager().window.maximize();
+        plt.subplot(211);
+        plt.title(str(i - 1));
+        plt.plot(X1.A.flatten(), y1.A.flatten(), "-x");
+        plt.plot(X1.A.flatten(), sY1.A.flatten(), color = "red");
+        plt.subplot(212);
+        plt.title(str(i));
+        plt.plot(X2.A.flatten(), y2.A.flatten(), "-x");
+        plt.plot(X2.A.flatten(), sY2.A.flatten(), color = "red");
+        plt.show(block = True);
+        plt.close();
+
+        X1, y1, sY1 = X2, y2, sY2;
+    print("change history completed.");
+
+    speed = np.mat(speed).T;
+    speedMean, speedStd = speed.mean(), speed.std();
+    plt.figure(1, (12, 8));
+    plt.get_current_fig_manager().window.maximize();
+    plt.hist(speed.A.flatten(), bins = 1000);
+    plt.show(block = True);
+    plt.close();
+
+    indices1 = np.argwhere(speed < (speedMean - 6 * speedStd))[:, 0].flatten().tolist() + np.argwhere(speed > (speedMean + 6 * speedStd))[:, 0].flatten().tolist();
+    indices1.sort();
+    # showAnomaly(indices1, j, size, data, marks);
+
+    h = 1;
+    startIndex, offset, values = size * h, int(12 * 60 / f), None;
+    if not os.path.isfile("{0}/speed_{1}_values.npy".format(f, j)):
+        ftn = LinearRegression.RegressionSplineFunction(int(h * 60 / timespan) + M - 2, M);
+        X = ftn.getX(np.mat(np.arange(size * h)).T);
+        x = np.mat([size * h - 1 - offset]);
+
+        with multiprocessing.Pool(psutil.cpu_count(False) - 2) as pool:
+            if M == 3:
+                T = np.multiply(np.hstack(tuple([x - k for k in ftn.knots])), np.hstack(tuple([(x > k) - 0 for k in ftn.knots])));
+
+                # values = [calcSpeedM3(i, j, offset, size, h, data, X, x, T) for i in range(startIndex, size * 24 * 10)];
+                # showDiff(speed[startIndex: startIndex + len(values)].A.flatten().tolist(), values, size * 6);
+
+                values = pool.starmap(calcSpeedM3, [(i, j, offset, size, h, data, X, x, T) for i in range(startIndex, data.shape[0] - offset)]);
+            else:
+                T = np.hstack(tuple([(x > k) - 0 for k in ftn.knots]));
+
+                # values = [calcSpeedM2(i, j, offset, size, h, data, X, T) for i in range(startIndex, size * 24 * 10)];
+                # showDiff(speed[startIndex: startIndex + len(values)].A.flatten().tolist(), values, size * 6);
+
+                values = pool.starmap(calcSpeedM2, [(i, j, offset, size, h, data, X, T) for i in range(startIndex, data.shape[0] - offset)]);
+        np.save("{0}/speed_{1}_values.npy".format(f, j), np.mat(values).T);
+        print("realtime speed completed.");
+
+    values = np.mat(np.load("{0}/speed_{1}_values.npy".format(f, j)));
+    valuesMean, valuesStd = values.mean(), values.std();
+    # plt.figure(1, (12, 8));
+    # plt.get_current_fig_manager().window.maximize();
+    # plt.hist(values.A.flatten(), bins = 1000);
+    # plt.show(block = True);
+    # plt.close();
+
+    indices2 = (np.argwhere(values < (speedMean - 6 * speedStd))[:, 0].flatten() + startIndex).tolist() + (np.argwhere(values > (speedMean + 6 * speedStd))[:, 0].flatten() + startIndex).tolist();
+    indices2.sort();
+    # showAnomaly(indices2, j, size, data, marks);
+
+    forest = None;
+    if not os.path.isfile("{0}/speed_{1}_forest.npy".format(f, j)):
+        forest = IsolationForest(200, 2 ** 9, CurvesThresholdFinder(0.65, 0.68, 0.73, False));
+        forest.fill(speed);
+        print("forest fill completed");
+        forest.train(speed);
+        print("forest train completed");
+
+        with open("{0}/speed_{1}_forest.npy".format(f, j), "wb") as file:
+            pickle.dump(forest, file, protocol = pickle.DEFAULT_PROTOCOL);
+    else:
+        with open("{0}/speed_{1}_forest.npy".format(f, j), "rb") as file:
+            forest = pickle.load(file);
+
+    scores = None;
+    if not os.path.isfile("{0}/speed_{1}_scores.npy".format(f, j)):
+        with multiprocessing.Pool(psutil.cpu_count(False) - 2) as pool:
+            scores = pool.map(forest.getAnomalyScore, [np.mat([v]) for v in values.A.flatten().tolist()]);
+        np.save("{0}/speed_{1}_scores.npy".format(f, j), np.mat(scores).T);
+        print("realtime score completed.");
+
+    scores = np.mat(np.load("{0}/speed_{1}_scores.npy".format(f, j)));
+    # plt.figure(1, (12, 8));
+    # plt.get_current_fig_manager().window.maximize();
+    # plt.hist(scores.A.flatten(), bins = 1000);
+    # plt.show(block = True);
+    # plt.close();
+
+    indices3 = (np.argwhere(scores >= forest.threshold)[:, 0].flatten() + startIndex).tolist();
+    indices3.sort();
+    # showAnomaly(indices3, j, size, data, marks);
+
+    indices4 = (np.argwhere(values < (speedMean - 3 * speedStd))[:, 0].flatten()).tolist() + (np.argwhere(values > (speedMean + 3 * speedStd))[:, 0].flatten()).tolist();
+    indices4 = [i + startIndex for i in indices4 if values[i, 0] < speedMean - 6 * speedStd or values[i, 0] > speedMean + 6 * speedStd or scores[i] >= forest.threshold];
+    indices4.sort();
+    # showAnomaly(indices4, j, size, data, marks);
+
+    deltaValues = np.diff(data[:, j], 1, 0);
+    deltaMean, deltaStd = deltaValues.mean(), deltaValues.std();
+    # plt.figure(1, (12, 8));
+    # plt.get_current_fig_manager().window.maximize();
+    # plt.hist(deltaValues.A.flatten(), bins = 1000);
+    # plt.show(block = True);
+    # plt.close();
+
+    # deltaScores = None;
+    # if not os.path.isfile("{0}/speed_{1}_delta_scores.npy".format(f, j)):
+    #     with multiprocessing.Pool(psutil.cpu_count(False) - 2) as pool:
+    #         deltaScores = pool.map(forest.getAnomalyScore, [np.mat([v]) for v in deltaValues.A.flatten().tolist()]);
+    #     np.save("{0}/speed_{1}_delta_scores.npy".format(f, j), np.mat(deltaScores).T);
+    #
+    # deltaScores = np.mat(np.load("{0}/speed_{1}_delta_scores.npy".format(f, j)));
+
+    indices5 = [i + 1 for i in range(0, deltaValues.shape[0]) if deltaValues[i, 0] < deltaMean - 6 * deltaStd or deltaValues[i, 0] > deltaMean + 6 * deltaStd];
+    indices5.sort();
+    showAnomaly2(indices4, indices5, j, size, data, marks);
+    # showAnomaly(indices4, j, size, data, marks);
+
+    print("speed {0} completed".format(j));
+
+
+def isConstant(y, periods, alpha):
+    if y.var() == 0:
+        return True;
+
+    p1 = [DataHelper.testWhiteNoise(y - y.mean(), m) for m in periods];
+    if np.any(np.mat(p1) <= alpha):
+        return False;
+
+    p2 = LinearRegression.LinearRegression().fit(np.mat(range(0, y.shape[0])).T, y).betaP;
+    if p2[1, 0] <= alpha:
+        return False;
+
+    p3 = DataHelper.testRunsLeft((y > np.quantile(y, 0.5)) - 0);
+    if p3 <= alpha:
+        return False;
+
+    print("{0}, {1}, {2}".format(p1, p2.T, p3));
+    return True;
+
+
+def detectConstant(j, f):
+    print("constant {0} started".format(j));
+
+    timespan = 15;
+    size = int(timespan * 60 / f);
+    periods, alpha = [3, 6, 12], 0.1;
+    data = np.mat(np.load("/media/WindowsE/Data/PARS/JNLH/ReasonAnalysis/{0}/data.npy".format(f)));
+    marks = np.mat(np.load("/media/WindowsE/Data/PARS/JNLH/ReasonAnalysis/{0}/marks.npy".format(f)));
+    y = data[:, j];
+    n, i, offset = y.shape[0], 0, int(1 * 60 / f);
+
+    while i + size <= n:
+        k = 0;
+
+        while i + size + k <= n and isConstant(y[i: i + size + k, :], periods, alpha):
+            k += 1;
+
+        if k > 0:
+            length = size + k - 1;
+            start, end = max(i - offset, 0), min(i + length + offset, n);
+
+            plt.figure(1, (12, 8));
+            plt.get_current_fig_manager().window.maximize();
+            plt.title("{0}({1} - {2}, {3})".format(length, i, i + length - 1, j));
+            plt.plot(list(range(start, end)), y[start: end, :].A.flatten(), "-x");
+            plt.scatter(list(range(i, i + length)), y[i: i + length, :].A.flatten(), color="red");
+            plt.show(block=True);
+            plt.close();
+
+            i += length;
+        else:
+            i += 1;
+
+    print("constant {0} completed".format(j));
+
 
 if __name__ == '__main__':
+    # K, M = 1, 2;
+    # y = np.mat(range(0, 100)).T;
+    # x = np.mat(range(0, y.shape[0])).T;
+    # m = LinearRegression.LinearRegression();
+    # m.fit(x, y, [LinearRegression.RegressionSplineFunction(K + M - 1, M)]);
+    # yHat = m.predictValue(x);
+    #
+    # plt.figure(1, (12, 8));
+    # plt.get_current_fig_manager().window.maximize();
+    # plt.plot(x.A.flatten(), y.A.flatten().tolist(), "xb");
+    # plt.plot(x.A.flatten(), yHat.A.flatten().tolist(), "or");
+    # plt.show(block = True);
+    # plt.close();
+
     # Hitters
     # data = np.mat(np.loadtxt("/home/xphter/Downloads/统计学习导论/Data/Hitters.csv", delimiter = ",", dtype = np.object))[1:, 1:];
     # r = (data[:, 13] == '"N"').A.flatten();
@@ -524,12 +754,28 @@ if __name__ == '__main__':
     # X = np.mat(data[:, :-1], np.float);
 
     # Wage
-    # data = np.mat(np.loadtxt("/home/xphter/Downloads/统计学习导论/Data/Wage.csv", delimiter = ",", dtype = np.object))[1:, 1:];
+    # data = np.mat(np.loadtxt("/media/WindowsD/WorkSpace/统计学习导论/Data/Wage.csv", delimiter = ",", dtype = np.object))[1:, 1:];
     # y = np.mat(data[:, -1], np.float);
     # X = np.mat(data[:, 1], np.float);
+    # m = LinearRegression.LinearRegression();
+    # m.fit(X, y, [LinearRegression.NatureCubicSplineFunction(0)]);
+    # print(m);
+    #
+    # X2 = np.mat(np.arange(X.min(), X.max() + 1)).T;
+    # y2 = m.predictValue(X2);
+    #
+    # plt.figure(1, (12, 8));
+    # plt.get_current_fig_manager().window.maximize();
+    # plt.scatter(X.A.flatten(), y.A.flatten());
+    # plt.plot(X2.A.flatten(), y2.A.flatten(), "-r");
+    # plt.show(block = True);
+    # plt.close();
 
     # detectAmplitude(int(sys.argv[1]) if len(sys.argv) > 1 else 0, int(sys.argv[2]) if len(sys.argv) > 2 else 60);
-    detectSpeed(int(sys.argv[1]) if len(sys.argv) > 1 else 0, int(sys.argv[2]) if len(sys.argv) > 2 else 60);
+    # detectSpeed(int(sys.argv[1]) if len(sys.argv) > 1 else 0, int(sys.argv[2]) if len(sys.argv) > 2 else 60);
+    # detectChange(int(sys.argv[1]) if len(sys.argv) > 1 else 0, int(sys.argv[2]) if len(sys.argv) > 2 else 60);
+    detectConstant(int(sys.argv[1]) if len(sys.argv) > 1 else 0, int(sys.argv[2]) if len(sys.argv) > 2 else 60);
+    # DataHelper.testRunsLeft(np.mat([1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1]).T);
 
     # data = np.mat(np.loadtxt("/home/xphter/Downloads/统计学习导论/Data/Wage.csv", delimiter = ",", dtype = np.object))[1:, 1:];
     # x = np.mat(data[:, 1], dtype = np.float);
@@ -616,12 +862,6 @@ if __name__ == '__main__':
     #         i = None;
     #
     # print(finder.threshold);
-
-
-# plt.figure(1, (12, 8));
-# plt.scatter(X.A.flatten(), Y.A.flatten());
-# plt.plot([X.min(), X.max()], [beta0 + beta1 * X.min(), beta0 + beta1 * X.max()]);
-# plt.show();
 
 
 
