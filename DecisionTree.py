@@ -121,7 +121,7 @@ class OrCondition(AggregateCondition):
 
 class IDataSplitter(metaclass = abc.ABCMeta):
     @abc.abstractmethod
-    def split(self, D, types):
+    def split(self, D, types, indices):
         # return value: (index, error_changed, (conditions))
         pass;
 
@@ -130,26 +130,28 @@ class DataSplitterBase(IDataSplitter, metaclass = abc.ABCMeta):
     def _getDiscretePoints(self, x):
         return list(set(x.A.flatten().tolist()));
 
+
     def _getContinuousPoints(self, x):
         v = np.array(list(set(x.A.flatten().tolist())));
 
-        return ((v[:-1] + v[1:]) / 2).A.flatten().tolist();
+        return ((v[:-1] + v[1:]) / 2).flatten().tolist();
 
 
 class RssDataSplitter(DataSplitterBase):
-    def _calcRss(self, y):
+    def _calcSS(self, y):
         y = y - y.mean();
 
         return (y.T * y)[0, 0];
 
-    def split(self, D, types):
-        tss = self._calcRss(D[:, -1]);
 
-        index, rss, value, flag = min([min(
-            [(j, s, True, self._calcRss(D[(D[:, j] <= s).A.flatten(), -1]) + self._calcRss(D[(D[:, j] > s).A.flatten(), -1])) for s in self._getContinuousPoints(D[:, j])]
+    def split(self, D, types, indices):
+        tss = self._calcSS(D[:, -1]);
+
+        index, value, flag, rss = min([min(
+            [(j, s, True, self._calcSS(D[(D[:, j] <= s).A.flatten(), -1]) + self._calcSS(D[(D[:, j] > s).A.flatten(), -1])) for s in self._getContinuousPoints(D[:, j])]
             if types[j] else
-            [(j, s, False, self._calcRss(D[(D[:, j] == s).A.flatten(), -1]) + self._calcRss(D[(D[:, j] != s).A.flatten(), -1])) for s in self._getDiscretePoints(D[:, j])],
-            key = lambda item: item[3]) for j in range(D.shape[1] - 1)],
+            [(j, s, False, self._calcSS(D[(D[:, j] == s).A.flatten(), -1]) + self._calcSS(D[(D[:, j] != s).A.flatten(), -1])) for s in self._getDiscretePoints(D[:, j])],
+            key = lambda item: item[3]) for j in indices],
             key = lambda item: item[3]);
 
         return index, rss - tss, (LessEqualCondition(index, value), GreaterThanCondition(index, value)) if flag else (EqualCondition(index, value), NotEqualCondition(index, value));
@@ -169,7 +171,7 @@ class Node(metaclass = abc.ABCMeta):
         if not isinstance(condition, ICondition):
             raise ValueError("condition is not a object of ICondition");
 
-        self._condition = self.condition;
+        self._condition = condition;
         self._value = self._getValue(D) if D.shape[0] > 0 else parent.value;
 
         self._parentNode = parent;
@@ -181,7 +183,7 @@ class Node(metaclass = abc.ABCMeta):
 
 
     def __str__(self):
-        return "{0} {1}".format(self._value, self._condition);
+        return "{0}, {1}".format(self._value, self._condition);
 
 
     @abc.abstractmethod
@@ -220,4 +222,61 @@ class CNode(Node):
 
 
 class DecisionTree:
-    pass;
+    def __init__(self, nodeType, splitter):
+        self.__nodeType = nodeType;
+        self.__splitter = splitter;
+
+        self.__queue = None;
+        self.__rootNode = None;
+        self.__splitsCount = 0;
+        self.__errorChanged = {};
+
+    def __createNode(self, D, parentNode, condition):
+        return self.__nodeType(D, parentNode, condition);
+
+
+    def __splitNode(self, node, D, types, minDataLimit, maxSplitLimit , variableCount):
+        if D.shape[0] <= minDataLimit or D[:, -1].var() == 0:
+            return;
+        if maxSplitLimit is not None and self.__splitsCount >= maxSplitLimit:
+            return;
+
+        featureCount = D.shape[1] - 1;
+        columns = set(np.random.randint(0, featureCount, variableCount).tolist()) if variableCount is not None else set(range(featureCount));
+        columns = columns.difference(set(np.flatnonzero(D[:, list(columns)].var(0) == 0).tolist()));
+        if len(columns) == 0:
+            return;
+
+        childNode = None;
+        index, errorChanged, conditions = self.__splitter.split(D, types, list(columns));
+
+        self.__splitsCount += 1;
+        self.__errorChanged[index] += errorChanged;
+
+        for d, c in [(D[c.check(D).A.flatten(), :], c) for c in conditions]:
+            childNode = self.__createNode(d, node, c);
+            node.childNodes.append(childNode);
+            self.__queue.append((childNode, d, types, minDataLimit, maxSplitLimit, variableCount));
+
+
+    def fit(self, D, types : list, minDataLimit = 5, maxSplitLimit = None, variableCount = None):
+        if D is None:
+            raise ValueError("D is none");
+
+        featureCount = D.shape[1] - 1;
+        minDataLimit = max(1, minDataLimit);
+        types = np.array(types) if types is not None else np.array([False] * featureCount);
+
+        if variableCount is not None:
+            variableCount = max(1, min(featureCount, variableCount));
+
+        self.__queue = [];
+        self.__splitsCount = 0;
+        self.__errorChanged = dict([(j, 0) for j in range(featureCount)]);
+        self.__rootNode = self.__createNode(D, None, TrueCondition());
+
+        self.__queue.append((self.__rootNode, D, types, minDataLimit, maxSplitLimit, variableCount));
+        while len(self.__queue) > 0:
+            self.__splitNode(*self.__queue.pop(0));
+
+        print("fit completed");
