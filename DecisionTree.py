@@ -137,6 +137,59 @@ class DataSplitterBase(IDataSplitter, metaclass = abc.ABCMeta):
         return ((v[:-1] + v[1:]) / 2).flatten().tolist();
 
 
+class InformationGainSplitter(DataSplitterBase):
+    def _calcEntropy(self, y, multiplyBySamplesCount = False):
+        samplesCount = y.shape[0];
+        data = y.A.flatten().tolist();
+
+        v = [data.count(c) for c in list(set(data))];
+
+        if multiplyBySamplesCount:
+            v = [c * math.log2(c / samplesCount) if c > 0 else 0 for c in v];
+        else:
+            v = [c / samplesCount * math.log2(c / samplesCount) if c > 0 else 0 for c in v];
+
+        return -1 * sum(v);
+
+
+    def split(self, D, types, indices):
+        samplesCount = D.shape[0];
+        total = self._calcEntropy(D[:, -1]);
+
+        index, value, flag, entropy = min([
+            min([(j, s, True, (self._calcEntropy(D[(D[:, j] <= s).A.flatten(), -1], True) + self._calcEntropy(D[(D[:, j] > s).A.flatten(), -1], True)) / samplesCount) for s in self._getContinuousPoints(D[:, j])], key = lambda item: item[3])
+            if types[j] else
+            (j, self._getDiscretePoints(D[:, j]), False, sum([self._calcEntropy(D[(D[:, j] == s).A.flatten(), -1], True) for s in self._getDiscretePoints(D[:, j])]) / samplesCount)
+            for j in indices],
+            key = lambda item: item[3]);
+
+        return index, entropy - total, (LessEqualCondition(index, value), GreaterThanCondition(index, value)) if flag else tuple([EqualCondition(index, s) for s in value]);
+
+
+class GiniIndexSplitter(DataSplitterBase):
+    def _calcGiniIndex(self, y, multiplyBySamplesCount = False):
+        samplesCount = y.shape[0];
+        data = y.A.flatten().tolist();
+
+        v = np.mat([data.count(c) for c in list(set(data))]);
+
+        return (samplesCount - (v * v.T)[0, 0] / samplesCount) if multiplyBySamplesCount else (1 - (v * v.T)[0, 0] / samplesCount ** 2);
+
+
+    def split(self, D, types, indices):
+        samplesCount = D.shape[0];
+        total = self._calcGiniIndex(D[:, -1]);
+
+        index, value, flag, gini = min([min(
+            [(j, s, True, (self._calcGiniIndex(D[(D[:, j] <= s).A.flatten(), -1], True) + self._calcGiniIndex(D[(D[:, j] > s).A.flatten(), -1], True)) / samplesCount) for s in self._getContinuousPoints(D[:, j])]
+            if types[j] else
+            [(j, s, False, (self._calcGiniIndex(D[(D[:, j] == s).A.flatten(), -1], True) + self._calcGiniIndex(D[(D[:, j] != s).A.flatten(), -1], True)) / samplesCount) for s in self._getDiscretePoints(D[:, j])],
+            key = lambda item: item[3]) for j in indices],
+            key = lambda item: item[3]);
+
+        return index, gini - total, (LessEqualCondition(index, value), GreaterThanCondition(index, value)) if flag else (EqualCondition(index, value), NotEqualCondition(index, value));
+
+
 class RssDataSplitter(DataSplitterBase):
     def _calcSS(self, y):
         y = y - y.mean();
@@ -218,7 +271,7 @@ class RNode(Node):
 
 class CNode(Node):
     def _getValue(self, D):
-        return scipy.stats.mode(D[:, -1], 0)[0][0];
+        return scipy.stats.mode(D[:, -1], axis = None)[0][0];
 
 
 class DecisionTree:
@@ -235,10 +288,8 @@ class DecisionTree:
         return self.__nodeType(D, parentNode, condition);
 
 
-    def __splitNode(self, node, D, types, minDataLimit, maxSplitLimit , variableCount):
+    def __splitNode(self, node, D, types, minDataLimit , variableCount):
         if D.shape[0] <= minDataLimit or D[:, -1].var() == 0:
-            return;
-        if maxSplitLimit is not None and self.__splitsCount >= maxSplitLimit:
             return;
 
         featureCount = D.shape[1] - 1;
@@ -249,14 +300,14 @@ class DecisionTree:
 
         childNode = None;
         index, errorChanged, conditions = self.__splitter.split(D, types, list(columns));
-
-        self.__splitsCount += 1;
         self.__errorChanged[index] += errorChanged;
+
+        print("method of split node ({0}): {1}, error changed: {2}".format(node, conditions, errorChanged));
 
         for d, c in [(D[c.check(D).A.flatten(), :], c) for c in conditions]:
             childNode = self.__createNode(d, node, c);
             node.childNodes.append(childNode);
-            self.__queue.append((childNode, d, types, minDataLimit, maxSplitLimit, variableCount));
+            self.__queue.append((childNode, d, types, minDataLimit, variableCount));
 
 
     def fit(self, D, types : list, minDataLimit = 5, maxSplitLimit = None, variableCount = None):
@@ -267,6 +318,9 @@ class DecisionTree:
         minDataLimit = max(1, minDataLimit);
         types = np.array(types) if types is not None else np.array([False] * featureCount);
 
+        if types.shape[0] != featureCount:
+            raise ValueError("the size of types is not match number of features");
+
         if variableCount is not None:
             variableCount = max(1, min(featureCount, variableCount));
 
@@ -275,8 +329,12 @@ class DecisionTree:
         self.__errorChanged = dict([(j, 0) for j in range(featureCount)]);
         self.__rootNode = self.__createNode(D, None, TrueCondition());
 
-        self.__queue.append((self.__rootNode, D, types, minDataLimit, maxSplitLimit, variableCount));
+        self.__queue.append((self.__rootNode, D, types, minDataLimit, variableCount));
         while len(self.__queue) > 0:
-            self.__splitNode(*self.__queue.pop(0));
+            if maxSplitLimit is not None and self.__splitsCount >= maxSplitLimit:
+                break;
 
-        print("fit completed");
+            self.__splitNode(*self.__queue.pop(0));
+            self.__splitsCount += 1;
+
+        print("fit decision tree completed, split a total of {0} times".format(self.__splitsCount));
