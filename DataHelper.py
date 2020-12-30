@@ -151,13 +151,8 @@ def holdOutSampling(X, proportion):
 
 
 def bootstrapSampling(X):
-    result = [];
-    classes = __groupByLabel(X);
-
-    for subSet in classes.values():
-        result.extend([random.choice(subSet) for i in range(0, len(subSet))]);
-
-    return np.mat(result);
+    n = X.shape[0];
+    return X[np.random.choice(n, n, True), :];
 
 
 def statisticFrequency(v):
