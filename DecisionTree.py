@@ -269,8 +269,14 @@ class Node(metaclass = abc.ABCMeta):
 
 
     @property
-    def isLeaf(self):
+    def isTerminal(self):
         return len(self._childNodes) == 0;
+
+
+    @staticmethod
+    @abc.abstractmethod
+    def singleError(value, label):
+        pass;
 
 
     @staticmethod
@@ -291,6 +297,11 @@ class RNode(Node):
 
 
     @staticmethod
+    def singleError(value, label):
+        return (value - label) ** 2;
+
+
+    @staticmethod
     def baggingPredict(values : list):
         return np.mean(values);
 
@@ -303,6 +314,11 @@ class RNode(Node):
 class CNode(Node):
     def _getValue(self, D):
         return scipy.stats.mode(D[:, -1], axis = None)[0][0];
+
+
+    @staticmethod
+    def singleError(value, label):
+        return 0 if value == label else 1;
 
 
     @staticmethod
@@ -325,11 +341,23 @@ class DecisionTree:
         self.__rootNode = None;
         self.__splitsCount = 0;
         self.__errorChanged = {};
+        self.__meanTrainingError = 0;
+        self.__terminalNodesCount = 0;
 
 
     @property
     def errorChanged(self):
         return self.__errorChanged;
+
+
+    @property
+    def meanTrainingError(self):
+        return self.__meanTrainingError;
+
+
+    @property
+    def terminalNodesCount(self):
+        return self.__terminalNodesCount;
 
 
     def __isSame(self, X, j):
@@ -345,7 +373,7 @@ class DecisionTree:
             return False;
 
         p = D.shape[1] - 1;
-        columns = [j for j in (np.random.choice(p, variableCount, False).tolist() if variableCount is not None else list(range(p))) if not self.__isSame(D, j)];
+        columns = [j for j in (np.random.choice(p, variableCount, False).tolist() if variableCount is not None and variableCount < p else list(range(p))) if not self.__isSame(D, j)];
         if len(columns) == 0:
             return False;
 
@@ -367,7 +395,7 @@ class DecisionTree:
         if D is None:
             raise ValueError("D is none");
 
-        p = D.shape[1] - 1;
+        n, p = D.shape[0], D.shape[1] - 1;
         minDataLimit = max(1, minDataLimit);
         types = np.array(types) if types is not None else np.array([False] * p);
 
@@ -379,6 +407,8 @@ class DecisionTree:
 
         self.__queue = [];
         self.__splitsCount = 0;
+        self.__meanTrainingError = 0;
+        self.__terminalNodesCount = 0;
         self.__errorChanged = dict([(j, 0) for j in range(p)]);
         self.__rootNode = self.__createNode(D, None, TrueCondition());
 
@@ -389,8 +419,12 @@ class DecisionTree:
 
             if self.__splitNode(*self.__queue.pop(0)):
                 self.__splitsCount += 1;
+            else:
+                self.__terminalNodesCount += 1;
 
-        print("fit decision tree {0} completed, split a total of {1} times".format(self.__name, self.__splitsCount));
+        self.__meanTrainingError = sum([self.__nodeType.singleError(self.predict(D[i, :-1]), D[i, -1]) for i in range(n)]) / n;
+
+        print("Fit decision tree {0} completed, split a total of {1} times. There are {2} terminal nodes. The training error rate is {3}.".format(self.__name, self.__splitsCount, self.__terminalNodesCount, self.__meanTrainingError));
 
         return self;
 
@@ -408,7 +442,7 @@ class DecisionTree:
         while node is not None:
             value = node.value;
 
-            node = ([None] + [c for c in node.childNodes if c.condition.check(x)[0, 0]]).pop(-1) if not node.isLeaf else None;
+            node = ([None] + [c for c in node.childNodes if c.condition.check(x)[0, 0]]).pop(-1) if not node.isTerminal else None;
 
         return value;
 
