@@ -66,6 +66,10 @@ def calcEuclideanDistance(X, v):
     return np.power(Y, 2).sum(1);
 
 
+def calcChebyshevDistance(X, v):
+    return np.abs(X - v).max(1);
+
+
 # only for normal distribution
 def calcMahalanobisDistance(X, v, inverseSigma):
     Y = X - v;
@@ -80,7 +84,8 @@ def calcJaccardCoefficient(X, v):
 
 # for sparse dataset
 def calcCosine(X, v):
-    return np.dot(X / np.mat(list(map(npl.norm, X))).T, v.T / npl.norm(v));
+    return np.divide(X * v.T, np.sqrt(np.power(X, 2).sum(1) * (v * v.T)[0, 0]));
+    # return np.dot(X / np.mat(list(map(npl.norm, X))).T, v.T / npl.norm(v));
 
 
 def __calcAcf(x, n, k, sigma2):
