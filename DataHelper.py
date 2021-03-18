@@ -60,10 +60,15 @@ def calcManhattanDistance(X, v):
     return np.abs(X - v).sum(1);
 
 
-def calcEuclideanDistance(X, v):
-    Y = X - v;
+# output: L2^2
+def calcEuclideanDistance(X, Y):
+    if X.shape[1] != Y.shape[1]:
+        raise ValueError("X and Y have different number of columns");
 
-    return np.power(Y, 2).sum(1);
+    if Y.shape[0] == 1:
+        return np.square(X - Y).sum(1);
+    else:
+        return -2 * X * Y.T + np.square(X).sum(1) + np.square(Y).sum(1).T;
 
 
 def calcChebyshevDistance(X, v):
