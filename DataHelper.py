@@ -98,16 +98,16 @@ def __calcAcf(x, n, k, sigma2):
     if k == 0:
         return 1;
 
-    x1 = x[:n - k, :];
-    x2 = x[k:, :];
+    x1 = x[:n - k];
+    x2 = x[k:];
 
-    return (x1.T * x2)[0, 0] / sigma2;
+    return np.dot(x1, x2) / sigma2;
 
 
 def calcAcf(x, k):
-    n = x.shape[0];
+    n = len(x);
     centralizedX = x - x.mean();
-    sigma2 = (centralizedX.T * centralizedX)[0, 0];
+    sigma2 = np.dot(centralizedX, centralizedX);
 
     return __calcAcf(centralizedX, n, k, sigma2);
 
@@ -293,36 +293,35 @@ def testNormalDistribution(x):
 # return p-value
 def testWhiteNoise(x, m):
     # x must be centralized
-    n = x.shape[0];
-    sigma2 = (x.T * x)[0, 0];
+    n = len(x);
+    sigma2 = np.dot(x, x);
 
     if sigma2 == 0:
         return 1;
 
-    rho = np.mat([__calcAcf(x, n, k, sigma2) for k in range(0, m + 1)]).T;
-
-    Q = n * (n + 2) * ((1 / np.mat(range(n - 1, n - m - 1, -1))) * np.power(rho[1:, 0], 2))[0, 0];
+    rho = np.array([__calcAcf(x, n, k, sigma2) for k in range(1, m + 1)]);
+    Q = n * (n + 2) * np.dot(1 / np.arange(n - 1, n - m - 1, -1), rho ** 2);
 
     return 1 - chi2.cdf(Q, m);
 
 
 # return p-value
 def testRunsLeft(x):
-    if x is None or x.shape[0] == 0:
+    if x is None or len(x) == 0:
         raise ValueError("x is none or empty");
 
-    if not np.all(np.logical_or(x == 0, x == 1)):
+    if not np.logical_or(x == 0, x == 1).all():
         raise ValueError("x should only contains 0 or 1");
 
-    n, n0, n1 = x.shape[0], (x == 0).sum(), (x == 1).sum();
+    n, n0, n1 = len(x), (x == 0).sum(), (x == 1).sum();
     if n0 == 0 or n1 == 0:
         return 0;
 
-    r, current = 1, x[0, 0];
-    for i in range(1, x.shape[0]):
-        if x[i, 0] != current:
+    r, current = 1, x[0];
+    for i in range(1, n):
+        if x[i] != current:
             r += 1;
-            current = x[i, 0];
+            current = x[i];
 
     p = 0;
 
