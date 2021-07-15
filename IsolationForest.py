@@ -233,6 +233,12 @@ class CurvesThresholdFinder(IThresholdFinder):
         self._rightLines = None;
 
 
+    def __reset(self):
+        self._curves = None;
+        self._leftLines = None;
+        self._rightLines = None;
+
+
     def _leftOnly(self, y):
         maxValue = y.max();
         value, residual = None, None;
@@ -415,5 +421,7 @@ class CurvesThresholdFinder(IThresholdFinder):
 
         threshold = (np.mean(self._values) if len(self._values) > 0 else defaultThreshold) / scale;
         print("threshold found: {0}".format(threshold));
+
+        self.__reset();
 
         return threshold;
