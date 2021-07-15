@@ -269,7 +269,11 @@ class LinearRegression:
         X = self.__getX(X);
         n, p = X.shape;
         W = np.diag(w) if w is not None else np.identity(n);
-        C = (X.T * W * X).I;
+        A = X.T * W * X;
+        if np.linalg.matrix_rank(A, tol = 1e-8) == A.shape[0]:
+            C = A.I;
+        else:
+            C = np.linalg.pinv(A);
 
         self.__n = n;
         self.__p = p;
