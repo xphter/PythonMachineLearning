@@ -1,3 +1,4 @@
+import sys;
 import abc;
 import math;
 import multiprocessing;
@@ -292,18 +293,18 @@ class LinearRegression:
         self.__cp = (rss + 2 * (p - 1) * sigma2) / n;
         # self.__aic = (rss + 2 * (p - 1) * sigma2) / (n * sigma2) + math.log(2 * math.pi * sigma2);
         # self.__bic = (rss + math.log(n) * (p - 1) * sigma2) / (n * sigma2) + math.log(2 * math.pi * sigma2);
-        self.__aic =           2 * (p - 1) + n - p + n * math.log(2 * math.pi * sigma2);
-        self.__bic = math.log(n) * (p - 1) + n - p + n * math.log(2 * math.pi * sigma2);
+        self.__aic =           2 * (p - 1) + n - p + n * math.log(2 * math.pi * sigma2) if sigma2 > 0 else -sys.maxsize;
+        self.__bic = math.log(n) * (p - 1) + n - p + n * math.log(2 * math.pi * sigma2) if sigma2 > 0 else -sys.maxsize;
         self.__adjustedR2 = 1 - (rss / (n - p)) / (tss / (n - 1)) if tss != 0 else 0;
         self.__c = C;
 
         self.__betaStd = self.__sigma * np.sqrt(C.diagonal().T);
-        self.__betaT = np.divide(self.__beta, self.__betaStd);
+        self.__betaT = np.divide(self.__beta, self.__betaStd) if self.__sigma != 0 else np.ones_like(self.__beta) * sys.maxsize;
         self.__betaP = self.__getP(self.__betaT, n - p);
         self.__betaValue = self.__beta.copy();
 
-        self.__allF = (tss - rss) / (p - 1) / self.__sigma ** 2 if p > 1 else 0;
-        self.__allP = 1 - f.cdf(self.__allF, p - 1, n - p) if p > 1 else 0;
+        self.__allF = ((tss - rss) / (p - 1) / sigma2 if sigma2 != 0 else sys.maxsize) if p > 1 else 0;
+        self.__allP = 1 - f.cdf(self.__allF, p - 1, n - p) if p > 1 else 1;
 
         return self;
 
