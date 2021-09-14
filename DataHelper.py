@@ -61,14 +61,21 @@ def calcManhattanDistance(X, v):
 
 
 # output: L2^2
-def calcEuclideanDistance(X, Y):
-    if X.shape[1] != Y.shape[1]:
+def calcEuclideanDistance(X : np.ndarray, Y : np.ndarray) -> np.ndarray:
+    if X.ndim > 2 or Y.ndim > 2:
+        raise ValueError("only support 1D or 2D arrays");
+
+    if X.shape[X.ndim - 1] != Y.shape[Y.ndim - 1]:
         raise ValueError("X and Y have different number of columns");
 
-    if Y.shape[0] == 1:
-        return np.square(X - Y).sum(1);
+    if X.ndim == 1 or Y.ndim == 1:
+        D = np.sum(np.square(X - Y), max(X.ndim, Y.ndim) - 1);
     else:
-        return -2 * X * Y.T + np.square(X).sum(1) + np.square(Y).sum(1).T;
+        D = -2 * X @ Y.T + np.sum(np.square(X), 1, keepdims = True) + np.sum(np.square(Y), 1, keepdims = True).T;
+
+    D[D < 0] = 0;
+
+    return D;
 
 
 def calcChebyshevDistance(X, v):
