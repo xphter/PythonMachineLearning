@@ -254,7 +254,7 @@ class AffineLayer(NetModuleBase):
         self._outputSize = outputSize;
         self._name = f"Affine {inputSize}*{outputSize}";
 
-        self._weight = 0.01 * np.random.randn(inputSize, outputSize) if W is None else W;
+        self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize) if W is None else W;
         self._bias = (np.zeros(outputSize) if b is None else b) if includeBias else None;
 
         self._params.append(self._weight);
@@ -523,7 +523,7 @@ class ConvolutionLayer(NetModuleBase):
         self._colW = None;
         self._name = f"Convolution {FN}*{C}*{FH}*{FW}";
 
-        self._weight = 0.01 * np.random.randn(FN, C, FH, FW) if W is None else W;
+        self._weight = math.sqrt(2.0 / (C * FH * FW)) * np.random.randn(FN, C, FH, FW) if W is None else W;
         self._bias = np.zeros(FN) if b is None else b;
 
         self._params.append(self._weight);
