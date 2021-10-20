@@ -230,11 +230,11 @@ class DropoutLayer(NetModuleBase):
             return X * self._mask, ;
         else:
             return X, ;
-        # if isTraining:
+        # if self._isTrainingMode:
         #     self._mask = np.random.rand(*X.shape) > self._dropoutRatio;
-        #     return X * self._mask;
+        #     return X * self._mask, ;
         # else:
-        #     return X * (1.0 - self._dropoutRatio);
+        #     return X * (1.0 - self._dropoutRatio), ;
 
 
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
@@ -369,6 +369,111 @@ class BatchNormalizationLayer(NetModuleBase):
         self._grads[1][...] = dBeta;
         if self._shape is not None:
             dX = dX.reshape(*self._shape);
+
+        return dX, ;
+
+
+class ConvolutionLayer(NetModuleBase):
+    def __init__(self, FN : int, C : int, FH : int, FW : int, stride = 1, pad = 0, W : np.ndarray = None, b : np.ndarray = None):
+        super().__init__();
+
+        self._stride = stride;
+        self._pad = pad;
+        self._shape = None;
+        self._colX = None;
+        self._colW = None;
+        self._name = f"Convolution {FN}*{C}*{FH}*{FW}";
+
+        self._weight = math.sqrt(2.0 / (C * FH * FW)) * np.random.randn(FN, C, FH, FW) if W is None else W;
+        self._bias = np.zeros(FN) if b is None else b;
+
+        self._params.append(self._weight);
+        self._params.append(self._bias);
+        self._grads.append(np.zeros_like(self._weight));
+        self._grads.append(np.zeros_like(self._bias));
+
+
+    @property
+    def weight(self):
+        return self._weight;
+
+
+    @property
+    def bias(self):
+        return self._bias;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        X = data[0];
+        self._shape = X.shape;
+
+        N, C, H, W = X.shape;
+        FN, C, FH, FW = self._weight.shape;
+        OH = convOutputSize(H, FH, self._stride, self._pad);
+        OW = convOutputSize(W, FW, self._stride, self._pad);
+
+        self._colX = im2col(X, FH, FW, self._stride, self._pad);
+        self._colW = self._weight.reshape(FN, -1).T;
+        Y = self._colX @ self._colW + self._bias;
+        Y = Y.reshape(N, OH, OW, FN).transpose(0, 3, 1, 2);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
+        FN, C, FH, FW = self._weight.shape;
+
+        colDY = dY.transpose(0, 2, 3, 1).reshape(-1, FN);
+        dW = self._colX.T @ colDY;
+        db = np.sum(colDY, 0);
+        dX = colDY @ self._colW.T;
+        dX = col2im(dX, self._shape, FH, FW, self._stride, self._pad, True);
+
+        self._grads[0][...] = dW.T.reshape(FN, C, FH, FW);
+        self._grads[1][...] = db;
+
+        return dX, ;
+
+
+class MaxPoolingLayer(NetModuleBase):
+    def __init__(self, PH : int, PW : int, stride = 1, pad = 0):
+        super().__init__();
+
+        self._PH = PH;
+        self._PW = PW;
+        self._stride = stride;
+        self._pad = pad;
+        self._shape = None;
+        self._argMax = None;
+        self._name = "MaxPooling";
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        X = data[0];
+        self._shape = X.shape;
+
+        N, C, H, W = X.shape;
+        OH = convOutputSize(H, self._PH, self._stride, self._pad);
+        OW = convOutputSize(W, self._PW, self._stride, self._pad);
+
+        col = im2col(X, self._PH, self._PW, self._stride, self._pad).reshape(-1, self._PH * self._PW);
+        Y = np.amax(col, 1).reshape(N, OH, OW, C).transpose(0, 3, 1, 2);
+        self._argMax = np.argmax(col, 1);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
+        N, C, OH, OW = dY.shape;
+        poolingSize = self._PH * self._PW;
+
+        colDY = dY.transpose(0, 2, 3, 1);
+        dMax = np.zeros((colDY.size, poolingSize));
+        dMax[np.arange(self._argMax.size), self._argMax.flatten()] = colDY.flatten();
+        dMax = dMax.reshape(-1, C * poolingSize);
+        dX = col2im(dMax, self._shape, self._PH, self._PW, self._stride, self._pad, True);
 
         return dX, ;
 
@@ -508,111 +613,6 @@ class SumWithMeanSquareLossLayer(NetLossBase):
     def backward(self) -> Tuple[np.ndarray]:
         dY = (self._Y - self._T) / len(self._T);
         dX = dY * np.ones_like(self._shape);
-
-        return dX, ;
-
-
-class ConvolutionLayer(NetModuleBase):
-    def __init__(self, FN : int, C : int, FH : int, FW : int, stride = 1, pad = 0, W : np.ndarray = None, b : np.ndarray = None):
-        super().__init__();
-
-        self._stride = stride;
-        self._pad = pad;
-        self._shape = None;
-        self._colX = None;
-        self._colW = None;
-        self._name = f"Convolution {FN}*{C}*{FH}*{FW}";
-
-        self._weight = math.sqrt(2.0 / (C * FH * FW)) * np.random.randn(FN, C, FH, FW) if W is None else W;
-        self._bias = np.zeros(FN) if b is None else b;
-
-        self._params.append(self._weight);
-        self._params.append(self._bias);
-        self._grads.append(np.zeros_like(self._weight));
-        self._grads.append(np.zeros_like(self._bias));
-
-
-    @property
-    def weight(self):
-        return self._weight;
-
-
-    @property
-    def bias(self):
-        return self._bias;
-
-
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        X = data[0];
-        self._shape = X.shape;
-
-        N, C, H, W = X.shape;
-        FN, C, FH, FW = self._weight.shape;
-        OH = convOutputSize(H, FH, self._stride, self._pad);
-        OW = convOutputSize(W, FW, self._stride, self._pad);
-
-        self._colX = im2col(X, FH, FW, self._stride, self._pad);
-        self._colW = self._weight.reshape(FN, -1).T;
-        Y = self._colX @ self._colW + self._bias;
-        Y = Y.reshape(N, OH, OW, FN).transpose(0, 3, 1, 2);
-
-        return Y, ;
-
-
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dY = dout[0];
-        FN, C, FH, FW = self._weight.shape;
-
-        colDY = dY.transpose(0, 2, 3, 1).reshape(-1, FN);
-        dW = self._colX.T @ colDY;
-        db = np.sum(colDY, 0);
-        dX = colDY @ self._colW.T;
-        dX = col2im(dX, self._shape, FH, FW, self._stride, self._pad, True);
-
-        self._grads[0][...] = dW.T.reshape(FN, C, FH, FW);
-        self._grads[1][...] = db;
-
-        return dX, ;
-
-
-class MaxPoolingLayer(NetModuleBase):
-    def __init__(self, PH : int, PW : int, stride = 1, pad = 0):
-        super().__init__();
-
-        self._PH = PH;
-        self._PW = PW;
-        self._stride = stride;
-        self._pad = pad;
-        self._shape = None;
-        self._argMax = None;
-        self._name = "MaxPooling";
-
-
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        X = data[0];
-        self._shape = X.shape;
-
-        N, C, H, W = X.shape;
-        OH = convOutputSize(H, self._PH, self._stride, self._pad);
-        OW = convOutputSize(W, self._PW, self._stride, self._pad);
-
-        col = im2col(X, self._PH, self._PW, self._stride, self._pad).reshape(-1, self._PH * self._PW);
-        Y = np.amax(col, 1).reshape(N, OH, OW, C).transpose(0, 3, 1, 2);
-        self._argMax = np.argmax(col, 1);
-
-        return Y, ;
-
-
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dY = dout[0];
-        N, C, OH, OW = dY.shape;
-        poolingSize = self._PH * self._PW;
-
-        colDY = dY.transpose(0, 2, 3, 1);
-        dMax = np.zeros((colDY.size, poolingSize));
-        dMax[np.arange(self._argMax.size), self._argMax.flatten()] = colDY.flatten();
-        dMax = dMax.reshape(-1, C * poolingSize);
-        dX = col2im(dMax, self._shape, self._PH, self._PW, self._stride, self._pad, True);
 
         return dX, ;
 
@@ -828,11 +828,16 @@ class NetTrainer:
 
 
     def _calcAccuracy(self, iterator : DataIterator) -> float:
-        self._evaluator.reset();
+        self._model.isTrainingMode = False;
 
-        for X, T in iterator:
-            Y = self._model.forward(X);
-            self._evaluator.update(*Y, T);
+        try:
+            self._evaluator.reset();
+
+            for X, T in iterator:
+                Y = self._model.forward(X);
+                self._evaluator.update(*Y, T);
+        finally:
+            self._model.isTrainingMode = True;
 
         return self._evaluator.accuracy;
 
