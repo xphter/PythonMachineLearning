@@ -57,7 +57,7 @@ class MNIST:
             X = X.reshape(n, 1, rows, columns);
 
         if normalize:
-            X /= 255.0;
+            X = X / 255.0;
 
         return X;
 
