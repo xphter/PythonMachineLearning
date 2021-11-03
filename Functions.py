@@ -121,13 +121,6 @@ def convOutputSize(inputSize : int, filterSize : int, stride : int = 1, pad : in
 
 
 def convert2OneHot(X : np.ndarray, size : int) -> np.ndarray:
-    Y = np.zeros(X.shape + (size,), dtype = np.int32);
-
-    it = np.nditer(X, flags = ["multi_index"], op_flags = ["readonly"]);
-    while not it.finished:
-        index = it.multi_index;
-        Y[index + (X[index],)] = 1;
-
-        it.iternext();
-
-    return Y;
+    Y = np.zeros((X.size, size));
+    Y[list(range(X.size)), X.flatten().tolist()] = 1;
+    return Y.reshape(X.shape + (size,));
