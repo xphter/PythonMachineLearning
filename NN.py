@@ -3,6 +3,8 @@ import math;
 import matplotlib.pyplot as plt;
 from typing import List, Tuple, Callable, Any;
 
+import numpy as np
+
 from Functions import *;
 
 
@@ -806,8 +808,8 @@ class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
 
     def update(self, *data: np.ndarray):
         Y, T = data;
-        self._rightCount += int(np.sum(np.argmax(Y, 1) == np.argmax(T, 1)));
-        self._totalCount += len(Y);
+        self._rightCount += int(np.sum(np.argmax(Y, Y.ndim - 1) == np.argmax(T, T.ndim - 1)));
+        self._totalCount += Y.size / Y.shape[Y.ndim - 1];
 
 
     def reset(self):
