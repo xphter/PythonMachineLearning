@@ -37,12 +37,16 @@ def softmax(X : np.ndarray) -> np.ndarray:
     return Y / np.sum(Y, Y.ndim - 1, keepdims = True);
 
 
+def lengthExceptLastDimension(X : np.ndarray):
+    return X.size // X.shape[X.ndim - 1] if X.ndim > 2 else len(X);
+
+
 def meanSquareError(Y, T):
-    return float(np.sum(np.square(Y - T))) / (2 * (Y.size / Y.shape[Y.ndim - 1] if Y.ndim > 2 else len(Y)));
+    return float(np.sum(np.square(Y - T))) / (2 * lengthExceptLastDimension(T));
 
 
 def crossEntropyError(Y : np.ndarray, T : np.ndarray, epsilon : float = 1e-8) -> float:
-    return float(np.sum(-(T * np.log(Y + epsilon)))) / (Y.size / Y.shape[Y.ndim - 1] if Y.ndim > 2 else len(Y));
+    return float(np.sum(-(T * np.log(Y + epsilon)))) / lengthExceptLastDimension(T);
 
 
 def numericGradient(f : Callable, X : np.ndarray):

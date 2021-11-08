@@ -518,7 +518,7 @@ class CrossEntropyLoss(NetLossBase):
 
 
     def backward(self) -> Tuple[np.ndarray]:
-        dY = -self._T / self._Y / len(self._T);
+        dY = -self._T / self._Y / lengthExceptLastDimension(self.T);
 
         return dY, ;
 
@@ -541,7 +541,7 @@ class SoftmaxWithCrossEntropyLoss(NetLossBase):
 
 
     def backward(self) -> Tuple[np.ndarray]:
-        dX = (self._Y - self._T) / len(self._T);
+        dX = (self._Y - self._T) / lengthExceptLastDimension(self._T);
 
         return dX, ;
 
@@ -565,7 +565,7 @@ class SigmoidWithCrossEntropyLoss(NetLossBase):
 
 
     def backward(self) -> Tuple[np.ndarray]:
-        dX = (self._Y - self._T) / len(self._T);
+        dX = (self._Y - self._T) / lengthExceptLastDimension(self._T);
 
         return dX, ;
 
@@ -586,7 +586,7 @@ class IdentityWithMeanSquareLoss(NetLossBase):
 
 
     def backward(self) -> Tuple[np.ndarray]:
-        dX = (self._Y - self._T) / len(self._T);
+        dX = (self._Y - self._T) / lengthExceptLastDimension(self._T);
 
         return dX, ;
 
@@ -611,7 +611,7 @@ class SumWithMeanSquareLossLayer(NetLossBase):
 
 
     def backward(self) -> Tuple[np.ndarray]:
-        dY = (self._Y - self._T) / len(self._T);
+        dY = (self._Y - self._T) / lengthExceptLastDimension(self._T);
         dX = dY * np.ones_like(self._shape);
 
         return dX, ;
