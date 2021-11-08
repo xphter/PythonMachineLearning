@@ -124,3 +124,10 @@ def convert2OneHot(X : np.ndarray, size : int) -> np.ndarray:
     Y = np.zeros((X.size, size));
     Y[list(range(X.size)), X.flatten().tolist()] = 1;
     return Y.reshape(X.shape + (size,));
+
+
+def npAddAt(X : np.ndarray, indices, Y : np.ndarray):
+    if DeviceConfig.EnableGPU:
+        cpx.scatter_add(X, indices, Y);
+    else:
+        np.add.at(X, indices, Y);

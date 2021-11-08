@@ -2,6 +2,8 @@ import DeviceConfig;
 
 if DeviceConfig.EnableGPU:
     import cupy as np;
+    import cupyx as cpx;
+
     np.cuda.set_allocator(np.cuda.MemoryPool().malloc);
 
     print("\033[92m GPU Mode is Enabled (cupy) \033[0m");
