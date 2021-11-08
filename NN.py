@@ -1,10 +1,8 @@
 import abc;
 import math;
 import matplotlib.pyplot as plt;
+
 from typing import List, Tuple, Callable, Any;
-
-import numpy as np
-
 from Functions import *;
 
 
@@ -776,9 +774,8 @@ class DataIterator:
         self._data = data;
         self._length = len(data[0]);
         self._batchSize = batchSize;
+        self._shuffle = shuffle;
         self._index = np.arange(self._length);
-        if shuffle:
-            np.random.shuffle(self._index);
 
 
     def _iterate(self):
@@ -792,6 +789,9 @@ class DataIterator:
 
     def __iter__(self):
         self._step = 0;
+        if self._shuffle:
+            np.random.shuffle(self._index);
+
         return self._iterate();
 
 
@@ -835,9 +835,9 @@ class NetTrainer:
         try:
             self._evaluator.reset();
 
-            for X, T in iterator:
-                Y = self._model.forward(X);
-                self._evaluator.update(*Y, T);
+            for data in iterator:
+                Y = self._model.forward(*data[:-1]);
+                self._evaluator.update(*Y, data[-1]);
         finally:
             self._model.isTrainingMode = True;
 
@@ -854,9 +854,9 @@ class NetTrainer:
         for epoch in range(maxEpoch):
             lossValues.clear();
 
-            for X, T in trainIterator:
-                Y = self._model.forward(X);
-                loss = self._lossFunc.forward(*Y, T);
+            for data in trainIterator:
+                Y = self._model.forward(*data[:-1]);
+                loss = self._lossFunc.forward(*Y, data[-1]);
                 lossValues.append(loss);
 
                 self._model.backward(*self._lossFunc.backward());
