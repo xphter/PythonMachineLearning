@@ -32,13 +32,13 @@ def reluGradient(X : np.ndarray) -> np.ndarray:
 
 
 def softmax(X : np.ndarray) -> np.ndarray:
-    Y = np.exp(X - np.amax(X, X.ndim - 1, keepdims = True));
+    Y = np.exp(X - np.amax(X, -1, keepdims = True));
 
-    return Y / np.sum(Y, Y.ndim - 1, keepdims = True);
+    return Y / np.sum(Y, -1, keepdims = True);
 
 
 def lengthExceptLastDimension(X : np.ndarray):
-    return X.size // X.shape[X.ndim - 1] if X.ndim > 2 else len(X);
+    return X.size // X.shape[-1] if X.ndim > 2 else len(X);
 
 
 def meanSquareError(Y, T):

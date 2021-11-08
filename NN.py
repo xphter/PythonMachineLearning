@@ -497,7 +497,7 @@ class SoftmaxLayer(NetModuleBase):
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
         dY = dout[0];
         Z = dY * self._Y;
-        dX = Z - self._Y * np.sum(Z, Z.ndim - 1, keepdims = True);
+        dX = Z - self._Y * np.sum(Z, -1, keepdims = True);
 
         return dX, ;
 
@@ -808,8 +808,8 @@ class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
 
     def update(self, *data: np.ndarray):
         Y, T = data;
-        self._rightCount += int(np.sum(np.argmax(Y, Y.ndim - 1) == np.argmax(T, T.ndim - 1)));
-        self._totalCount += Y.size / Y.shape[Y.ndim - 1];
+        self._rightCount += int(np.sum(np.argmax(Y, -1) == np.argmax(T, -1)));
+        self._totalCount += Y.size / Y.shape[-1];
 
 
     def reset(self):
