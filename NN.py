@@ -558,14 +558,17 @@ class SigmoidWithCrossEntropyLoss(NetLossBase):
         X, T = data;
         self._T = T;
         self._Y = sigmoid(X);
-        self._loss = crossEntropyError(np.concatenate((self._Y, 1 - self._Y), axis = -1) if self._Y.ndim > 1 else np.column_stack((self._Y, 1 - self._Y)),
-                                       np.concatenate((self._T, 1 - self._T), axis = -1) if self._T.ndim > 1 else np.column_stack((self._T, 1 - self._T)));
+
+        Y = self._Y.flatten();
+        T = self._T.flatten();
+        self._loss = crossEntropyError(np.column_stack((Y, 1 - Y)),
+                                       np.column_stack((T, 1 - T)));
 
         return self._loss;
 
 
     def backward(self) -> Tuple[np.ndarray]:
-        dX = (self._Y - self._T) / lengthExceptLastDimension(self._T);
+        dX = (self._Y - self._T) / self._T.size;
 
         return dX, ;
 
