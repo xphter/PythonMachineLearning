@@ -1,5 +1,9 @@
 import abc;
 import math;
+import time;
+import datetime;
+import collections;
+
 import matplotlib.pyplot as plt;
 
 from typing import List, Tuple, Callable, Any;
@@ -38,6 +42,12 @@ class INetModule(metaclass = abc.ABCMeta):
 
     @abc.abstractmethod
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        pass;
+
+
+class INetModel(INetModule, metaclass = abc.ABCMeta):
+    @abc.abstractmethod
+    def getFinalTag(self, T : np.ndarray) -> np.ndarray:
         pass;
 
 
@@ -478,6 +488,295 @@ class MaxPoolingLayer(NetModuleBase):
         return dX, ;
 
 
+class EmbeddingLayer(NetModuleBase):
+    def __init__(self, inputSize : int, outputSize : int, W : np.ndarray = None):
+        super().__init__();
+
+        self._index = None;
+        self._shape = None;
+        self._inputSize = inputSize;
+        self._outputSize = outputSize;
+        self._name = f"Embedding {inputSize}*{outputSize}";
+
+        self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize) if W is None else W;
+        self._params.append(self._weight);
+        self._grads.append(np.zeros_like(self._weight));
+
+
+    @property
+    def weight(self):
+        return self._weight;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        X = data[0];
+        self._shape = X.shape;
+        self._index = X.flatten();
+        Y = self._weight[self._index].reshape(X.shape + (self._outputSize, ));
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
+        dY = dY.reshape(-1, self._outputSize);
+
+        dW = self._grads[0];
+        dW[...] = 0;
+
+        # np.add.at(dW, self._index, dY);
+        npAddAt(dW, self._index, dY);
+
+        # the dX is always zero!!!
+        return np.zeros(self._shape), ;
+
+
+class EmbeddingWithDotLayer(NetModuleBase):
+    def __init__(self, inputSize : int, outputSize : int, W : np.ndarray = None):
+        super().__init__();
+
+        self._X = None;
+        self._W = None;
+        self._inputSize = inputSize;
+        self._outputSize = outputSize;
+        self._name = f"EmbeddingWithDot {outputSize}*{inputSize}";
+
+        self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(outputSize, inputSize) if W is None else W;
+        self._embeddingLayer = EmbeddingLayer(outputSize, inputSize, W = self._weight);
+
+
+    @property
+    def params(self) -> List[np.ndarray]:
+        return self._embeddingLayer.params;
+
+
+    @property
+    def grads(self) -> List[np.ndarray]:
+        return self._embeddingLayer.grads;
+
+
+    @property
+    def weight(self):
+        return self._weight;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        X, T = data;
+        self._X = X;
+        self._W = self._embeddingLayer.forward(T)[0];
+        Y = np.sum(self._X * self._W, axis = -1);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
+        dY = np.expand_dims(dY, axis = -1);
+
+        dW = dY * self._X;
+        dX = dY * self._W;
+        self._embeddingLayer.backward(dW);
+
+        return dX, ;
+
+
+class CorpusNegativeSampler:
+    def __init__(self, corpus : np.ndarray, sampleSize : int, exponent : float = 0.75):
+        vocab, counts = np.unique(corpus, return_counts = True);
+
+        self._vocab = vocab;
+        self._vocabSize = len(vocab);
+        self._sampleSize = sampleSize;
+        self._probability = np.power(counts, exponent);
+        self._probability /= np.sum(self._probability);
+        self._resampleNumber = 0;
+
+
+    @property
+    def sampleSize(self) -> int:
+        return self._sampleSize;
+
+
+    @property
+    def resampleNumber(self) -> int:
+        return self._resampleNumber;
+
+
+    def _findSample(self, sampleSize : int, exceptIndex = None):
+        p = self._probability;
+        if exceptIndex is not None:
+            p = p.copy();
+            p[exceptIndex] = 0;
+            p /= np.sum(p);
+
+        return np.random.choice(self._vocab, sampleSize, replace = DeviceConfig.EnableGPU or sampleSize >= self._vocabSize, p = p);
+
+
+    # return: negative samples, final tags
+    def getSample(self, T : np.ndarray) -> (np.ndarray, np.ndarray):
+        index = None;
+        PS = T.flatten();
+        NS = self._findSample(T.size * self._sampleSize);
+        NT = np.zeros_like(NS);
+        for i in range(len(PS)):
+            if not np.any(index := (NS[i * self._sampleSize: (i + 1) * self._sampleSize] == PS[i])):
+                continue;
+
+            # NS[i * self._sampleSize: (i + 1) * self._sampleSize] = self._findSample(self._sampleSize, PS[i]);
+            NT[i * self._sampleSize: (i + 1) * self._sampleSize][index] = 1;
+            self._resampleNumber += 1;
+
+        PS = np.expand_dims(T, axis = -1);
+        PT = np.ones_like(PS);
+        NS = NS.reshape(T.shape + (self._sampleSize, ));
+        NT = NT.reshape(T.shape + (self._sampleSize, ));
+
+        return np.concatenate((PS, NS), axis = -1), np.concatenate((PT, NT), axis = -1);
+
+
+class CBOWModel(NetModuleBase, INetModel):
+    def __init__(self, windowSize : int, vocabSize : int, hiddenSize : int, negativeSampler : CorpusNegativeSampler, inW : np.ndarray = None, outW : np.ndarray = None):
+        super().__init__();
+
+        self._finalTag = None;
+        self._windowSize = windowSize;
+        self._vocabSize = vocabSize;
+        self._hiddenSize = hiddenSize;
+        self._negativeSampler = negativeSampler;
+        self._W0 = math.sqrt(2.0 / vocabSize) * np.random.randn(vocabSize, hiddenSize) if inW is None else inW;
+        self._W1 = math.sqrt(2.0 / hiddenSize) * np.random.randn(hiddenSize, vocabSize).T if outW is None else outW;
+
+        self._embeddingLayer = EmbeddingLayer(vocabSize, hiddenSize, W = self._W0);
+        self._outputLayer = EmbeddingWithDotLayer(hiddenSize, vocabSize, W = self._W1);
+
+        self._params.extend([self._W0, self._W1]);
+        self._grads.extend([np.zeros_like(self._W0), np.zeros_like(self._W1)]);
+
+        self._name = "CBOW";
+
+
+    def _setTrainingMode(self, value : bool):
+        self._embeddingLayer.isTrainingMode = value;
+        self._outputLayer.isTrainingMode = value;
+
+
+    @property
+    def wordVector(self):
+        return self._W0;
+
+
+    @property
+    def weights(self) -> (np.ndarray, np.ndarray):
+        return self._W0, self._W1;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        X, T = data;
+        N, C = X.shape;
+        S = self._negativeSampler.sampleSize;
+
+        H = self._embeddingLayer.forward(X)[0];
+        H = np.sum(H, axis = 1) / C;
+
+        H = np.expand_dims(H, axis = -2);
+        H = np.repeat(H, S + 1, axis = -2);
+        T, self._finalTag = self._negativeSampler.getSample(T);
+
+        Y = self._outputLayer.forward(H, T)[0];
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
+        N, C = len(dY), 2 * self._windowSize;
+
+        dH = self._outputLayer.backward(dY)[0];
+        dH = np.sum(dH, axis = -2) / C;
+        dH = np.expand_dims(dH, axis = 1);
+        dH = np.repeat(dH, C, axis = 1);
+        self._embeddingLayer.backward(dH);
+
+        self._grads[0][...] = self._embeddingLayer.grads[0];
+        self._grads[1][...] = self._outputLayer.grads[0];
+
+        return np.zeros((N, C)), ;
+
+
+    def getFinalTag(self, T : np.ndarray) -> np.ndarray:
+        return self._finalTag;
+
+
+class SkipGramModel(NetModuleBase, INetModel):
+    def __init__(self, windowSize : int, vocabSize : int, hiddenSize : int, negativeSampler : CorpusNegativeSampler, inW : np.ndarray = None, outW : np.ndarray = None):
+        super().__init__();
+
+        self._finalTag = None;
+        self._windowSize = windowSize;
+        self._vocabSize = vocabSize;
+        self._hiddenSize = hiddenSize;
+        self._negativeSampler = negativeSampler;
+        self._W0 = math.sqrt(2.0 / vocabSize) * np.random.randn(vocabSize, hiddenSize) if inW is None else inW;
+        self._W1 = math.sqrt(2.0 / hiddenSize) * np.random.randn(hiddenSize, vocabSize).T if outW is None else outW;
+
+        self._embeddingLayer = EmbeddingLayer(vocabSize, hiddenSize, W = self._W0);
+        self._outputLayer = EmbeddingWithDotLayer(hiddenSize, vocabSize, W = self._W1);
+
+        self._params.extend([self._W0, self._W1]);
+        self._grads.extend([np.zeros_like(self._W0), np.zeros_like(self._W1)]);
+
+        self._name = "SkipGram";
+
+
+    def _setTrainingMode(self, value: bool):
+        self._embeddingLayer.isTrainingMode = value;
+        self._outputLayer.isTrainingMode = value;
+
+
+    @property
+    def wordVector(self):
+        return self._W0;
+
+
+    @property
+    def weights(self) -> (np.ndarray, np.ndarray):
+        return self._W0, self._W1;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        X, T = data;
+        N, C = T.shape;
+        S = self._negativeSampler.sampleSize;
+
+        H = self._embeddingLayer.forward(X)[0];
+        H = np.expand_dims(H, axis = -2);
+        H = np.repeat(H, C, axis = -2);
+
+        H = np.expand_dims(H, axis = -2);
+        H = np.repeat(H, S + 1, axis = -2);
+        T, self._finalTag = self._negativeSampler.getSample(T);
+
+        Y = self._outputLayer.forward(H, T)[0];
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
+        dH = self._outputLayer.backward(dY)[0];
+        dH = np.sum(dH, axis = (-2, -3));
+        dX = self._embeddingLayer.backward(dH)[0];
+
+        self._grads[0][...] = self._embeddingLayer.grads[0];
+        self._grads[1][...] = self._outputLayer.grads[0];
+
+        return dX, ;
+
+
+    def getFinalTag(self, T : np.ndarray) -> np.ndarray:
+        return self._finalTag;
+
+
 class SoftmaxLayer(NetModuleBase):
     def __init__(self):
         super().__init__();
@@ -730,7 +1029,7 @@ class Adam(NetOptimizerBase):
             params[i] -= self._lr * v / (np.sqrt(s) + self._epsilon);
 
 
-class SequentialContainer(NetModuleBase):
+class SequentialContainer(NetModuleBase, INetModel):
     def __init__(self, *modules : INetModule):
         super().__init__();
 
@@ -764,6 +1063,10 @@ class SequentialContainer(NetModuleBase):
             dout = m.backward(*dout);
 
         return dout;
+
+
+    def getFinalTag(self, T : np.ndarray) -> np.ndarray:
+        return T;
 
 
     def apply(self, func : Callable):
@@ -821,7 +1124,7 @@ class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
 
 
 class NetTrainer:
-    def __init__(self, model : INetModule, lossFunc : INetLoss, optimizer : INetOptimizer, evaluator : INetAccuracyEvaluator):
+    def __init__(self, model : INetModel, lossFunc : INetLoss, optimizer : INetOptimizer, evaluator : INetAccuracyEvaluator):
         self._model = model;
         self._lossFunc = lossFunc;
         self._optimizer = optimizer;
@@ -840,7 +1143,7 @@ class NetTrainer:
 
             for data in iterator:
                 Y = self._model.forward(*data[:-1]);
-                self._evaluator.update(*Y, data[-1]);
+                self._evaluator.update(*Y, self._model.getFinalTag(data[-1]));
         finally:
             self._model.isTrainingMode = True;
 
@@ -854,12 +1157,15 @@ class NetTrainer:
         self._trainAccuracyData.clear();
         self._testAccuracyData.clear();
 
+        print(f"[{datetime.datetime.now()}] start to train model {self._model}");
+
         for epoch in range(maxEpoch):
             lossValues.clear();
+            startTime = time.time();
 
             for data in trainIterator:
                 Y = self._model.forward(*data[:-1]);
-                loss = self._lossFunc.forward(*Y, data[-1]);
+                loss = self._lossFunc.forward(*Y, self._model.getFinalTag(data[-1]));
                 lossValues.append(loss);
 
                 self._model.backward(*self._lossFunc.backward());
@@ -871,9 +1177,11 @@ class NetTrainer:
                 self._testAccuracyData.append(self._calcAccuracy(testIterator));
 
             if testIterator is not None:
-                print(f"epoch {epoch}, loss: {lossValues[-1]}, train accuracy: {self._trainAccuracyData[-1]}, test accuracy: {self._testAccuracyData[-1]}");
+                print(f"epoch {epoch}, loss: {lossValues[-1]}, train accuracy: {self._trainAccuracyData[-1]}, test accuracy: {self._testAccuracyData[-1]}, elapsed time: {time.time() - startTime}s");
             else:
-                print(f"epoch {epoch}, loss: {lossValues[-1]}, train accuracy: {self._trainAccuracyData[-1]}");
+                print(f"epoch {epoch}, loss: {lossValues[-1]}, train accuracy: {self._trainAccuracyData[-1]}, elapsed time: {time.time() - startTime}s");
+
+        print(f"[{datetime.datetime.now()}] complete to train model {self._model}");
 
 
     def plot(self):
