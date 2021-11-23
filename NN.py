@@ -254,12 +254,40 @@ class DropoutLayer(NetModuleBase):
         return dX, ;
 
 
+class ReshapeLayer(NetModuleBase):
+    def __init__(self, *shapeSelector : Callable):
+        super().__init__();
+
+        self._originalShapes = [];
+        self._shapeSelector = shapeSelector;
+        self._name = "Reshape";
+
+
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
+        self._originalShapes.clear();
+        output : List[np.ndarray] = [];
+
+        for X, fn in zip(data, self._shapeSelector):
+            self._originalShapes.append(X.shape);
+            output.append(X.reshape(fn(X)));
+
+        return tuple(output);
+
+
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray]:
+        dX : List[np.ndarray] = [];
+
+        for dY, shape in zip(dout, self._originalShapes):
+            dX.append(dY.reshape(shape));
+
+        return tuple(dX);
+
+
 class AffineLayer(NetModuleBase):
     def __init__(self, inputSize : int, outputSize : int, includeBias : bool = True, W : np.ndarray = None, b : np.ndarray = None):
         super().__init__();
 
         self._X = None;
-        self._shape = None;
         self._inputSize = inputSize;
         self._outputSize = outputSize;
         self._name = f"Affine {inputSize}*{outputSize}";
@@ -285,14 +313,7 @@ class AffineLayer(NetModuleBase):
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        X = data[0];
-
-        if X.ndim <= 2:
-            self._X = X;
-            self._shape = None;
-        else:
-            self._X = X.reshape(len(X), -1);
-            self._shape = X.shape;
+        self._X = data[0];
 
         Y = self._X @ self._weight;
         if self._bias is not None:
@@ -311,8 +332,6 @@ class AffineLayer(NetModuleBase):
             self._grads[1][...] = db;
 
         dX = dY @ self._weight.T;
-        if self._shape is not None:
-            dX = dX.reshape(*self._shape);
 
         return dX, ;
 
@@ -326,7 +345,6 @@ class BatchNormalizationLayer(NetModuleBase):
         self._Xmu = None;
         self._std = None;
         self._XHat = None;
-        self._shape = None;
         self._name = "BatchNormalization";
 
         self._gamma = np.ones(inputSize) if gamma is None else gamma;
@@ -349,13 +367,6 @@ class BatchNormalizationLayer(NetModuleBase):
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
         X = data[0];
-
-        if X.ndim <= 2:
-            self._shape = None;
-        else:
-            X = X.reshape(len(X), -1);
-            self._shape = X.shape;
-
         mu = X.mean(0);
         self._n = len(X);
         self._Xmu = X - mu;
@@ -377,8 +388,6 @@ class BatchNormalizationLayer(NetModuleBase):
 
         self._grads[0][...] = dGamma;
         self._grads[1][...] = dBeta;
-        if self._shape is not None:
-            dX = dX.reshape(*self._shape);
 
         return dX, ;
 
