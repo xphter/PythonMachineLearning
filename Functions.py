@@ -45,8 +45,15 @@ def meanSquareError(Y, T):
     return float(np.sum(np.square(Y - T))) / (2 * lengthExceptLastDimension(T));
 
 
+# Y and T has the same shape
 def crossEntropyError(Y : np.ndarray, T : np.ndarray, epsilon : float = 1e-8) -> float:
     return float(np.sum(-(T * np.log(Y + epsilon)))) / lengthExceptLastDimension(T);
+
+
+# T was used as a 1-D index array
+def crossEntropyError1D(Y : np.ndarray, T : np.ndarray, epsilon : float = 1e-8) -> float:
+    n = T.size;
+    return float(np.sum(-np.log(Y.reshape((n, -1))[np.arange(n), T.flatten()] + epsilon))) / n;
 
 
 def numericGradient(f : Callable, X : np.ndarray):
