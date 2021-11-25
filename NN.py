@@ -6,7 +6,7 @@ import collections;
 
 import matplotlib.pyplot as plt;
 
-from typing import List, Tuple, Callable, Any;
+from typing import List, Tuple, Callable, Any, Optional, Iterable;
 from Functions import *;
 
 
@@ -83,7 +83,18 @@ class INetOptimizer(metaclass = abc.ABCMeta):
 class INetAccuracyEvaluator(metaclass = abc.ABCMeta):
     @property
     @abc.abstractmethod
+    def name(self) -> str:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
     def accuracy(self) -> float:
+        pass;
+
+
+    @abc.abstractmethod
+    def fromLoss(self, lossValues : List[float]) -> bool:
         pass;
 
 
@@ -255,11 +266,11 @@ class DropoutLayer(NetModuleBase):
 
 
 class ReshapeLayer(NetModuleBase):
-    def __init__(self, *shapeSelector : Callable):
+    def __init__(self, *newShapes : Tuple):
         super().__init__();
 
         self._originalShapes = [];
-        self._shapeSelector = shapeSelector;
+        self._newShapes = newShapes;
         self._name = "Reshape";
 
 
@@ -267,9 +278,9 @@ class ReshapeLayer(NetModuleBase):
         self._originalShapes.clear();
         output : List[np.ndarray] = [];
 
-        for X, fn in zip(data, self._shapeSelector):
+        for X, shape in zip(data, self._newShapes):
             self._originalShapes.append(X.shape);
-            output.append(X.reshape(fn(X)));
+            output.append(X.reshape(shape));
 
         return tuple(output);
 
@@ -589,6 +600,150 @@ class EmbeddingWithDotLayer(NetModuleBase):
         return dX, ;
 
 
+class RnnCell(NetModuleBase):
+    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None):
+        super().__init__();
+
+        self._X = None;
+        self._H = None;
+        self._Y = None;
+        self._inputSize = inputSize;
+        self._outputSize = outputSize;
+        self._name = f"RNN Module {inputSize}*{outputSize}";
+
+        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize) if Wx is None else Wx;
+        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize) if Wh is None else Wh;
+        self._bias = np.zeros(outputSize) if b is None else b;
+
+        weights = [self._weightX, self._weightH, self._bias];
+        self._params.extend(weights);
+        self._grads.extend([np.zeros_like(w) for w in weights]);
+
+
+    @property
+    def weightX(self) -> np.ndarray:
+        return self._weightX;
+
+
+    @property
+    def weightH(self) -> np.ndarray:
+        return self._weightH;
+
+
+    @property
+    def bias(self) -> np.ndarray:
+        return self._bias;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        self._X, self._H = data;
+        self._Y = tanh(self._X @ self._weightX + self._H @ self._weightH + self._bias);
+
+        return self._Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
+        dY = dY * tanhGradient(self._Y);
+
+        dWx = self._X.T @ dY;
+        dWh = self._H.T @ dY;
+        db = np.sum(dY, axis = 0);
+
+        dX = dY @ self._weightX.T;
+        dH = dY @ self._weightH.T;
+
+        self._grads[0][...] = dWx;
+        self._grads[1][...] = dWh;
+        self._grads[2][...] = db;
+
+        return dX, dH;
+
+
+class RnnLayer(NetModuleBase):
+    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, stateful : bool = True):
+        super().__init__();
+
+        self._H = None;
+        self._dH = None;
+        self._stateful = stateful;
+        self._inputSize = inputSize;
+        self._outputSize = outputSize;
+        self._name = f"RNN {inputSize}*{outputSize}";
+
+        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize) if Wx is None else Wx;
+        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize) if Wh is None else Wh;
+        self._bias = np.zeros(outputSize) if b is None else b;
+        self._rnnModules : List[RnnCell] = [];
+
+        weights = [self._weightX, self._weightH, self._bias];
+        self._params.extend(weights);
+        self._grads.extend([np.zeros_like(w) for w in weights]);
+
+
+    @property
+    def weightX(self) -> np.ndarray:
+        return self._weightX;
+
+
+    @property
+    def weightH(self) -> np.ndarray:
+        return self._weightH;
+
+
+    @property
+    def bias(self) -> np.ndarray:
+        return self._bias;
+
+
+    @property
+    def state(self) -> np.ndarray:
+        return self._H;
+
+
+    @state.setter
+    def state(self, value : np.ndarray):
+        self._H = value;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        X = data[0];
+        N, T, D = X.shape;
+
+        if len(self._rnnModules) != T:
+            self._rnnModules = [RnnCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias) for _ in range(T)];
+
+        if not self._stateful or self._H is None:
+            self._H = np.zeros((N, self._outputSize));
+
+        Y = np.zeros((N, T, self._outputSize));
+        for t in range(T):
+            self._H = self._rnnModules[t].forward(X[:, t, :], self._H)[0];
+            Y[:, t, :] = self._H;
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
+        N, T = dY.shape[: 2];
+
+        # truncated BPTT
+        self._dH = np.zeros_like(self._H);
+        dX = np.zeros((N, T, self._inputSize));
+        for i in range(len(self._grads)):
+            self._grads[i][...] = 0;
+
+        for t in reversed(range(T)):
+            rnn = self._rnnModules[t];
+            dX[:, t, :], self._dH = rnn.backward(dY[:, t, :] + self._dH);
+
+            for i in range(len(self._grads)):
+                self._grads[i] += rnn.grads[i];
+
+        return dX, ;
+
+
 class CorpusNegativeSampler:
     def __init__(self, corpus : np.ndarray, sampleSize : int, exponent : float = 0.75):
         vocab, counts = np.unique(corpus, return_counts = True);
@@ -854,6 +1009,33 @@ class SoftmaxWithCrossEntropyLoss(NetLossBase):
         return dX, ;
 
 
+class SoftmaxWithCrossEntropy1DLoss(NetLossBase):
+    def __init__(self):
+        super().__init__();
+
+        self._Y = None;
+        self._T = None;
+
+
+    def forward(self, *data: np.ndarray) -> float:
+        X, T = data;
+        self._T = T;
+        self._Y = softmax(X);
+        self._loss = crossEntropyError1D(self._Y, self._T);
+
+        return self._loss;
+
+
+    def backward(self) -> Tuple[np.ndarray]:
+        n = self._T.size;
+
+        dX = self._Y.reshape((n, -1));
+        dX[np.arange(n), self._T.flatten()] -= 1;
+        dX /= n;
+
+        return dX.reshape(self._Y.shape), ;
+
+
 class SigmoidWithCrossEntropyLoss(NetLossBase):
     def __init__(self):
         super().__init__();
@@ -1083,7 +1265,7 @@ class SequentialContainer(NetModuleBase, INetModel):
             func(m);
 
 
-class DataIterator:
+class SequentialDataIterator:
     def __init__(self, data : List[np.ndarray], batchSize = 2 ** 8, shuffle : bool = True):
         self._step = 0;
         self._data = data;
@@ -1110,6 +1292,42 @@ class DataIterator:
         return self._iterate();
 
 
+class PartitionedDataIterator:
+    def __init__(self, data : List[np.ndarray], partitionNumber : int, batchSize : int, shuffle : bool = False):
+        self._step = 0;
+        self._data = data;
+        self._length = len(data[0]);
+        self._partitionNumber = partitionNumber;
+        self._partitionSize = self._length // partitionNumber;
+        self._batchSize = batchSize;
+        self._shuffle = shuffle;
+        self._index = list(range(self._length));
+
+
+    def _iterate(self):
+        index = [];
+
+        while self._step * self._batchSize < self._partitionSize:
+            index.clear();
+            batchSize = min(self._batchSize, self._partitionSize - self._step * self._batchSize);
+
+            for i in range(self._partitionNumber):
+                startIndex = i * self._partitionSize + self._step * self._batchSize;
+                index.extend(self._index[startIndex: startIndex + batchSize]);
+
+            self._step += 1;
+
+            yield tuple([d[index].reshape((self._partitionNumber, -1) + d.shape[1:]) for d in self._data]);
+
+
+    def __iter__(self):
+        self._step = 0;
+        if self._shuffle:
+            np.random.shuffle(self._index);
+
+        return self._iterate();
+
+
 class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
     def __init__(self):
         self._rightCount = 0.0;
@@ -1117,8 +1335,17 @@ class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     @property
+    def name(self) -> str:
+        return "classification accuracy";
+
+
+    @property
     def accuracy(self) -> float:
         return self._rightCount / self._totalCount;
+
+
+    def fromLoss(self, lossValues : List[float]) -> bool:
+        return False;
 
 
     def update(self, *data: np.ndarray):
@@ -1132,8 +1359,36 @@ class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
         self._totalCount = 0.0;
 
 
+class PerplexityAccuracyEvaluator(INetAccuracyEvaluator):
+    def __init__(self):
+        self._perplexity = 1.0;
+
+
+    @property
+    def name(self) -> str:
+        return "perplexity";
+
+
+    @property
+    def accuracy(self) -> float:
+        return self._perplexity;
+
+
+    def fromLoss(self, lossValues : List[float]) -> bool:
+        self._perplexity = math.exp(sum(lossValues) / len(lossValues));
+        return True;
+
+
+    def update(self, *data: np.ndarray):
+        raise NotImplemented();
+
+
+    def reset(self):
+        self._perplexity = 1.0;
+
+
 class NetTrainer:
-    def __init__(self, model : INetModel, lossFunc : INetLoss, optimizer : INetOptimizer, evaluator : INetAccuracyEvaluator):
+    def __init__(self, model : INetModel, lossFunc : INetLoss, optimizer : INetOptimizer, evaluator : INetAccuracyEvaluator = None):
         self._model = model;
         self._lossFunc = lossFunc;
         self._optimizer = optimizer;
@@ -1144,22 +1399,23 @@ class NetTrainer:
         self._testAccuracyData = [];
 
 
-    def _calcAccuracy(self, iterator : DataIterator) -> float:
+    def _calcAccuracy(self, lossValues : List[float], iterator : Iterable) -> float:
         self._model.isTrainingMode = False;
 
         try:
             self._evaluator.reset();
 
-            for data in iterator:
-                Y = self._model.forward(*data[:-1]);
-                self._evaluator.update(*Y, self._model.getFinalTag(data[-1]));
+            if not self._evaluator.fromLoss(lossValues):
+                for data in iterator:
+                    Y = self._model.forward(*data[:-1]);
+                    self._evaluator.update(*Y, self._model.getFinalTag(data[-1]));
         finally:
             self._model.isTrainingMode = True;
 
         return self._evaluator.accuracy;
 
 
-    def train(self, maxEpoch : int, trainIterator : DataIterator, testIterator : DataIterator = None):
+    def train(self, maxEpoch : int, trainIterator : Iterable, testIterator : Iterable = None):
         lossValues = [];
 
         self._lossData.clear();
@@ -1181,14 +1437,20 @@ class NetTrainer:
                 self._optimizer.update(self._model.params, self._model.grads);
 
             self._lossData.append(sum(lossValues) / len(lossValues));
-            self._trainAccuracyData.append(self._calcAccuracy(trainIterator));
-            if testIterator is not None:
-                self._testAccuracyData.append(self._calcAccuracy(testIterator));
 
-            if testIterator is not None:
-                print(f"epoch {epoch}, loss: {lossValues[-1]}, train accuracy: {self._trainAccuracyData[-1]}, test accuracy: {self._testAccuracyData[-1]}, elapsed time: {time.time() - startTime}s");
+            if self._evaluator is not None:
+                self._trainAccuracyData.append(self._calcAccuracy(lossValues, trainIterator));
+                if testIterator is not None:
+                    self._testAccuracyData.append(self._calcAccuracy(lossValues, testIterator));
+
+            elapsedTime = time.time() - startTime;
+            if len(self._trainAccuracyData) > 0 and len(self._testAccuracyData) > 0:
+                print(f"epoch {epoch}, average loss: {lossValues[-1]}, train {self._evaluator.name}: {self._trainAccuracyData[-1]}, test  {self._evaluator.name}: {self._testAccuracyData[-1]}, elapsed time: {elapsedTime}s");
+            elif len(self._trainAccuracyData) > 0:
+                print(f"epoch {epoch}, average loss: {lossValues[-1]}, train {self._evaluator.name}: {self._trainAccuracyData[-1]}, elapsed time: {elapsedTime}s");
             else:
-                print(f"epoch {epoch}, loss: {lossValues[-1]}, train accuracy: {self._trainAccuracyData[-1]}, elapsed time: {time.time() - startTime}s");
+                print(f"epoch {epoch}, average loss: {lossValues[-1]}, elapsed time: {elapsedTime}s");
+
 
         print(f"[{datetime.datetime.now()}] complete to train model {self._model}");
 
