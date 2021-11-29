@@ -85,6 +85,13 @@ class INetOptimizer(metaclass = abc.ABCMeta):
         pass;
 
 
+class IDataIterator(Iterable, metaclass = abc.ABCMeta):
+    @property
+    @abc.abstractmethod
+    def totalIterations(self) -> int:
+        pass;
+
+
 class INetAccuracyEvaluator(metaclass = abc.ABCMeta):
     @property
     @abc.abstractmethod
@@ -1273,12 +1280,13 @@ class SequentialContainer(NetModuleBase, INetModel):
             func(m);
 
 
-class SequentialDataIterator:
-    def __init__(self, data : List[np.ndarray], batchSize = 2 ** 8, shuffle : bool = True):
+class SequentialDataIterator(IDataIterator):
+    def __init__(self, data : List[np.ndarray], batchSize : int = 2 ** 8, shuffle : bool = True):
         self._step = 0;
         self._data = data;
         self._length = len(data[0]);
         self._batchSize = batchSize;
+        self._totalIterations = self._length // self._batchSize + int(self._length % self._batchSize > 0);
         self._shuffle = shuffle;
         self._index = np.arange(self._length);
 
@@ -1300,7 +1308,12 @@ class SequentialDataIterator:
         return self._iterate();
 
 
-class PartitionedDataIterator:
+    @property
+    def totalIterations(self) -> int:
+        return self._totalIterations;
+
+
+class PartitionedDataIterator(IDataIterator):
     def __init__(self, data : List[np.ndarray], partitionNumber : int, batchSize : int, shuffle : bool = False):
         self._step = 0;
         self._data = data;
@@ -1308,6 +1321,7 @@ class PartitionedDataIterator:
         self._partitionNumber = partitionNumber;
         self._partitionSize = self._length // partitionNumber;
         self._batchSize = batchSize;
+        self._totalIterations = self._partitionSize // self._batchSize + int(self._partitionSize % self._batchSize > 0);
         self._shuffle = shuffle;
         self._index = list(range(self._length));
 
@@ -1334,6 +1348,11 @@ class PartitionedDataIterator:
             np.random.shuffle(self._index);
 
         return self._iterate();
+
+
+    @property
+    def totalIterations(self) -> int:
+        return self._totalIterations;
 
 
 class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
@@ -1424,7 +1443,7 @@ class NetTrainer:
         return self._evaluator.accuracy;
 
 
-    def train(self, maxEpoch : int, trainIterator : Iterable, testIterator : Iterable = None):
+    def train(self, maxEpoch : int, trainIterator : IDataIterator, testIterator : IDataIterator = None):
         lossValues = [];
 
         self._lossData.clear();
