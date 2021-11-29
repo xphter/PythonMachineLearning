@@ -36,6 +36,11 @@ class INetModule(metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
+    def reset(self):
+        pass;
+
+
+    @abc.abstractmethod
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
         pass;
 
@@ -146,6 +151,10 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
 
 
     def _setTrainingMode(self, value : bool):
+        pass;
+
+
+    def reset(self):
         pass;
 
 
@@ -609,7 +618,7 @@ class RnnCell(NetModuleBase):
         self._Y = None;
         self._inputSize = inputSize;
         self._outputSize = outputSize;
-        self._name = f"RNN Module {inputSize}*{outputSize}";
+        self._name = f"RNN Cell {inputSize}*{outputSize}";
 
         self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize) if Wx is None else Wx;
         self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize) if Wh is None else Wh;
@@ -696,14 +705,8 @@ class RnnLayer(NetModuleBase):
         return self._bias;
 
 
-    @property
-    def state(self) -> np.ndarray:
-        return self._H;
-
-
-    @state.setter
-    def state(self, value : np.ndarray):
-        self._H = value;
+    def reset(self):
+        self._H = None;
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
@@ -1242,6 +1245,11 @@ class SequentialContainer(NetModuleBase, INetModel):
             m.isTrainingMode = value;
 
 
+    def reset(self):
+        for m in self._modules:
+            m.reset();
+
+
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
         for m in self._modules:
             data = m.forward(*data);
@@ -1410,6 +1418,7 @@ class NetTrainer:
                     Y = self._model.forward(*data[:-1]);
                     self._evaluator.update(*Y, self._model.getFinalTag(data[-1]));
         finally:
+            self._model.reset();
             self._model.isTrainingMode = True;
 
         return self._evaluator.accuracy;
@@ -1436,6 +1445,7 @@ class NetTrainer:
                 self._model.backward(*self._lossFunc.backward());
                 self._optimizer.update(self._model.params, self._model.grads);
 
+            self._model.reset();
             self._lossData.append(sum(lossValues) / len(lossValues));
 
             if self._evaluator is not None:
