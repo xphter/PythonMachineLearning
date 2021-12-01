@@ -754,6 +754,162 @@ class RnnLayer(NetModuleBase):
         return dX, ;
 
 
+class LstmCell(NetModuleBase):
+    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None):
+        super().__init__();
+
+        self._X, self._H, self._C = None, None, None;
+        self._F, self._G, self._I, self._O = None, None, None, None;
+        self._YC, self._tanhYC, self._YH = None, None, None;
+        self._inputSize = inputSize;
+        self._outputSize = outputSize;
+        self._name = f"LSTM Cell {inputSize}*{outputSize}";
+
+        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 4 * outputSize) if Wx is None else Wx;
+        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 4 * outputSize) if Wh is None else Wh;
+        self._bias = np.zeros(4 * outputSize) if b is None else b;
+
+        weights = [self._weightX, self._weightH, self._bias];
+        self._params.extend(weights);
+        self._grads.extend([np.zeros_like(w) for w in weights]);
+
+
+    @property
+    def weightX(self) -> np.ndarray:
+        return self._weightX;
+
+
+    @property
+    def weightH(self) -> np.ndarray:
+        return self._weightH;
+
+
+    @property
+    def bias(self) -> np.ndarray:
+        return self._bias;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        self._X, self._H, self._C = data;
+
+        A = self._X @ self._weightX + self._H @ self._weightH + self._bias;
+        self._F, self._G, self._I, self._O = tuple(np.hsplit(A, 4));
+        self._F, self._G, self._I, self._O = sigmoid(self._F), tanh(self._G), sigmoid(self._I), sigmoid(self._O);
+
+        self._YC = self._C * self._F + self._G * self._I;
+        self._tanhYC = tanh(self._YC);
+        self._YH = self._tanhYC * self._O;
+
+        return self._YH, self._YC;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dYH, dYC = dout;
+
+        dYC += dYH * self._O * tanhGradient(self._tanhYC);
+        dF, dG, dI, dO = dYC * self._C, dYC * self._I, dYC * self._G, dYH * self._tanhYC;
+        dF *= sigmoidGradient(self._F);
+        dG *= tanhGradient(self._G);
+        dI *= sigmoidGradient(self._I);
+        dO *= sigmoidGradient(self._O);
+        dA = np.hstack((dF, dG, dI, dO));
+
+        dWx = self._X.T @ dA;
+        dWh = self._H.T @ dA;
+        db = np.sum(dA, axis = 0);
+
+        dX = dA @ self._weightX.T;
+        dH = dA @ self._weightH.T;
+        dC = dYC * self._F;
+
+        self._grads[0][...] = dWx;
+        self._grads[1][...] = dWh;
+        self._grads[2][...] = db;
+
+        return dX, dH, dC;
+
+
+class LstmLayer(NetModuleBase):
+    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, stateful : bool = True):
+        super().__init__();
+
+        self._H, self._C = None, None;
+        self._dH, self._dC = None, None;
+        self._stateful = stateful;
+        self._inputSize = inputSize;
+        self._outputSize = outputSize;
+        self._name = f"LSTM {inputSize}*{outputSize}";
+
+        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 4 * outputSize) if Wx is None else Wx;
+        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 4 * outputSize) if Wh is None else Wh;
+        self._bias = np.zeros(4 * outputSize) if b is None else b;
+        self._lstmModules : List[LstmCell] = [];
+
+        weights = [self._weightX, self._weightH, self._bias];
+        self._params.extend(weights);
+        self._grads.extend([np.zeros_like(w) for w in weights]);
+
+
+    @property
+    def weightX(self) -> np.ndarray:
+        return self._weightX;
+
+
+    @property
+    def weightH(self) -> np.ndarray:
+        return self._weightH;
+
+
+    @property
+    def bias(self) -> np.ndarray:
+        return self._bias;
+
+
+    def reset(self):
+        self._H, self._C = None, None;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        X = data[0];
+        N, T, D = X.shape;
+
+        if len(self._lstmModules) != T:
+            self._lstmModules = [LstmCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias) for _ in range(T)];
+
+        if not self._stateful or self._H is None:
+            self._H = np.zeros((N, self._outputSize));
+        if not self._stateful or self._C is None:
+            self._C = np.zeros((N, self._outputSize));
+
+        Y = np.zeros((N, T, self._outputSize));
+        for t in range(T):
+            self._H, self._C = self._lstmModules[t].forward(X[:, t, :], self._H, self._C);
+            Y[:, t, :] = self._H;
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
+        N, T = dY.shape[: 2];
+
+        # truncated BPTT
+        self._dH = np.zeros_like(self._H);
+        self._dC = np.zeros_like(self._H);
+        dX = np.zeros((N, T, self._inputSize));
+        for i in range(len(self._grads)):
+            self._grads[i][...] = 0;
+
+        for t in reversed(range(T)):
+            lstm = self._lstmModules[t];
+            dX[:, t, :], self._dH, self._dC = lstm.backward(dY[:, t, :] + self._dH, self._dC);
+
+            for i in range(len(self._grads)):
+                self._grads[i] += lstm.grads[i];
+
+        return dX, ;
+
+
 class CorpusNegativeSampler:
     def __init__(self, corpus : np.ndarray, sampleSize : int, exponent : float = 0.75):
         vocab, counts = np.unique(corpus, return_counts = True);
