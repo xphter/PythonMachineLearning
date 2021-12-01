@@ -1120,6 +1120,30 @@ class SumWithMeanSquareLossLayer(NetLossBase):
         return dX, ;
 
 
+class GradientsClipping(INetOptimizer):
+    def __init__(self, maxL2 : float, optimizer : INetOptimizer, epsilon : float = 1e-8):
+        self._maxL2 = maxL2;
+        self._optimizer = optimizer;
+        self._epsilon = epsilon;
+
+
+    def learningRate(self) -> float:
+        return self._optimizer.learningRate;
+
+
+    def update(self, params : List[np.ndarray], grads : List[np.ndarray]):
+        totalL2 = 0;
+        for g in grads:
+            totalL2 += float(np.sum(g ** 2));
+
+        ratio = self._maxL2 / math.sqrt(totalL2 + self._epsilon);
+        if ratio < 1:
+            for g in grads:
+                g *= ratio;
+
+        self._optimizer.update(params, grads);
+
+
 class SGD(NetOptimizerBase):
     def __init__(self, lr : float = 0.001):
         super().__init__(lr);
