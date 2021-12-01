@@ -1132,11 +1132,9 @@ class GradientsClipping(INetOptimizer):
 
 
     def update(self, params : List[np.ndarray], grads : List[np.ndarray]):
-        totalL2 = 0;
-        for g in grads:
-            totalL2 += float(np.sum(g ** 2));
-
+        totalL2 = sum([float(np.sum(g ** 2)) for g in grads]);
         ratio = self._maxL2 / math.sqrt(totalL2 + self._epsilon);
+
         if ratio < 1:
             for g in grads:
                 g *= ratio;
