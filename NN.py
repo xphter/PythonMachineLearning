@@ -101,12 +101,12 @@ class INetAccuracyEvaluator(metaclass = abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def accuracy(self) -> float:
+    def accuracy(self) -> Optional[float]:
         pass;
 
 
     @abc.abstractmethod
-    def fromLoss(self, lossValues : List[float]) -> bool:
+    def fromLoss(self, lossValues : List[float] = None) -> bool:
         pass;
 
 
@@ -1363,15 +1363,15 @@ class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
 
     @property
     def name(self) -> str:
-        return "classification accuracy";
+        return "Classification Accuracy";
 
 
     @property
-    def accuracy(self) -> float:
-        return self._rightCount / self._totalCount;
+    def accuracy(self) -> Optional[float]:
+        return self._rightCount / self._totalCount if self._totalCount > 0 else None;
 
 
-    def fromLoss(self, lossValues : List[float]) -> bool:
+    def fromLoss(self, lossValues :List[float] = None) -> bool:
         return False;
 
 
@@ -1388,30 +1388,33 @@ class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
 
 class PerplexityAccuracyEvaluator(INetAccuracyEvaluator):
     def __init__(self):
-        self._perplexity = 1.0;
+        self._perplexity = None;
 
 
     @property
     def name(self) -> str:
-        return "perplexity";
+        return "Perplexity";
 
 
     @property
-    def accuracy(self) -> float:
+    def accuracy(self) -> Optional[float]:
         return self._perplexity;
 
 
-    def fromLoss(self, lossValues : List[float]) -> bool:
+    def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
+        if lossValues is None:
+            return False;
+
         self._perplexity = math.exp(sum(lossValues) / len(lossValues));
         return True;
 
 
     def update(self, *data: np.ndarray):
-        raise NotImplemented();
+        pass;
 
 
     def reset(self):
-        self._perplexity = 1.0;
+        self._perplexity = None;
 
 
 class NetTrainer:
@@ -1422,20 +1425,27 @@ class NetTrainer:
         self._evaluator = evaluator;
 
         self._lossData = [];
-        self._trainAccuracyData = [];
+        self._trainingAccuracyData = [];
         self._testAccuracyData = [];
 
 
-    def _calcAccuracy(self, lossValues : List[float], iterator : Iterable) -> float:
+    def _calcAccuracy(self, lossValues : List[float] = None, iterator : Iterable = None) -> float:
         self._model.isTrainingMode = False;
 
         try:
             self._evaluator.reset();
 
-            if not self._evaluator.fromLoss(lossValues):
+            if not self._evaluator.fromLoss(lossValues) and iterator is not None:
+                lossValues = [];
+
                 for data in iterator:
                     Y = self._model.forward(*data[:-1]);
+                    loss = self._lossFunc.forward(*Y, self._model.getFinalTag(data[-1]));
+
+                    lossValues.append(loss);
                     self._evaluator.update(*Y, self._model.getFinalTag(data[-1]));
+
+                self._evaluator.fromLoss(lossValues);
         finally:
             self._model.reset();
             self._model.isTrainingMode = True;
@@ -1443,11 +1453,12 @@ class NetTrainer:
         return self._evaluator.accuracy;
 
 
-    def train(self, maxEpoch : int, trainIterator : IDataIterator, testIterator : IDataIterator = None):
+    def train(self, maxEpoch : int, trainingIterator : IDataIterator, testIterator : IDataIterator = None,
+              evalEpoch : bool = True, evalIterations : int = None, evalTrainingData : bool = False, evalTestData : bool = True):
         lossValues = [];
 
         self._lossData.clear();
-        self._trainAccuracyData.clear();
+        self._trainingAccuracyData.clear();
         self._testAccuracyData.clear();
 
         print(f"[{datetime.datetime.now()}] start to train model {self._model}");
@@ -1456,7 +1467,7 @@ class NetTrainer:
             lossValues.clear();
             startTime = time.time();
 
-            for data in trainIterator:
+            for data in trainingIterator:
                 Y = self._model.forward(*data[:-1]);
                 loss = self._lossFunc.forward(*Y, self._model.getFinalTag(data[-1]));
                 lossValues.append(loss);
@@ -1464,22 +1475,29 @@ class NetTrainer:
                 self._model.backward(*self._lossFunc.backward());
                 self._optimizer.update(self._model.params, self._model.grads);
 
+                if self._evaluator is not None and evalIterations is not None and len(lossValues) % evalIterations == 0:
+                    accuracy = self._calcAccuracy(lossValues[-evalIterations:], None);
+                    if accuracy is not None:
+                        print(f"epoch {epoch}, iterations: {len(lossValues)} / {trainingIterator.totalIterations}, traning {self._evaluator.name}: {accuracy}");
+
             self._model.reset();
             self._lossData.append(sum(lossValues) / len(lossValues));
 
-            if self._evaluator is not None:
-                self._trainAccuracyData.append(self._calcAccuracy(lossValues, trainIterator));
-                if testIterator is not None:
-                    self._testAccuracyData.append(self._calcAccuracy(lossValues, testIterator));
+            if self._evaluator is not None and evalEpoch:
+                if evalTrainingData:
+                    self._trainingAccuracyData.append(self._calcAccuracy(lossValues, trainingIterator));
+                if testIterator is not None and evalTestData:
+                    self._testAccuracyData.append(self._calcAccuracy(None, testIterator));
 
-            elapsedTime = time.time() - startTime;
-            if len(self._trainAccuracyData) > 0 and len(self._testAccuracyData) > 0:
-                print(f"epoch {epoch}, average loss: {lossValues[-1]}, train {self._evaluator.name}: {self._trainAccuracyData[-1]}, test  {self._evaluator.name}: {self._testAccuracyData[-1]}, elapsed time: {elapsedTime}s");
-            elif len(self._trainAccuracyData) > 0:
-                print(f"epoch {epoch}, average loss: {lossValues[-1]}, train {self._evaluator.name}: {self._trainAccuracyData[-1]}, elapsed time: {elapsedTime}s");
-            else:
-                print(f"epoch {epoch}, average loss: {lossValues[-1]}, elapsed time: {elapsedTime}s");
+            trainingMessage = f", training {self._evaluator.name}: {self._trainingAccuracyData[-1]}" if len(self._trainingAccuracyData) > 0 else "";
+            testMessage = f", test {self._evaluator.name}: {self._testAccuracyData[-1]}" if len(self._testAccuracyData) > 0 else "";
+            print(f"epoch {epoch}, average loss: {lossValues[-1]}{trainingMessage}{testMessage}, elapsed time: {time.time() - startTime}s");
 
+        if self._evaluator is not None:
+            if len(self._trainingAccuracyData) == 0:
+                print(f"the final training {self._evaluator.name} is {self._calcAccuracy(None, trainingIterator)}");
+            if len(self._testAccuracyData) == 0 and testIterator is not None:
+                print(f"the final test {self._evaluator.name} is {self._calcAccuracy(None, testIterator)}");
 
         print(f"[{datetime.datetime.now()}] complete to train model {self._model}");
 
@@ -1490,8 +1508,8 @@ class NetTrainer:
         plt.ylabel('loss');
 
         plt.plot(self._lossData, "o-k", label = "loss");
-        if len(self._trainAccuracyData) > 0:
-            plt.plot(self._trainAccuracyData, "D-b", label = "train accuracy");
+        if len(self._trainingAccuracyData) > 0:
+            plt.plot(self._trainingAccuracyData, "D-b", label = "training accuracy");
         if len(self._testAccuracyData) > 0:
             plt.plot(self._testAccuracyData, "s-r", label = "test accuracy");
 
