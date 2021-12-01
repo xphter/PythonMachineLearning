@@ -6,7 +6,7 @@ import collections;
 
 import matplotlib.pyplot as plt;
 
-from typing import List, Tuple, Callable, Any, Optional, Iterable;
+from typing import Union, List, Tuple, Callable, Any, Optional, Iterable;
 from Functions import *;
 
 
@@ -282,11 +282,11 @@ class DropoutLayer(NetModuleBase):
 
 
 class ReshapeLayer(NetModuleBase):
-    def __init__(self, *newShapes : Tuple):
+    def __init__(self, *shapeSelector : Union[Tuple, Callable]):
         super().__init__();
 
         self._originalShapes = [];
-        self._newShapes = newShapes;
+        self._shapeSelector = shapeSelector;
         self._name = "Reshape";
 
 
@@ -294,9 +294,9 @@ class ReshapeLayer(NetModuleBase):
         self._originalShapes.clear();
         output : List[np.ndarray] = [];
 
-        for X, shape in zip(data, self._newShapes):
+        for X, selector in zip(data, self._shapeSelector):
             self._originalShapes.append(X.shape);
-            output.append(X.reshape(shape));
+            output.append(X.reshape(selector if isinstance(selector, tuple) else selector(X)));
 
         return tuple(output);
 
