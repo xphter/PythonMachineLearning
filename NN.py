@@ -259,11 +259,15 @@ class DropoutLayer(NetModuleBase):
         self._name = f"Dropout {dropoutRatio}";
 
 
+    def _getMask(self, shape : Tuple) -> np.ndarray:
+        return (np.random.rand(*shape) > self._dropoutRatio) / (1.0 - self._dropoutRatio);
+
+
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
         X = data[0];
 
         if self._isTrainingMode:
-            self._mask = (np.random.rand(*X.shape) > self._dropoutRatio) / (1 - self._dropoutRatio);
+            self._mask = self._getMask(X.shape);
             return X * self._mask, ;
         else:
             return X, ;
@@ -279,6 +283,27 @@ class DropoutLayer(NetModuleBase):
         dX = dY * self._mask;
 
         return dX, ;
+
+
+class VariationalDropoutLayer(DropoutLayer):
+    def __init__(self, dropoutRatio = 0.5):
+        super().__init__(dropoutRatio);
+
+        self._name = f"VariationalDropout {dropoutRatio}";
+
+
+    def _getMask(self, shape : Tuple) -> np.ndarray:
+        D = len(shape);
+        if D <= 2:
+            return super()._getMask(shape);
+
+        mask = super()._getMask((shape[0], shape[-1]));
+        for _ in range(D - 2):
+            mask = np.expand_dims(mask, axis = -2);
+        for d in range(1, D - 1):
+            mask = np.repeat(mask, shape[d], axis = d);
+
+        return mask;
 
 
 class ReshapeLayer(NetModuleBase):
