@@ -1737,11 +1737,11 @@ class NetTrainer:
         self._trainingAccuracyData.clear();
         self._testAccuracyData.clear();
 
+        startTime = time.time();
         print(f"[{datetime.datetime.now()}] start to train model {self._model}");
 
         for epoch in range(maxEpoch):
             lossValues.clear();
-            startTime = time.time();
 
             for data in trainingIterator:
                 Y = self._model.forward(*data[:-1]);
@@ -1754,7 +1754,7 @@ class NetTrainer:
                 if self._evaluator is not None and evalIterations is not None and len(lossValues) % evalIterations == 0:
                     accuracy = self._calcAccuracy(lossValues[-evalIterations:], None);
                     if accuracy is not None:
-                        print(f"epoch {epoch}, iterations: {len(lossValues)} / {trainingIterator.totalIterations}, traning {self._evaluator.name}: {accuracy}");
+                        print(f"epoch {epoch}, iterations: {len(lossValues)} / {trainingIterator.totalIterations}, elapsed time: {int(time.time() - startTime)}s, training {self._evaluator.name}: {accuracy}");
 
             self._model.reset();
             self._lossData.append(sum(lossValues) / len(lossValues));
@@ -1769,7 +1769,7 @@ class NetTrainer:
 
             trainingMessage = f", training {self._evaluator.name}: {self._trainingAccuracyData[-1]}" if len(self._trainingAccuracyData) > 0 else "";
             testMessage = f", test {self._evaluator.name}: {self._testAccuracyData[-1]}" if len(self._testAccuracyData) > 0 else "";
-            print(f"epoch {epoch}, average loss: {lossValues[-1]}{trainingMessage}{testMessage}, elapsed time: {time.time() - startTime}s");
+            print(f"epoch {epoch}, average loss: {lossValues[-1]}{trainingMessage}{testMessage}, elapsed time: {int(time.time() - startTime)}s");
 
         if self._evaluator is not None:
             print("evaluating final training data...");
@@ -1779,7 +1779,7 @@ class NetTrainer:
                 print("evaluating final test data...");
                 print(f"the final test {self._evaluator.name} is {self._calcAccuracy(None, testIterator)}");
 
-        print(f"[{datetime.datetime.now()}] complete to train model {self._model}");
+        print(f"[{datetime.datetime.now()}] complete to train model, elapsed time: {int(time.time() - startTime)}s");
 
 
     def plot(self):
