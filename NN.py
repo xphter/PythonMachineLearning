@@ -1301,6 +1301,79 @@ class SumWithMeanSquareLossLayer(NetLossBase):
         return dX, ;
 
 
+class _ParametersShareInfo:
+    def __init__(self, index : int, target : int, isTranspose : bool = False):
+        self.index = index;
+        self.target = target;
+        self.isTranspose = isTranspose;
+
+
+    def __repr__(self):
+        return self.__str__();
+
+
+    def __str__(self):
+        return f"[{self.target}] += [{self.index}]{'.T' if self.isTranspose else ''}";
+
+
+class ParametersShare(INetOptimizer):
+    def __init__(self, optimizer : INetOptimizer):
+        self._optimizer = optimizer;
+        self._sharesInfo: Optional[List[_ParametersShareInfo]] = None;
+
+
+    def learningRate(self) -> float:
+        return self._optimizer.learningRate;
+
+
+    def _find(self, params : List[np.ndarray]):
+        L = len(params);
+        sharesInfo = [];
+        params = params[:];
+
+        for i in range(L - 1):
+            if (p1 := params[i]) is None:
+                continue;
+
+            for j in range(i + 1, L):
+                if (p2 := params[j]) is None:
+                    continue;
+
+                if p1 is p2:
+                    # p1 == p2
+                    sharesInfo.append(_ParametersShareInfo(j, i));
+                    params[j] = None;
+                elif p1.ndim == 2 and p2.ndim == 2 and (p1 is p2.base or p2 is p1.base):
+                    # p1 == p2.T or p1.T == p2
+                    s1, s2 = p1.shape, p2.shape;
+
+                    if s1[0] == s2[1] and s1[1] == s2[0]:
+                        if p1 is p2.base:
+                            sharesInfo.append(_ParametersShareInfo(j, i, isTranspose = True));
+                            params[j] = None;
+                        else:
+                            sharesInfo.append(_ParametersShareInfo(i, j, isTranspose = True));
+                            params[i] = None;
+                            break;
+
+        self._sharesInfo = sorted(sharesInfo, key = lambda item: item.index, reverse = True);
+
+
+    def update(self, params : List[np.ndarray], grads : List[np.ndarray]):
+        L = len(params);
+        params, grads = params[:], grads[:];
+
+        if self._sharesInfo is None:
+            self._find(params);
+
+        for info in self._sharesInfo:
+            grads[info.target] += (grads[info.index].T if info.isTranspose else grads[info.index]);
+            params.pop(info.index);
+            grads.pop(info.index);
+
+        self._optimizer.update(params, grads);
+
+
 class GradientsClipping(INetOptimizer):
     def __init__(self, maxL2 : float, optimizer : INetOptimizer, epsilon : float = 1e-8):
         self._maxL2 = maxL2;
