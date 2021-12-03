@@ -88,7 +88,7 @@ def im2col(X : np.ndarray, FH : int, FW : int, stride : int = 1, pad : int = 0) 
     OW = (W + 2 * pad - FW) // stride + 1;
 
     img = X if pad <= 0 else np.pad(X,[(0, 0), (0, 0), (pad, pad), (pad, pad)], "constant");
-    col = np.zeros((N, C, FH, FW, OH, OW));
+    col = np.zeros((N, C, FH, FW, OH, OW), dtype = X.dtype);
 
     for y in range(FH):
         yMax = y + stride * OH;
@@ -111,7 +111,7 @@ def col2im(X : np.ndarray, imShape : tuple, FH : int, FW : int, stride : int = 1
     OW = (W + 2 * pad - FW) // stride + 1;
 
     col = X.reshape(N, OH, OW, C, FH, FW).transpose(0, 3, 4, 5, 1, 2);
-    img = np.zeros((N, C, H + 2 * pad, W + 2 * pad));
+    img = np.zeros((N, C, H + 2 * pad, W + 2 * pad), dtype = X.dtype);
 
     for y in range(FH):
         yMax = y + stride * OH;
@@ -132,7 +132,7 @@ def convOutputSize(inputSize : int, filterSize : int, stride : int = 1, pad : in
 
 
 def convert2OneHot(X : np.ndarray, size : int) -> np.ndarray:
-    Y = np.zeros((X.size, size));
+    Y = np.zeros((X.size, size), dtype = X.dtype);
     Y[list(range(X.size)), X.flatten().tolist()] = 1;
     return Y.reshape(X.shape + (size,));
 

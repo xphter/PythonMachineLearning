@@ -259,15 +259,15 @@ class DropoutLayer(NetModuleBase):
         self._name = f"Dropout {dropoutRatio}";
 
 
-    def _getMask(self, shape : Tuple) -> np.ndarray:
-        return (np.random.rand(*shape) > self._dropoutRatio) / (1.0 - self._dropoutRatio);
+    def _getMask(self, shape : Tuple, dtype) -> np.ndarray:
+        return (np.random.rand(*shape) > self._dropoutRatio).astype(dtype) / (1.0 - self._dropoutRatio);
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
         X = data[0];
 
         if self._isTrainingMode:
-            self._mask = self._getMask(X.shape);
+            self._mask = self._getMask(X.shape, X.dtype);
             return X * self._mask, ;
         else:
             return X, ;
@@ -292,12 +292,12 @@ class VariationalDropoutLayer(DropoutLayer):
         self._name = f"VariationalDropout {dropoutRatio}";
 
 
-    def _getMask(self, shape : Tuple) -> np.ndarray:
+    def _getMask(self, shape : Tuple, dtype) -> np.ndarray:
         D = len(shape);
         if D <= 2:
-            return super()._getMask(shape);
+            return super()._getMask(shape, dtype);
 
-        mask = super()._getMask((shape[0], shape[-1]));
+        mask = super()._getMask((shape[0], shape[-1]), dtype);
         for _ in range(D - 2):
             mask = np.expand_dims(mask, axis = -2);
         for d in range(1, D - 1):
@@ -344,8 +344,8 @@ class AffineLayer(NetModuleBase):
         self._outputSize = outputSize;
         self._name = f"Affine {inputSize}*{outputSize}";
 
-        self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize) if W is None else W;
-        self._bias = (np.zeros(outputSize) if b is None else b) if includeBias else None;
+        self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize).astype(defaultDType) if W is None else W;
+        self._bias = (np.zeros(outputSize, dtype = defaultDType) if b is None else b) if includeBias else None;
 
         self._params.append(self._weight);
         self._grads.append(np.zeros_like(self._weight));
@@ -559,7 +559,7 @@ class EmbeddingLayer(NetModuleBase):
         self._outputSize = outputSize;
         self._name = f"Embedding {inputSize}*{outputSize}";
 
-        self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize) if W is None else W;
+        self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize).astype(defaultDType) if W is None else W;
         self._params.append(self._weight);
         self._grads.append(np.zeros_like(self._weight));
 
@@ -589,7 +589,7 @@ class EmbeddingLayer(NetModuleBase):
         npAddAt(dW, self._index, dY);
 
         # the dX is always zero!!!
-        return np.zeros(self._shape), ;
+        return np.zeros(self._shape, dtype = dY.dtype), ;
 
 
 class EmbeddingWithDotLayer(NetModuleBase):
@@ -790,9 +790,9 @@ class LstmCell(NetModuleBase):
         self._outputSize = outputSize;
         self._name = f"LSTM Cell {inputSize}*{outputSize}";
 
-        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 4 * outputSize) if Wx is None else Wx;
-        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 4 * outputSize) if Wh is None else Wh;
-        self._bias = np.zeros(4 * outputSize) if b is None else b;
+        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 4 * outputSize).astype(defaultDType) if Wx is None else Wx;
+        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 4 * outputSize).astype(defaultDType) if Wh is None else Wh;
+        self._bias = np.zeros(4 * outputSize, dtype = defaultDType) if b is None else b;
 
         weights = [self._weightX, self._weightH, self._bias];
         self._params.extend(weights);
@@ -865,9 +865,9 @@ class LstmLayer(NetModuleBase):
         self._outputSize = outputSize;
         self._name = f"LSTM {inputSize}*{outputSize}";
 
-        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 4 * outputSize) if Wx is None else Wx;
-        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 4 * outputSize) if Wh is None else Wh;
-        self._bias = np.zeros(4 * outputSize) if b is None else b;
+        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 4 * outputSize).astype(defaultDType) if Wx is None else Wx;
+        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 4 * outputSize).astype(defaultDType) if Wh is None else Wh;
+        self._bias = np.zeros(4 * outputSize, dtype = defaultDType) if b is None else b;
         self._lstmModules : List[LstmCell] = [];
 
         weights = [self._weightX, self._weightH, self._bias];
@@ -902,11 +902,11 @@ class LstmLayer(NetModuleBase):
             self._lstmModules = [LstmCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias) for _ in range(T)];
 
         if not self._stateful or self._H is None:
-            self._H = np.zeros((N, self._outputSize));
+            self._H = np.zeros((N, self._outputSize), dtype = X.dtype);
         if not self._stateful or self._C is None:
-            self._C = np.zeros((N, self._outputSize));
+            self._C = np.zeros((N, self._outputSize), dtype = X.dtype);
 
-        Y = np.zeros((N, T, self._outputSize));
+        Y = np.zeros((N, T, self._outputSize), dtype = X.dtype);
         for t in range(T):
             self._H, self._C = self._lstmModules[t].forward(X[:, t, :], self._H, self._C);
             Y[:, t, :] = self._H;
@@ -921,7 +921,7 @@ class LstmLayer(NetModuleBase):
         # truncated BPTT
         self._dH = np.zeros_like(self._H);
         self._dC = np.zeros_like(self._H);
-        dX = np.zeros((N, T, self._inputSize));
+        dX = np.zeros((N, T, self._inputSize), dtype = dY.dtype);
         for i in range(len(self._grads)):
             self._grads[i][...] = 0;
 
