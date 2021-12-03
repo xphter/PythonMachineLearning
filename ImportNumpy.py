@@ -1,6 +1,6 @@
 import DeviceConfig;
 
-if DeviceConfig.EnableGPU:
+if DeviceConfig.enableGPU:
     import cupy as np;
     import cupyx as cpx;
 

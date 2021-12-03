@@ -1,1 +1,1 @@
-EnableGPU : bool = False;
+enableGPU : bool = False;

@@ -964,7 +964,7 @@ class CorpusNegativeSampler:
             p[exceptIndex] = 0;
             p /= np.sum(p);
 
-        return np.random.choice(self._vocab, sampleSize, replace = DeviceConfig.EnableGPU or sampleSize >= self._vocabSize, p = p);
+        return np.random.choice(self._vocab, sampleSize, replace = DeviceConfig.enableGPU or sampleSize >= self._vocabSize, p = p);
 
 
     # return: negative samples, final tags
