@@ -1772,9 +1772,12 @@ class NetTrainer:
             print(f"epoch {epoch}, average loss: {lossValues[-1]}{trainingMessage}{testMessage}, elapsed time: {time.time() - startTime}s");
 
         if self._evaluator is not None:
-            print(f"evaluating training data...\r\nthe final training {self._evaluator.name} is {self._calcAccuracy(None, trainingIterator)}");
+            print("evaluating final training data...");
+            print(f"the final training {self._evaluator.name} is {self._calcAccuracy(None, trainingIterator)}");
+
             if testIterator is not None:
-                print(f"evaluating test data...\r\nthe final test {self._evaluator.name} is {self._calcAccuracy(None, testIterator)}");
+                print("evaluating final test data...");
+                print(f"the final test {self._evaluator.name} is {self._calcAccuracy(None, testIterator)}");
 
         print(f"[{datetime.datetime.now()}] complete to train model {self._model}");
 
