@@ -194,7 +194,7 @@ class ReluLayer(NetModuleBase):
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
         X = data[0];
-        self._mask = (X > 0) - 0;
+        self._mask = (X > 0).astype(X.dtype);
 
         return relu(X), ;
 
@@ -399,8 +399,8 @@ class BatchNormalizationLayer(NetModuleBase):
         self._XHat = None;
         self._name = "BatchNormalization";
 
-        self._gamma = np.ones(inputSize) if gamma is None else gamma;
-        self._beta = np.zeros(inputSize) if beta is None else beta;
+        self._gamma = np.ones(inputSize, dtype = defaultDType) if gamma is None else gamma;
+        self._beta = np.zeros(inputSize, dtype = defaultDType) if beta is None else beta;
         self._params.append(self._gamma);
         self._params.append(self._beta);
         self._grads.append(np.zeros_like(self._gamma));
@@ -455,8 +455,8 @@ class ConvolutionLayer(NetModuleBase):
         self._colW = None;
         self._name = f"Convolution {FN}*{C}*{FH}*{FW}";
 
-        self._weight = math.sqrt(2.0 / (C * FH * FW)) * np.random.randn(FN, C, FH, FW) if W is None else W;
-        self._bias = np.zeros(FN) if b is None else b;
+        self._weight = math.sqrt(2.0 / (C * FH * FW)) * np.random.randn(FN, C, FH, FW).astype(defaultDType) if W is None else W;
+        self._bias = np.zeros(FN, dtype = defaultDType) if b is None else b;
 
         self._params.append(self._weight);
         self._params.append(self._bias);
@@ -541,7 +541,7 @@ class MaxPoolingLayer(NetModuleBase):
         poolingSize = self._PH * self._PW;
 
         colDY = dY.transpose(0, 2, 3, 1);
-        dMax = np.zeros((colDY.size, poolingSize));
+        dMax = np.zeros((colDY.size, poolingSize), dtype = dY.dtype);
         dMax[np.arange(self._argMax.size), self._argMax.flatten()] = colDY.flatten();
         dMax = dMax.reshape(-1, C * poolingSize);
         dX = col2im(dMax, self._shape, self._PH, self._PW, self._stride, self._pad, True);
@@ -602,7 +602,7 @@ class EmbeddingWithDotLayer(NetModuleBase):
         self._outputSize = outputSize;
         self._name = f"EmbeddingWithDot {outputSize}*{inputSize}";
 
-        self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(outputSize, inputSize) if W is None else W;
+        self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(outputSize, inputSize).astype(defaultDType) if W is None else W;
         self._embeddingLayer = EmbeddingLayer(outputSize, inputSize, W = self._weight);
 
 
@@ -652,9 +652,9 @@ class RnnCell(NetModuleBase):
         self._outputSize = outputSize;
         self._name = f"RNN Cell {inputSize}*{outputSize}";
 
-        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize) if Wx is None else Wx;
-        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize) if Wh is None else Wh;
-        self._bias = np.zeros(outputSize) if b is None else b;
+        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize).astype(defaultDType) if Wx is None else Wx;
+        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize).astype(defaultDType) if Wh is None else Wh;
+        self._bias = np.zeros(outputSize, dtype = defaultDType) if b is None else b;
 
         weights = [self._weightX, self._weightH, self._bias];
         self._params.extend(weights);
@@ -712,9 +712,9 @@ class RnnLayer(NetModuleBase):
         self._outputSize = outputSize;
         self._name = f"RNN {inputSize}*{outputSize}";
 
-        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize) if Wx is None else Wx;
-        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize) if Wh is None else Wh;
-        self._bias = np.zeros(outputSize) if b is None else b;
+        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize).astype(defaultDType) if Wx is None else Wx;
+        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize).astype(defaultDType) if Wh is None else Wh;
+        self._bias = np.zeros(outputSize, dtype = defaultDType) if b is None else b;
         self._rnnModules : List[RnnCell] = [];
 
         weights = [self._weightX, self._weightH, self._bias];
@@ -749,9 +749,9 @@ class RnnLayer(NetModuleBase):
             self._rnnModules = [RnnCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias) for _ in range(T)];
 
         if not self._stateful or self._H is None:
-            self._H = np.zeros((N, self._outputSize));
+            self._H = np.zeros((N, self._outputSize), X.dtype);
 
-        Y = np.zeros((N, T, self._outputSize));
+        Y = np.zeros((N, T, self._outputSize), X.dtype);
         for t in range(T):
             self._H = self._rnnModules[t].forward(X[:, t, :], self._H)[0];
             Y[:, t, :] = self._H;
@@ -765,7 +765,7 @@ class RnnLayer(NetModuleBase):
 
         # truncated BPTT
         self._dH = np.zeros_like(self._H);
-        dX = np.zeros((N, T, self._inputSize));
+        dX = np.zeros((N, T, self._inputSize), dY.dtype);
         for i in range(len(self._grads)):
             self._grads[i][...] = 0;
 
@@ -998,8 +998,8 @@ class CBOWModel(NetModuleBase, INetModel):
         self._vocabSize = vocabSize;
         self._hiddenSize = hiddenSize;
         self._negativeSampler = negativeSampler;
-        self._W0 = math.sqrt(2.0 / vocabSize) * np.random.randn(vocabSize, hiddenSize) if inW is None else inW;
-        self._W1 = math.sqrt(2.0 / hiddenSize) * np.random.randn(hiddenSize, vocabSize).T if outW is None else outW;
+        self._W0 = math.sqrt(2.0 / vocabSize) * np.random.randn(vocabSize, hiddenSize).astype(defaultDType) if inW is None else inW;
+        self._W1 = math.sqrt(2.0 / hiddenSize) * np.random.randn(hiddenSize, vocabSize).astype(defaultDType).T if outW is None else outW;
 
         self._embeddingLayer = EmbeddingLayer(vocabSize, hiddenSize, W = self._W0);
         self._outputLayer = EmbeddingWithDotLayer(hiddenSize, vocabSize, W = self._W1);
@@ -1055,7 +1055,7 @@ class CBOWModel(NetModuleBase, INetModel):
         self._grads[0][...] = self._embeddingLayer.grads[0];
         self._grads[1][...] = self._outputLayer.grads[0];
 
-        return np.zeros((N, C)), ;
+        return np.zeros((N, C), dtype = dY.dtype), ;
 
 
     def getFinalTag(self, T : np.ndarray) -> np.ndarray:
@@ -1071,8 +1071,8 @@ class SkipGramModel(NetModuleBase, INetModel):
         self._vocabSize = vocabSize;
         self._hiddenSize = hiddenSize;
         self._negativeSampler = negativeSampler;
-        self._W0 = math.sqrt(2.0 / vocabSize) * np.random.randn(vocabSize, hiddenSize) if inW is None else inW;
-        self._W1 = math.sqrt(2.0 / hiddenSize) * np.random.randn(hiddenSize, vocabSize).T if outW is None else outW;
+        self._W0 = math.sqrt(2.0 / vocabSize) * np.random.randn(vocabSize, hiddenSize).astype(defaultDType) if inW is None else inW;
+        self._W1 = math.sqrt(2.0 / hiddenSize) * np.random.randn(hiddenSize, vocabSize).astype(defaultDType).T if outW is None else outW;
 
         self._embeddingLayer = EmbeddingLayer(vocabSize, hiddenSize, W = self._W0);
         self._outputLayer = EmbeddingWithDotLayer(hiddenSize, vocabSize, W = self._W1);
@@ -1172,7 +1172,7 @@ class CrossEntropyLoss(NetLossBase):
 
 
     def backward(self) -> Tuple[np.ndarray]:
-        dY = -self._T / self._Y / lengthExceptLastDimension(self.T);
+        dY = -(self._T / self._Y).astype(self._Y.dtype) / lengthExceptLastDimension(self.T);
 
         return dY, ;
 
@@ -1195,7 +1195,7 @@ class SoftmaxWithCrossEntropyLoss(NetLossBase):
 
 
     def backward(self) -> Tuple[np.ndarray]:
-        dX = (self._Y - self._T) / lengthExceptLastDimension(self._T);
+        dX = (self._Y - self._T).astype(self._Y.dtype) / lengthExceptLastDimension(self._T);
 
         return dX, ;
 
@@ -1249,7 +1249,7 @@ class SigmoidWithCrossEntropyLoss(NetLossBase):
 
 
     def backward(self) -> Tuple[np.ndarray]:
-        dX = (self._Y - self._T) / self._T.size;
+        dX = (self._Y - self._T).astype(self._Y.dtype) / self._T.size;
 
         return dX, ;
 

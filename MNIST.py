@@ -57,7 +57,7 @@ class MNIST:
             X = X.reshape(n, 1, rows, columns);
 
         if normalize:
-            X = X / 255.0;
+            X = (X / 255.0).astype(defaultDType);
 
         return X;
 
@@ -73,7 +73,7 @@ class MNIST:
 
             labels = np.fromfile(file, np.uint8);
 
-        Y = np.zeros((n, 10));
+        Y = np.zeros((n, 10), dtype = np.int8);
         Y[list(range(n)), labels] = 1;
 
         return Y;

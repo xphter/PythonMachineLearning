@@ -13,7 +13,7 @@ class PTB:
     def __init__(self, folderPath : str):
         words, self._word2ID, self._id2Word = self._loadVocab(os.path.join(folderPath, PTB.TRAIN_DATA_FILE_NAME));
 
-        self._trainCorpus = np.array([self._word2ID[w] for w in words]);
+        self._trainCorpus = np.array([self._word2ID[w] for w in words], dtype = np.int32);
         self._testCorpus = self._loadCorpus(os.path.join(folderPath, PTB.TEST_DATA_FILE_NAME));
         self._validateCorpus = self._loadCorpus(os.path.join(folderPath, PTB.VALIDATE_LABELS_FILE_NAME));
 
@@ -70,6 +70,6 @@ class PTB:
 
     def _loadCorpus(self, filePath : str) -> np.ndarray:
         words = self._loadWords(filePath);
-        corpus = np.array([self._word2ID[w] for w in words]);
+        corpus = np.array([self._word2ID[w] for w in words], dtype = np.int32);
 
         return corpus;
