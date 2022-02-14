@@ -1590,40 +1590,39 @@ class SequentialDataIterator(IDataIterator):
 
 
 class PartitionedDataIterator(IDataIterator):
-    def __init__(self, data : List[np.ndarray], partitionNumber : int, batchSize : int, shuffle : bool = False):
-        self._step = 0;
+    def __init__(self, data : List[np.ndarray], batchSize : int, stepSize : int, shuffle : bool = False):
         self._data = data;
         self._length = len(data[0]);
-        self._partitionNumber = partitionNumber;
-        self._partitionSize = self._length // partitionNumber;
         self._batchSize = batchSize;
-        self._totalIterations = self._partitionSize // self._batchSize + int(self._partitionSize % self._batchSize > 0);
+        self._stepSize = stepSize;
+        self._totalIterations = 1;
         self._shuffle = shuffle;
-        self._index = list(range(self._length));
 
 
-    def _iterate(self):
-        index = [];
+    def _sequentialSample(self):
+        offset = int(np.random.randint(0, self._stepSize));
+        totalLength = ((self._length - offset) // self._batchSize) * self._batchSize;
+        data = [d[offset: offset + totalLength].reshape((self._batchSize, -1) + d.shape[1:]) for d in self._data];
+        self._totalIterations = data[0].shape[1] // self._stepSize
 
-        while self._step * self._batchSize < self._partitionSize:
-            index.clear();
-            batchSize = min(self._batchSize, self._partitionSize - self._step * self._batchSize);
+        for i in range(0, self._totalIterations * self._stepSize, self._stepSize):
+            yield tuple([d[:, i: i + self._stepSize] for d in data]);
 
-            for i in range(self._partitionNumber):
-                startIndex = i * self._partitionSize + self._step * self._batchSize;
-                index.extend(self._index[startIndex: startIndex + batchSize]);
 
-            self._step += 1;
+    def _randomSample(self):
+        offset = int(np.random.randint(0, self._stepSize));
+        data = [d[offset:] for d in self._data];
+        subIdx = list(range(0, ((self._length - offset) // self._stepSize) * self._stepSize, self._stepSize));
+        self._totalIterations = len(subIdx) // self._batchSize;
 
-            yield tuple([d[index].reshape((self._partitionNumber, -1) + d.shape[1:]) for d in self._data]);
+        np.random.shuffle(subIdx);
+        for i in range(0, self._totalIterations * self._batchSize, self._batchSize):
+            idx = subIdx[i: i + self._batchSize];
+            yield tuple([np.array([d[j: j + self._stepSize] for j in idx]) for d in data]);
 
 
     def __iter__(self):
-        self._step = 0;
-        if self._shuffle:
-            np.random.shuffle(self._index);
-
-        return self._iterate();
+        return self._randomSample() if self._shuffle else self._sequentialSample();
 
 
     @property
