@@ -712,14 +712,24 @@ class RnnLayer(NetModuleBase):
         self._outputSize = outputSize;
         self._name = f"RNN {inputSize}*{outputSize}";
 
-        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize).astype(defaultDType) if Wx is None else Wx;
-        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize).astype(defaultDType) if Wh is None else Wh;
-        self._bias = np.zeros(outputSize, dtype = defaultDType) if b is None else b;
-        self._rnnModules : List[RnnCell] = [];
+        self._weightX, self._weightH, self._bias = self._initParams(inputSize, outputSize, Wx, Wh, b);
+        self._rnnModules : List[INetModule] = [];
 
         weights = [self._weightX, self._weightH, self._bias];
         self._params.extend(weights);
         self._grads.extend([np.zeros_like(w) for w in weights]);
+
+
+    def _initParams(self, inputSize : int, outputSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
+        return (
+            math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize).astype(defaultDType) if Wx is None else Wx,
+            math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize).astype(defaultDType) if Wh is None else Wh,
+            np.zeros(outputSize, dtype = defaultDType) if b is None else b
+        );
+
+
+    def _getCell(self, inputSize : int, outputSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> INetModule:
+        return RnnCell(inputSize, outputSize, Wx, Wh, b);
 
 
     @property
@@ -746,7 +756,7 @@ class RnnLayer(NetModuleBase):
         N, T, D = X.shape;
 
         if len(self._rnnModules) != T:
-            self._rnnModules = [RnnCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias) for _ in range(T)];
+            self._rnnModules = [self._getCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias) for _ in range(T)];
 
         if not self._stateful or self._H is None:
             self._H = np.zeros((N, self._outputSize), X.dtype);
@@ -933,6 +943,97 @@ class LstmLayer(NetModuleBase):
                 self._grads[i] += lstm.grads[i];
 
         return dX, ;
+
+
+class GruCell(NetModuleBase):
+    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None):
+        super().__init__();
+
+        self._X, self._H = None, None;
+        self._R, self._Z, self._C, self._Y = None, None, None, None;
+        self._inputSize = inputSize;
+        self._outputSize = outputSize;
+        self._name = f"GRU Cell {inputSize}*{outputSize}";
+
+        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 3 * outputSize).astype(defaultDType) if Wx is None else Wx;
+        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 3 * outputSize).astype(defaultDType) if Wh is None else Wh;
+        self._bias = np.zeros(3 * outputSize, dtype = defaultDType) if b is None else b;
+
+        weights = [self._weightX, self._weightH, self._bias];
+        self._params.extend(weights);
+        self._grads.extend([np.zeros_like(w) for w in weights]);
+
+
+    @property
+    def weightX(self) -> np.ndarray:
+        return self._weightX;
+
+
+    @property
+    def weightH(self) -> np.ndarray:
+        return self._weightH;
+
+
+    @property
+    def bias(self) -> np.ndarray:
+        return self._bias;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        self._X, self._H = data;
+
+        Wxr, Wxz, Wxh = tuple(np.hsplit(self._weightX, 3));
+        Whr, Whz, Whh = tuple(np.hsplit(self._weightH, 3));
+        br, bz, bh = tuple(np.hsplit(self._bias, 3));
+
+        self._R = sigmoid(self._X @ Wxr + self._H @ Whr + br);
+        self._Z = sigmoid(self._X @ Wxz + self._H @ Whz + bz);
+        self._C = tanh(self._X @ Wxh + (self._H * self._R) @ Whh + bh);
+        self._Y = self._H * self._Z + self._C * (1 - self._Z);
+
+        return self._Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
+        Wxr, Wxz, Wxh = tuple(np.hsplit(self._weightX, 3));
+        Whr, Whz, Whh = tuple(np.hsplit(self._weightH, 3));
+
+        dC = dY * (1 - self._Z) * tanhGradient(self._C);
+        dZ = dY * (self._H - self._C) * sigmoidGradient(self._Z);
+        dR = dC @ Whh.T * self._H * sigmoidGradient(self._R);
+
+        dWxr, dWhr, dbr = self._X.T @ dR, self._H.T @ dR, np.sum(dR, axis = 0);
+        dWxz, dWhz, dbz = self._X.T @ dZ, self._H.T @ dZ, np.sum(dZ, axis = 0);
+        dWxh, dWhh, dbh = self._X.T @ dC, (self._H * self._R).T @ dC, np.sum(dC, axis = 0);
+
+        dX = dC @ Wxh.T + dZ @ Wxz.T + dR @ Wxr.T;
+        dH = dY * self._Z + dC @ Whh.T * self._R + dZ @ Whz.T + dR @ Whr.T;
+
+        self._grads[0][...] = np.hstack((dWxr, dWxz, dWxh));
+        self._grads[1][...] = np.hstack((dWhr, dWhz, dWhh));
+        self._grads[2][...] = np.hstack((dbr, dbz, dbh));
+
+        return dX, dH;
+
+
+class GruLayer(RnnLayer):
+    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, stateful : bool = True):
+        super().__init__(inputSize, outputSize, Wx, Wh, b, stateful);
+
+        self._name = f"GRU {inputSize}*{outputSize}";
+
+
+    def _initParams(self, inputSize : int, outputSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
+        return (
+            math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 3 * outputSize).astype(defaultDType) if Wx is None else Wx,
+            math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 3 * outputSize).astype(defaultDType) if Wh is None else Wh,
+            np.zeros(3 * outputSize, dtype = defaultDType) if b is None else b
+        );
+
+
+    def _getCell(self, inputSize : int, outputSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> INetModule:
+        return GruCell(inputSize, outputSize, Wx, Wh, b);
 
 
 class CorpusNegativeSampler:
