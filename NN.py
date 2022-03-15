@@ -28,6 +28,11 @@ class INetModule(metaclass = abc.ABCMeta):
     def params(self) -> List[np.ndarray]:
         pass;
 
+    @params.setter
+    @abc.abstractmethod
+    def params(self, value : List[np.ndarray]):
+        pass;
+
 
     @property
     @abc.abstractmethod
@@ -152,12 +157,22 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
         return self._params;
 
 
+    @params.setter
+    def params(self, value: List[np.ndarray]):
+        self._params = value;
+        self._setParams(value);
+
+
     @property
     def grads(self) -> List[np.ndarray]:
         return self._grads;
 
 
     def _setTrainingMode(self, value : bool):
+        pass;
+
+
+    def _setParams(self, value: List[np.ndarray]):
         pass;
 
 
@@ -342,6 +357,7 @@ class AffineLayer(NetModuleBase):
         self._X = None;
         self._inputSize = inputSize;
         self._outputSize = outputSize;
+        self._includeBias = includeBias;
         self._name = f"Affine {inputSize}*{outputSize}";
 
         self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize).astype(defaultDType) if W is None else W;
@@ -352,6 +368,10 @@ class AffineLayer(NetModuleBase):
         if self._bias is not None:
             self._params.append(self._bias);
             self._grads.append(np.zeros_like(self._bias));
+
+
+    def _setParams(self, value: List[np.ndarray]):
+        self._weight, self._bias = value[0], value[1] if self._includeBias else None;
 
 
     @property
@@ -401,10 +421,14 @@ class BatchNormalizationLayer(NetModuleBase):
 
         self._gamma = np.ones(inputSize, dtype = defaultDType) if gamma is None else gamma;
         self._beta = np.zeros(inputSize, dtype = defaultDType) if beta is None else beta;
-        self._params.append(self._gamma);
-        self._params.append(self._beta);
-        self._grads.append(np.zeros_like(self._gamma));
-        self._grads.append(np.zeros_like(self._beta));
+
+        weights = [self._gamma, self._beta];
+        self._params.extend(weights);
+        self._grads.extend([np.zeros_like(w) for w in weights]);
+
+
+    def _setParams(self, value: List[np.ndarray]):
+        self._gamma, self._beta = value[0], value[1];
 
 
     @property
@@ -458,10 +482,13 @@ class ConvolutionLayer(NetModuleBase):
         self._weight = math.sqrt(2.0 / (C * FH * FW)) * np.random.randn(FN, C, FH, FW).astype(defaultDType) if W is None else W;
         self._bias = np.zeros(FN, dtype = defaultDType) if b is None else b;
 
-        self._params.append(self._weight);
-        self._params.append(self._bias);
-        self._grads.append(np.zeros_like(self._weight));
-        self._grads.append(np.zeros_like(self._bias));
+        weights = [self._weight, self._bias];
+        self._params.extend(weights);
+        self._grads.extend([np.zeros_like(w) for w in weights]);
+
+
+    def _setParams(self, value: List[np.ndarray]):
+        self._weight, self._bias = value[0], value[1];
 
 
     @property
@@ -564,6 +591,10 @@ class EmbeddingLayer(NetModuleBase):
         self._grads.append(np.zeros_like(self._weight));
 
 
+    def _setParams(self, value: List[np.ndarray]):
+        self._weight = value[0];
+
+
     @property
     def weight(self):
         return self._weight;
@@ -602,13 +633,18 @@ class EmbeddingWithDotLayer(NetModuleBase):
         self._outputSize = outputSize;
         self._name = f"EmbeddingWithDot {outputSize}*{inputSize}";
 
-        self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(outputSize, inputSize).astype(defaultDType) if W is None else W;
-        self._embeddingLayer = EmbeddingLayer(outputSize, inputSize, W = self._weight);
+        weight = math.sqrt(2.0 / inputSize) * np.random.randn(outputSize, inputSize).astype(defaultDType) if W is None else W;
+        self._embeddingLayer = EmbeddingLayer(outputSize, inputSize, W = weight);
 
 
     @property
     def params(self) -> List[np.ndarray]:
         return self._embeddingLayer.params;
+
+
+    @params.setter
+    def params(self, value: List[np.ndarray]):
+        self._embeddingLayer.params = value;
 
 
     @property
@@ -618,7 +654,7 @@ class EmbeddingWithDotLayer(NetModuleBase):
 
     @property
     def weight(self):
-        return self._weight;
+        return self._embeddingLayer.weight;
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
@@ -659,6 +695,10 @@ class RnnCell(NetModuleBase):
         weights = [self._weightX, self._weightH, self._bias];
         self._params.extend(weights);
         self._grads.extend([np.zeros_like(w) for w in weights]);
+
+
+    def _setParams(self, value: List[np.ndarray]):
+        self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
 
 
     @property
@@ -718,6 +758,12 @@ class RnnLayer(NetModuleBase):
         weights = [self._weightX, self._weightH, self._bias];
         self._params.extend(weights);
         self._grads.extend([np.zeros_like(w) for w in weights]);
+
+
+    def _setParams(self, value: List[np.ndarray]):
+        self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
+        for cell in self._rnnModules:
+            cell.params = value;
 
 
     def _initParams(self, inputSize : int, outputSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
@@ -809,6 +855,10 @@ class LstmCell(NetModuleBase):
         self._grads.extend([np.zeros_like(w) for w in weights]);
 
 
+    def _setParams(self, value: List[np.ndarray]):
+        self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
+
+
     @property
     def weightX(self) -> np.ndarray:
         return self._weightX;
@@ -883,6 +933,12 @@ class LstmLayer(NetModuleBase):
         weights = [self._weightX, self._weightH, self._bias];
         self._params.extend(weights);
         self._grads.extend([np.zeros_like(w) for w in weights]);
+
+
+    def _setParams(self, value: List[np.ndarray]):
+        self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
+        for cell in self._lstmModules:
+            cell.params = value;
 
 
     @property
@@ -962,6 +1018,10 @@ class GruCell(NetModuleBase):
         weights = [self._weightX, self._weightH, self._bias];
         self._params.extend(weights);
         self._grads.extend([np.zeros_like(w) for w in weights]);
+
+
+    def _setParams(self, value: List[np.ndarray]):
+        self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
 
 
     @property
@@ -1105,8 +1165,9 @@ class CBOWModel(NetModuleBase, INetModel):
         self._embeddingLayer = EmbeddingLayer(vocabSize, hiddenSize, W = self._W0);
         self._outputLayer = EmbeddingWithDotLayer(hiddenSize, vocabSize, W = self._W1);
 
-        self._params.extend([self._W0, self._W1]);
-        self._grads.extend([np.zeros_like(self._W0), np.zeros_like(self._W1)]);
+        weights = [self._W0, self._W1];
+        self._params.extend(weights);
+        self._grads.extend([np.zeros_like(w) for w in weights]);
 
         self._name = "CBOW";
 
@@ -1114,6 +1175,12 @@ class CBOWModel(NetModuleBase, INetModel):
     def _setTrainingMode(self, value : bool):
         self._embeddingLayer.isTrainingMode = value;
         self._outputLayer.isTrainingMode = value;
+
+
+    def _setParams(self, value: List[np.ndarray]):
+        self._W0, self._W1 = value[0], value[1];
+        self._embeddingLayer.params = [self._W0];
+        self._outputLayer.params = [self.W1];
 
 
     @property
@@ -1178,8 +1245,9 @@ class SkipGramModel(NetModuleBase, INetModel):
         self._embeddingLayer = EmbeddingLayer(vocabSize, hiddenSize, W = self._W0);
         self._outputLayer = EmbeddingWithDotLayer(hiddenSize, vocabSize, W = self._W1);
 
-        self._params.extend([self._W0, self._W1]);
-        self._grads.extend([np.zeros_like(self._W0), np.zeros_like(self._W1)]);
+        weights = [self._W0, self._W1];
+        self._params.extend(weights);
+        self._grads.extend([np.zeros_like(w) for w in weights]);
 
         self._name = "SkipGram";
 
@@ -1187,6 +1255,12 @@ class SkipGramModel(NetModuleBase, INetModel):
     def _setTrainingMode(self, value: bool):
         self._embeddingLayer.isTrainingMode = value;
         self._outputLayer.isTrainingMode = value;
+
+
+    def _setParams(self, value: List[np.ndarray]):
+        self._W0, self._W1 = value[0], value[1];
+        self._embeddingLayer.params = [self._W0];
+        self._outputLayer.params = [self.W1];
 
 
     @property
@@ -1627,6 +1701,17 @@ class SequentialContainer(NetModuleBase, INetModel):
     def _setTrainingMode(self, value: bool):
         for m in self._modules:
             m.isTrainingMode = value;
+
+
+    def _setParams(self, value: List[np.ndarray]):
+        i = 0;
+
+        for m in self._modules:
+            if (n := len(m.params)) == 0:
+                continue;
+
+            m.params = value[i: i + n];
+            i += n;
 
 
     def reset(self):
