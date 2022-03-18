@@ -90,6 +90,17 @@ class INetOptimizer(metaclass = abc.ABCMeta):
         pass;
 
 
+class IDataScaler(metaclass = abc.ABCMeta):
+    @abc.abstractmethod
+    def transform(self, X : np.ndarray) -> np.ndarray:
+        pass;
+
+
+    @abc.abstractmethod
+    def inverse(self, Y : np.ndarray) -> np.ndarray:
+        pass;
+
+
 class IDataIterator(Iterable, metaclass = abc.ABCMeta):
     @property
     @abc.abstractmethod
@@ -1679,6 +1690,84 @@ class Adam(NetOptimizerBase):
             s = self._s[i] / (1 - self._beta2 ** self._t);
 
             params[i] -= self._lr * v / (np.sqrt(s) + self._epsilon);
+
+
+class ScalerBase(IDataScaler):
+    def __init__(self):
+        self._ndim = None;
+
+
+    @abc.abstractmethod
+    def _transform(self, X : np.ndarray) -> np.ndarray:
+        pass;
+
+
+    @abc.abstractmethod
+    def _inverse(self, Y: np.ndarray) -> np.ndarray:
+        pass;
+
+
+    def transform(self, X : np.ndarray) -> np.ndarray:
+        shape = X.shape;
+        self._ndim = 1 if X.ndim <= 1 else 2;
+
+        if X.ndim > self._ndim:
+            X = X.flatten() if self._ndim == 1 else X.reshape(-1, shape[-1]);
+
+        X = self._transform(X);
+
+        return X.reshape(shape);
+
+
+    def inverse(self, Y : np.ndarray) -> np.ndarray:
+        shape = Y.shape;
+
+        if Y.ndim > self._ndim:
+            Y = Y.flatten() if self._ndim == 1 else Y.reshape(-1, shape[-1]);
+
+        Y = self._inverse(Y);
+
+        return Y.reshape(shape);
+
+
+class MinMaxScaler(ScalerBase):
+    def __init__(self):
+        super().__init__();
+
+        self._min = None;
+        self._max = None;
+        self._delta = None;
+
+
+    def _transform(self, X : np.ndarray) -> np.ndarray:
+        self._min = np.amin(X, axis = 0);
+        self._max = np.amax(X, axis = 0);
+        self._delta = self._max - self._min;
+
+        return (X - self._min) / self._delta;
+
+
+    def _inverse(self, Y : np.ndarray) -> np.ndarray:
+        return self._delta * Y + self._min;
+
+
+class StandardScaler(ScalerBase):
+    def __init__(self):
+        super().__init__();
+
+        self._mu = None;
+        self._sigma = None;
+
+
+    def _transform(self, X : np.ndarray) -> np.ndarray:
+        self._mu = np.mean(X, axis = 0);
+        self._sigma = np.std(X, axis = 0);
+
+        return (X - self._mu) / self._sigma;
+
+
+    def _inverse(self, Y : np.ndarray) -> np.ndarray:
+        return self._sigma * Y + self._mu;
 
 
 class SequentialContainer(NetModuleBase, INetModel):
