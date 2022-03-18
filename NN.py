@@ -1954,7 +1954,7 @@ class NetTrainer:
 
             trainingMessage = f", training {self._evaluator.name}: {self._trainingAccuracyData[-1]}" if len(self._trainingAccuracyData) > 0 else "";
             testMessage = f", test {self._evaluator.name}: {self._testAccuracyData[-1]}" if len(self._testAccuracyData) > 0 else "";
-            print(f"epoch {epoch}, average loss: {lossValues[-1]}{trainingMessage}{testMessage}, elapsed time: {int(time.time() - startTime)}s");
+            print(f"epoch {epoch}, average loss: {self._lossData[-1]}{trainingMessage}{testMessage}, elapsed time: {int(time.time() - startTime)}s");
 
         if self._evaluator is not None:
             print("evaluating final training data...");
