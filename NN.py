@@ -926,11 +926,13 @@ class LstmCell(NetModuleBase):
 
 
 class LstmLayer(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, stateful : bool = True):
+    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, returnSequences : bool = False, stateful : bool = False):
         super().__init__();
 
+        self._T = 0;
         self._H, self._C = None, None;
         self._dH, self._dC = None, None;
+        self._returnSequences = returnSequences;
         self._stateful = stateful;
         self._inputSize = inputSize;
         self._outputSize = outputSize;
@@ -975,6 +977,7 @@ class LstmLayer(NetModuleBase):
         X = data[0];
         N, T, D = X.shape;
 
+        self._T = T;
         if len(self._lstmModules) != T:
             self._lstmModules = [LstmCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias) for _ in range(T)];
 
@@ -988,12 +991,17 @@ class LstmLayer(NetModuleBase):
             self._H, self._C = self._lstmModules[t].forward(X[:, t, :], self._H, self._C);
             Y[:, t, :] = self._H;
 
-        return Y, ;
+        return Y if self._returnSequences else Y[:, -1, :], ;
 
 
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
         dY = dout[0];
-        N, T = dY.shape[: 2];
+        N, T = len(dY), self._T;
+
+        if not self._returnSequences:
+            dH = dY;
+            dY = np.zeros((N, T, dY.shape[-1]), dtype = dY.dtype);
+            dY[:, -1, :] = dH;
 
         # truncated BPTT
         self._dH = np.zeros_like(self._H);
