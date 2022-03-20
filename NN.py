@@ -92,12 +92,17 @@ class INetOptimizer(metaclass = abc.ABCMeta):
 
 class IDataScaler(metaclass = abc.ABCMeta):
     @abc.abstractmethod
+    def fit(self, X : np.ndarray) -> np.ndarray:
+        pass;
+
+
+    @abc.abstractmethod
     def transform(self, X : np.ndarray) -> np.ndarray:
         pass;
 
 
     @abc.abstractmethod
-    def inverse(self, Y : np.ndarray) -> np.ndarray:
+    def inverse(self, Y : np.ndarray, *args, **kwargs) -> np.ndarray:
         pass;
 
 
@@ -1700,9 +1705,44 @@ class Adam(NetOptimizerBase):
             params[i] -= self._lr * v / (np.sqrt(s) + self._epsilon);
 
 
+class AggregateScaler(IDataScaler):
+    def __init__(self, *scalers : IDataScaler):
+        self._scalers = scalers;
+
+
+    def fit(self, X : np.ndarray):
+        Y = X;
+        for scaler in self._scalers:
+            Y = scaler.fit(Y);
+
+
+    def transform(self, X : np.ndarray) -> np.ndarray:
+        Y = X;
+
+        for scaler in self._scalers:
+            Y = scaler.transform(Y);
+
+        return Y;
+
+
+    def inverse(self, Y : np.ndarray, *args, **kwargs) -> np.ndarray:
+        X = Y;
+
+        for scaler in reversed(self._scalers):
+            X = scaler.inverse(X, *args, **kwargs);
+
+        return X;
+
+
 class ScalerBase(IDataScaler):
     def __init__(self):
         self._ndim = None;
+        self._fitted = False;
+
+
+    @abc.abstractmethod
+    def _fit(self, X: np.ndarray) -> np.ndarray:
+        pass;
 
 
     @abc.abstractmethod
@@ -1711,52 +1751,75 @@ class ScalerBase(IDataScaler):
 
 
     @abc.abstractmethod
-    def _inverse(self, Y: np.ndarray) -> np.ndarray:
+    def _inverse(self, Y: np.ndarray, *args, **kwargs) -> np.ndarray:
         pass;
 
 
-    def transform(self, X : np.ndarray) -> np.ndarray:
-        shape = X.shape;
+    def _check(self):
+        if not self._fitted:
+            raise ValueError("scaler has not fitted");
+
+
+    def fit(self, X: np.ndarray) -> np.ndarray:
         self._ndim = 1 if X.ndim <= 1 else 2;
+
+        Y = self._fit((X.flatten() if self._ndim == 1 else X.reshape(-1, X.shape[-1])) if X.ndim > self._ndim else X);
+        self._fitted = True;
+
+        return Y;
+
+
+    def transform(self, X : np.ndarray) -> np.ndarray:
+        self._check();
+
+        shape = X.shape;
 
         if X.ndim > self._ndim:
             X = X.flatten() if self._ndim == 1 else X.reshape(-1, shape[-1]);
 
         X = self._transform(X);
 
-        return X.reshape(shape);
+        return X.reshape((-1, ) + shape[1:]);
 
 
-    def inverse(self, Y : np.ndarray) -> np.ndarray:
+    def inverse(self, Y : np.ndarray, *args, **kwargs) -> np.ndarray:
+        self._check();
+
         shape = Y.shape;
 
         if Y.ndim > self._ndim:
             Y = Y.flatten() if self._ndim == 1 else Y.reshape(-1, shape[-1]);
 
-        Y = self._inverse(Y);
+        Y = self._inverse(Y, *args, **kwargs);
 
-        return Y.reshape(shape);
+        return Y.reshape((-1, ) + shape[1:]);
 
 
 class MinMaxScaler(ScalerBase):
-    def __init__(self):
+    def __init__(self, minRange : float = 0, maxRange : float = 1):
         super().__init__();
 
-        self._min = None;
-        self._max = None;
-        self._delta = None;
+        self._minRange = minRange * 1.0;
+        self._maxRange = maxRange * 1.0;
+        self._rangeDelta = maxRange - minRange;
+        self._minValue = None;
+        self._maxValue = None;
+        self._valueDelta = None;
+
+
+    def _fit(self, X: np.ndarray) -> np.ndarray:
+        self._minValue = np.amin(X, axis = 0);
+        self._maxValue = np.amax(X, axis = 0);
+        self._valueDelta = self._maxValue - self._minValue;
+        return X;
 
 
     def _transform(self, X : np.ndarray) -> np.ndarray:
-        self._min = np.amin(X, axis = 0);
-        self._max = np.amax(X, axis = 0);
-        self._delta = self._max - self._min;
-
-        return (X - self._min) / self._delta;
+        return self._minRange + (X - self._minValue) / self._valueDelta * self._rangeDelta;
 
 
-    def _inverse(self, Y : np.ndarray) -> np.ndarray:
-        return self._delta * Y + self._min;
+    def _inverse(self, Y : np.ndarray, *args, **kwargs) -> np.ndarray:
+        return (Y - self._minRange) / self._rangeDelta * self._valueDelta + self._minValue;
 
 
 class StandardScaler(ScalerBase):
@@ -1767,15 +1830,42 @@ class StandardScaler(ScalerBase):
         self._sigma = None;
 
 
-    def _transform(self, X : np.ndarray) -> np.ndarray:
+    def _fit(self, X: np.ndarray):
         self._mu = np.mean(X, axis = 0);
         self._sigma = np.std(X, axis = 0);
+        return X;
 
+
+    def _transform(self, X : np.ndarray) -> np.ndarray:
         return (X - self._mu) / self._sigma;
 
 
-    def _inverse(self, Y : np.ndarray) -> np.ndarray:
+    def _inverse(self, Y : np.ndarray, *args, **kwargs) -> np.ndarray:
         return self._sigma * Y + self._mu;
+
+
+class DiffScaler(ScalerBase):
+    INDEX_ARGUMENT_NAME = "index";
+
+    def __init__(self, interval : int = 1):
+        super().__init__();
+
+        self._X = None;
+        self._interval = interval;
+
+
+    def _fit(self, X: np.ndarray):
+        self._X = X;
+        return self._transform(X);
+
+
+    def _transform(self, X : np.ndarray) -> np.ndarray:
+        return X[self._interval:] - X[:-self._interval];
+
+
+    def _inverse(self, Y : np.ndarray, *args, **kwargs) -> np.ndarray:
+        index = int(kwargs[DiffScaler.INDEX_ARGUMENT_NAME]) if DiffScaler.INDEX_ARGUMENT_NAME in kwargs else 0;
+        return np.concatenate((self._X[index: index + self._interval], self._X[index: index + len(Y)] + Y), axis = 0);
 
 
 class SequentialContainer(NetModuleBase, INetModel):
