@@ -10,57 +10,6 @@ from typing import Union, List, Tuple, Callable, Any, Optional, Iterable;
 from Functions import *;
 
 
-class INetModule(metaclass = abc.ABCMeta):
-    @property
-    @abc.abstractmethod
-    def isTrainingMode(self) -> bool:
-        pass;
-
-
-    @isTrainingMode.setter
-    @abc.abstractmethod
-    def isTrainingMode(self, value: bool):
-        pass;
-
-
-    @property
-    @abc.abstractmethod
-    def params(self) -> List[np.ndarray]:
-        pass;
-
-    @params.setter
-    @abc.abstractmethod
-    def params(self, value : List[np.ndarray]):
-        pass;
-
-
-    @property
-    @abc.abstractmethod
-    def grads(self) -> List[np.ndarray]:
-        pass;
-
-
-    @abc.abstractmethod
-    def reset(self):
-        pass;
-
-
-    @abc.abstractmethod
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        pass;
-
-
-    @abc.abstractmethod
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        pass;
-
-
-class INetModel(INetModule, metaclass = abc.ABCMeta):
-    @abc.abstractmethod
-    def getFinalTag(self, T : np.ndarray) -> np.ndarray:
-        pass;
-
-
 class INetLoss(metaclass = abc.ABCMeta):
     @property
     @abc.abstractmethod
@@ -141,6 +90,64 @@ class INetAccuracyEvaluator(metaclass = abc.ABCMeta):
         pass;
 
 
+class INetModule(metaclass = abc.ABCMeta):
+    @property
+    @abc.abstractmethod
+    def isTrainingMode(self) -> bool:
+        pass;
+
+
+    @isTrainingMode.setter
+    @abc.abstractmethod
+    def isTrainingMode(self, value: bool):
+        pass;
+
+
+    @property
+    @abc.abstractmethod
+    def params(self) -> List[np.ndarray]:
+        pass;
+
+    @params.setter
+    @abc.abstractmethod
+    def params(self, value : List[np.ndarray]):
+        pass;
+
+
+    @property
+    @abc.abstractmethod
+    def grads(self) -> List[np.ndarray]:
+        pass;
+
+
+    @abc.abstractmethod
+    def reset(self):
+        pass;
+
+
+    @abc.abstractmethod
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        pass;
+
+
+    @abc.abstractmethod
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        pass;
+
+
+class INetModel(INetModule, metaclass = abc.ABCMeta):
+    @abc.abstractmethod
+    def getFinalTag(self, T : np.ndarray) -> np.ndarray:
+        pass;
+
+
+    @abc.abstractmethod
+    def fit(self, trainingIterator : IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch : int, testIterator : IDataIterator = None,
+            evaluator: INetAccuracyEvaluator = None, evalEpoch : bool = True, evalIterations : int = None, evalTrainingData : bool = False, evalTestData : bool = True,
+            plot = False):
+        pass;
+
+
 class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
     def __init__(self):
         self._name = None;
@@ -194,6 +201,111 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
 
     def reset(self):
         pass;
+
+
+class NetModelBase(NetModuleBase, INetModel, metaclass = abc.ABCMeta):
+    def __init__(self):
+        super().__init__();
+
+
+    def _calcAccuracy(self, lossFunc : INetLoss, optimizer : INetOptimizer, evaluator : INetAccuracyEvaluator, lossValues : List[float] = None, iterator : Iterable = None) -> float:
+        self.isTrainingMode = False;
+
+        try:
+            evaluator.reset();
+
+            if not (lossValues is not None and evaluator.fromLoss(lossValues)) and iterator is not None:
+                lossValues = [];
+
+                for data in iterator:
+                    Y = self.forward(*data[:-1]);
+                    loss = lossFunc.forward(*Y, self.getFinalTag(data[-1]));
+
+                    lossValues.append(loss);
+                    evaluator.update(*Y, self.getFinalTag(data[-1]));
+
+                evaluator.fromLoss(lossValues);
+        finally:
+            self.reset();
+            self.isTrainingMode = True;
+
+        return evaluator.accuracy;
+
+
+    def getFinalTag(self, T : np.ndarray) -> np.ndarray:
+        return T;
+
+
+    def fit(self, trainingIterator: IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch: int, testIterator: IDataIterator = None,
+            evaluator: INetAccuracyEvaluator = None, evalEpoch: bool = True, evalIterations: int = None, evalTrainingData: bool = False, evalTestData: bool = True,
+            plot = False):
+        lossData = [];
+        lossValues = [];
+        trainingAccuracyData = [];
+        testAccuracyData = [];
+
+        startTime = time.time();
+        print(f"[{datetime.datetime.now()}] start to train model {self}");
+
+        for epoch in range(maxEpoch):
+            lossValues.clear();
+
+            for data in trainingIterator:
+                Y = self.forward(*data[:-1]);
+                loss = lossFunc.forward(*Y, self.getFinalTag(data[-1]));
+                lossValues.append(loss);
+
+                self.backward(*lossFunc.backward());
+                optimizer.update(self.params, self.grads);
+
+                if evaluator is not None and evalIterations is not None and len(lossValues) % evalIterations == 0:
+                    accuracy = self._calcAccuracy(lossFunc, optimizer, evaluator, lossValues[-evalIterations:], None);
+                    if accuracy is not None:
+                        print(f"epoch {epoch}, iterations: {len(lossValues)} / {trainingIterator.totalIterations}, elapsed time: {int(time.time() - startTime)}s, training {evaluator.name}: {accuracy}");
+
+            self.reset();
+            lossData.append(sum(lossValues) / len(lossValues));
+
+            if evaluator is not None and evalEpoch:
+                if evalTrainingData:
+                    print("evaluating training data...");
+                    trainingAccuracyData.append(self._calcAccuracy(lossFunc, optimizer, evaluator, lossValues, trainingIterator));
+                if testIterator is not None and evalTestData:
+                    print("evaluating test data...");
+                    testAccuracyData.append(self._calcAccuracy(lossFunc, optimizer, evaluator, None, testIterator,));
+
+            trainingMessage = f", training {evaluator.name}: {trainingAccuracyData[-1]}" if len(trainingAccuracyData) > 0 else "";
+            testMessage = f", test {evaluator.name}: {testAccuracyData[-1]}" if len(testAccuracyData) > 0 else "";
+            print(f"epoch {epoch}, average loss: {lossData[-1]}{trainingMessage}{testMessage}, elapsed time: {int(time.time() - startTime)}s");
+
+        if evaluator is not None:
+            print("evaluating final training data...");
+            print(f"the final training {evaluator.name} is {self._calcAccuracy(lossFunc, optimizer, evaluator, None, trainingIterator)}");
+
+            if testIterator is not None:
+                print("evaluating final test data...");
+                print(f"the final test {evaluator.name} is {self._calcAccuracy(lossFunc, optimizer, evaluator, None, testIterator)}");
+
+        print(f"[{datetime.datetime.now()}] complete to train model, elapsed time: {int(time.time() - startTime)}s");
+
+        if plot:
+            fig = plt.figure(1);
+
+            ax1 = fig.add_subplot(111);
+            ax1.set_xlabel("epoch");
+            ax1.set_ylabel('loss');
+            ax1.plot(lossData, "o-k", label = "loss");
+
+            ax2 = ax1.twinx();
+            ax2.set_ylabel('accuracy');
+            if len(trainingAccuracyData) > 0:
+                ax2.plot(trainingAccuracyData, "D-b", label = "training accuracy");
+            if len(testAccuracyData) > 0:
+                ax2.plot(testAccuracyData, "s-r", label = "test accuracy");
+
+            fig.legend(loc = "upper right", bbox_to_anchor = (1, 1), bbox_transform = ax1.transAxes)
+            plt.show(block = True);
+            plt.close();
 
 
 class NetLossBase(INetLoss, metaclass = abc.ABCMeta):
@@ -1174,7 +1286,7 @@ class CorpusNegativeSampler:
         return np.concatenate((PS, NS), axis = -1), np.concatenate((PT, NT), axis = -1);
 
 
-class CBOWModel(NetModuleBase, INetModel):
+class CBOWModel(NetModelBase):
     def __init__(self, windowSize : int, vocabSize : int, hiddenSize : int, negativeSampler : CorpusNegativeSampler, inW : np.ndarray = None, outW : np.ndarray = None):
         super().__init__();
 
@@ -1254,7 +1366,7 @@ class CBOWModel(NetModuleBase, INetModel):
         return self._finalTag;
 
 
-class SkipGramModel(NetModuleBase, INetModel):
+class SkipGramModel(NetModelBase):
     def __init__(self, windowSize : int, vocabSize : int, hiddenSize : int, negativeSampler : CorpusNegativeSampler, inW : np.ndarray = None, outW : np.ndarray = None):
         super().__init__();
 
@@ -1868,7 +1980,7 @@ class DiffScaler(ScalerBase):
         return np.concatenate((self._X[index: index + self._interval], self._X[index: index + len(Y)] + Y), axis = 0);
 
 
-class SequentialContainer(NetModuleBase, INetModel):
+class SequentialContainer(NetModelBase):
     def __init__(self, *modules : INetModule):
         super().__init__();
 
@@ -1918,10 +2030,6 @@ class SequentialContainer(NetModuleBase, INetModel):
             dout = m.backward(*dout);
 
         return dout;
-
-
-    def getFinalTag(self, T : np.ndarray) -> np.ndarray:
-        return T;
 
 
     def apply(self, func : Callable):
@@ -2003,6 +2111,37 @@ class PartitionedDataIterator(IDataIterator):
         return self._totalIterations;
 
 
+class RegressionAccuracyEvaluator(INetAccuracyEvaluator):
+    def __init__(self):
+        self._rss = 0.0;
+        self._totalCount = 0.0;
+
+
+    @property
+    def name(self) -> str:
+        return "RMSE";
+
+
+    @property
+    def accuracy(self) -> Optional[float]:
+        return math.sqrt(self._rss / self._totalCount) if self._totalCount > 0 else None;
+
+
+    def fromLoss(self, lossValues : List[float] = None) -> bool:
+        return False;
+
+
+    def update(self, *data: np.ndarray):
+        Y, T = data;
+        self._rss += float(np.sum(np.square(Y - T)));
+        self._totalCount += lengthExceptLastDimension(Y);
+
+
+    def reset(self):
+        self._rss = 0.0;
+        self._totalCount = 0.0;
+
+
 class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
     def __init__(self):
         self._rightCount = 0.0;
@@ -2019,7 +2158,7 @@ class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
         return self._rightCount / self._totalCount if self._totalCount > 0 else None;
 
 
-    def fromLoss(self, lossValues :List[float] = None) -> bool:
+    def fromLoss(self, lossValues : List[float] = None) -> bool:
         return False;
 
 
