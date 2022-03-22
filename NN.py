@@ -148,6 +148,11 @@ class INetModel(INetModule, metaclass = abc.ABCMeta):
         pass;
 
 
+    @abc.abstractmethod
+    def predict(self, iterator : IDataIterator) -> Iterable:
+        pass;
+
+
 class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
     def __init__(self):
         self._name = None;
@@ -306,6 +311,11 @@ class NetModelBase(NetModuleBase, INetModel, metaclass = abc.ABCMeta):
             fig.legend(loc = "upper right", bbox_to_anchor = (1, 1), bbox_transform = ax1.transAxes)
             plt.show(block = True);
             plt.close();
+
+
+    def predict(self, iterator : IDataIterator) -> Iterable:
+        for data in iterator:
+            yield self.forward(*data[:-1]);
 
 
 class NetLossBase(INetLoss, metaclass = abc.ABCMeta):
