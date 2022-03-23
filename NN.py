@@ -223,7 +223,7 @@ class NetModelBase(NetModuleBase, INetModel, metaclass = abc.ABCMeta):
                 lossValues = [];
 
                 for data in iterator:
-                    Y = self.forward(*data[:-1]);
+                    Y = self.forward(*data);
                     loss = lossFunc.forward(*Y, self.getFinalTag(data[-1]));
 
                     lossValues.append(loss);
@@ -256,7 +256,7 @@ class NetModelBase(NetModuleBase, INetModel, metaclass = abc.ABCMeta):
             lossValues.clear();
 
             for data in trainingIterator:
-                Y = self.forward(*data[:-1]);
+                Y = self.forward(*data);
                 loss = lossFunc.forward(*Y, self.getFinalTag(data[-1]));
                 lossValues.append(loss);
 
@@ -315,7 +315,7 @@ class NetModelBase(NetModuleBase, INetModel, metaclass = abc.ABCMeta):
 
     def predict(self, iterator : IDataIterator) -> Iterable:
         for data in iterator:
-            yield self.forward(*data[:-1]);
+            yield self.forward(*data);
 
 
 class NetLossBase(INetLoss, metaclass = abc.ABCMeta):
@@ -2029,6 +2029,7 @@ class SequentialContainer(NetModelBase):
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        data = data[:-1];
         for m in self._modules:
             data = m.forward(*data);
 
