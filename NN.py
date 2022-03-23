@@ -931,6 +931,11 @@ class RnnLayer(NetModuleBase):
         return self._bias;
 
 
+    @property
+    def dH(self) -> np.ndarray:
+        return self._dH;
+
+
     def reset(self):
         self._H = None;
 
@@ -971,6 +976,10 @@ class RnnLayer(NetModuleBase):
                 self._grads[i] += rnn.grads[i];
 
         return dX, ;
+
+
+    def setState(self, H : np.ndarray):
+        self._H = H;
 
 
 class LstmCell(NetModuleBase):
@@ -1096,6 +1105,11 @@ class LstmLayer(NetModuleBase):
         return self._bias;
 
 
+    @property
+    def dH(self) -> np.ndarray:
+        return self._dH;
+
+
     def reset(self):
         self._H, self._C = None, None;
 
@@ -1145,6 +1159,10 @@ class LstmLayer(NetModuleBase):
                 self._grads[i] += lstm.grads[i];
 
         return dX, ;
+
+
+    def setState(self, H : np.ndarray, C : np.ndarray = None):
+        self._H, self._C = H, C;
 
 
 class GruCell(NetModuleBase):
