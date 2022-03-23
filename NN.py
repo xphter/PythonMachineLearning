@@ -208,9 +208,45 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
         pass;
 
 
-class NetModelBase(NetModuleBase, INetModel, metaclass = abc.ABCMeta):
-    def __init__(self):
+class AggregateNetModule(NetModuleBase, metaclass = abc.ABCMeta):
+    def __init__(self, *modules : INetModule):
         super().__init__();
+
+        self._modules = modules;
+        for m in modules:
+            self._params.extend(m.params);
+            self._grads.extend(m.grads);
+
+
+    @property
+    def modules(self) -> Tuple[INetModule]:
+        return self._modules;
+
+
+    def _setTrainingMode(self, value: bool):
+        for m in self._modules:
+            m.isTrainingMode = value;
+
+
+    def _setParams(self, value: List[np.ndarray]):
+        i = 0;
+
+        for m in self._modules:
+            if (n := len(m.params)) == 0:
+                continue;
+
+            m.params = value[i: i + n];
+            i += n;
+
+
+    def reset(self):
+        for m in self._modules:
+            m.reset();
+
+
+class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
+    def __init__(self, *modules : INetModule):
+        super().__init__(*modules);
 
 
     def _calcAccuracy(self, lossFunc : INetLoss, optimizer : INetOptimizer, evaluator : INetAccuracyEvaluator, lossValues : List[float] = None, iterator : Iterable = None) -> float:
@@ -1316,8 +1352,6 @@ class CorpusNegativeSampler:
 
 class CBOWModel(NetModelBase):
     def __init__(self, windowSize : int, vocabSize : int, hiddenSize : int, negativeSampler : CorpusNegativeSampler, inW : np.ndarray = None, outW : np.ndarray = None):
-        super().__init__();
-
         self._finalTag = None;
         self._windowSize = windowSize;
         self._vocabSize = vocabSize;
@@ -1329,22 +1363,13 @@ class CBOWModel(NetModelBase):
         self._embeddingLayer = EmbeddingLayer(vocabSize, hiddenSize, W = self._W0);
         self._outputLayer = EmbeddingWithDotLayer(hiddenSize, vocabSize, W = self._W1);
 
-        weights = [self._W0, self._W1];
-        self._params.extend(weights);
-        self._grads.extend([np.zeros_like(w) for w in weights]);
-
+        super().__init__(self._embeddingLayer, self._outputLayer);
         self._name = "CBOW";
 
 
-    def _setTrainingMode(self, value : bool):
-        self._embeddingLayer.isTrainingMode = value;
-        self._outputLayer.isTrainingMode = value;
-
-
     def _setParams(self, value: List[np.ndarray]):
+        super()._setParams(value);
         self._W0, self._W1 = value[0], value[1];
-        self._embeddingLayer.params = [self._W0];
-        self._outputLayer.params = [self.W1];
 
 
     @property
@@ -1396,8 +1421,6 @@ class CBOWModel(NetModelBase):
 
 class SkipGramModel(NetModelBase):
     def __init__(self, windowSize : int, vocabSize : int, hiddenSize : int, negativeSampler : CorpusNegativeSampler, inW : np.ndarray = None, outW : np.ndarray = None):
-        super().__init__();
-
         self._finalTag = None;
         self._windowSize = windowSize;
         self._vocabSize = vocabSize;
@@ -1409,22 +1432,13 @@ class SkipGramModel(NetModelBase):
         self._embeddingLayer = EmbeddingLayer(vocabSize, hiddenSize, W = self._W0);
         self._outputLayer = EmbeddingWithDotLayer(hiddenSize, vocabSize, W = self._W1);
 
-        weights = [self._W0, self._W1];
-        self._params.extend(weights);
-        self._grads.extend([np.zeros_like(w) for w in weights]);
-
+        super().__init__(self._embeddingLayer, self._outputLayer);
         self._name = "SkipGram";
 
 
-    def _setTrainingMode(self, value: bool):
-        self._embeddingLayer.isTrainingMode = value;
-        self._outputLayer.isTrainingMode = value;
-
-
     def _setParams(self, value: List[np.ndarray]):
+        super()._setParams(value);
         self._W0, self._W1 = value[0], value[1];
-        self._embeddingLayer.params = [self._W0];
-        self._outputLayer.params = [self.W1];
 
 
     @property
@@ -2010,40 +2024,8 @@ class DiffScaler(ScalerBase):
 
 class SequentialContainer(NetModelBase):
     def __init__(self, *modules : INetModule):
-        super().__init__();
-
-        self._modules = modules;
-        for m in modules:
-            self._params.extend(m.params);
-            self._grads.extend(m.grads);
-
+        super().__init__(*modules);
         self._name = "  -->  ".join([str(m) for m in modules]);
-
-
-    @property
-    def modules(self) -> Tuple[INetModule]:
-        return self._modules;
-
-
-    def _setTrainingMode(self, value: bool):
-        for m in self._modules:
-            m.isTrainingMode = value;
-
-
-    def _setParams(self, value: List[np.ndarray]):
-        i = 0;
-
-        for m in self._modules:
-            if (n := len(m.params)) == 0:
-                continue;
-
-            m.params = value[i: i + n];
-            i += n;
-
-
-    def reset(self):
-        for m in self._modules:
-            m.reset();
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
