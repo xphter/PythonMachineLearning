@@ -244,6 +244,24 @@ class AggregateNetModule(NetModuleBase, metaclass = abc.ABCMeta):
             m.reset();
 
 
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        Y = data;
+
+        for m in self._modules:
+            Y = m.forward(*Y);
+
+        return Y;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dX = dout;
+
+        for m in reversed(self._modules):
+            dX = m.backward(*dX);
+
+        return dX;
+
+
 class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
     def __init__(self, *modules : INetModule):
         super().__init__(*modules);
@@ -2029,18 +2047,7 @@ class SequentialContainer(NetModelBase):
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        data = data[:-1];
-        for m in self._modules:
-            data = m.forward(*data);
-
-        return data;
-
-
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        for m in reversed(self._modules):
-            dout = m.backward(*dout);
-
-        return dout;
+        return super().forward(*data[:-1]);
 
 
     def apply(self, func : Callable):
