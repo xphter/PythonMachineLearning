@@ -1164,6 +1164,11 @@ class LstmLayer(NetModuleBase):
         return self._dH;
 
 
+    @property
+    def dC(self) -> np.ndarray:
+        return self._dC;
+
+
     def reset(self):
         self._H, self._C = None, None;
 
