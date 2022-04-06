@@ -547,6 +547,7 @@ class AffineLayer(NetModuleBase):
         super().__init__();
 
         self._X = None;
+        self._shape = None;
         self._inputSize = inputSize;
         self._outputSize = outputSize;
         self._includeBias = includeBias;
@@ -577,17 +578,30 @@ class AffineLayer(NetModuleBase):
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        self._X = data[0];
+        X = data[0];
+
+        if X.ndim > 2:
+            self._shape = X.shape;
+            self._X = np.reshape(X, (-1, X.shape[-1]));
+        else:
+            self._shape = None;
+            self._X = X;
 
         Y = self._X @ self._weight;
         if self._bias is not None:
             Y += self._bias;
+
+        if self._shape is not None:
+            Y = np.reshape(Y, self._shape[:-1] + (Y.shape[-1], ));
 
         return Y, ;
 
 
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
         dY = dout[0];
+        if self._shape is not None:
+            dY = np.reshape(dY, (-1, dY.shape[-1]));
+
         dW = self._X.T @ dY;
         self._grads[0][...] = dW;
 
@@ -596,6 +610,8 @@ class AffineLayer(NetModuleBase):
             self._grads[1][...] = db;
 
         dX = dY @ self._weight.T;
+        if self._shape is not None:
+            dX = np.reshape(dX, self._shape);
 
         return dX, ;
 
