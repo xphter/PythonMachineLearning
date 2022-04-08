@@ -2076,6 +2076,220 @@ class SequentialContainer(NetModelBase):
             func(m);
 
 
+# select value by weights for 1 time step
+class SelectByWeight1TModule(NetModuleBase):
+    def __init__(self):
+        super().__init__();
+
+        self._V = None;
+        self._W = None;
+        self._name = "SelectByWeight1T";
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        # V: values, N1 ...Nm * T1 * V, W: weights, N1 ... Nm * T1
+        V, W = data;
+        self._V, self._W = V, np.expand_dims(W, axis = -1);
+        Y = np.sum(self._V * self._W, axis = -2);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = np.repeat(np.expand_dims(dout[0], axis = -2), self._V.shape[-2], axis = -2);
+        dV = dY * self._W;
+        dW = np.sum(dY * self._V, axis = -1);
+
+        return dV, dW;
+
+
+# select value by weights for N time step
+class SelectByWeightNTModule(SelectByWeight1TModule):
+    def __init__(self):
+        super().__init__();
+
+        self._name = "SelectByWeightNT";
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        # V: values, N1 ...Nm * T1 * D, W: weights, N1 ... Nm * T2 * T1
+        V, W = data;
+        self._V, self._W = np.expand_dims(V, axis = -3), np.expand_dims(W, axis = -1);
+        Y = np.sum(self._V * self._W, axis = -2);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = np.repeat(np.expand_dims(dout[0], axis = -2), self._V.shape[-2], axis = -2);
+        dV = np.sum(dY * self._W, axis = -3);
+        dW = np.sum(dY * self._V, axis = -1);
+
+        return dV, dW;
+
+
+# additive attention weight for 1 time step
+class AdditiveAttentionWeight1TModule(AggregateNetModule):
+    def __init__(self, querySize : int, keySize : int, hiddenSize : int, Wq : np.ndarray = None, Wk : np.ndarray = None, wv : np.ndarray = None):
+        self._qLayer = AffineLayer(querySize, hiddenSize, includeBias = False, W = Wq);
+        self._kLayer = AffineLayer(keySize, hiddenSize, includeBias = False, W = Wk);
+        self._vLayer = AffineLayer(hiddenSize, 1, includeBias = False, W = wv);
+        self._softmax = SoftmaxLayer();
+
+        super().__init__(self._qLayer, self._kLayer, self._vLayer, self._softmax);
+
+        self._H = None;
+        self._name = "AdditiveAttentionWeight1T";
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        # K: keys, N1 ...Nm * T1 * K, Q: queries, N1 ... Nm * Q
+        K, Q = data;
+
+        QY = self._qLayer.forward(Q)[0];
+        KY = self._kLayer.forward(K)[0];
+
+        QY = np.expand_dims(QY, axis = -2);
+        self._H = tanh(QY + KY);
+        S = self._vLayer.forward(self._H)[0];
+        S = np.squeeze(S, axis = -1);
+        Y = self._softmax.forward(S)[0];
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dS = self._softmax.backward(*dout)[0];
+        dS = np.expand_dims(dS, axis = -1);
+        dH = self._vLayer.backward(dS)[0];
+        dH = dH * tanhGradient(self._H);
+        dQ = self._qLayer.backward(np.sum(dH, axis = -2))[0];
+        dK = self._kLayer.backward(dH)[0];
+
+        return dK, dQ;
+
+
+# additive attention weight for N time step
+class AdditiveAttentionWeightNTModule(AdditiveAttentionWeight1TModule):
+    def __init__(self, querySize : int, keySize : int, hiddenSize : int, Wq : np.ndarray = None, Wk : np.ndarray = None, wv : np.ndarray = None):
+        super().__init__(querySize, keySize, hiddenSize, Wq, Wk, wv);
+
+        self._name = "AdditiveAttentionWeightNT";
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        # K: keys, N1 ...Nm * T1 * K, Q: queries, N1 ... Nm * T2 * Q
+        K, Q = data;
+
+        QY = self._qLayer.forward(Q)[0];
+        KY = self._kLayer.forward(K)[0];
+
+        QY = np.expand_dims(QY, axis = -2);
+        KY = np.expand_dims(KY, axis = -3);
+        self._H = tanh(QY + KY);
+        S = self._vLayer.forward(self._H)[0];
+        S = np.squeeze(S, axis = -1);
+        Y = self._softmax.forward(S)[0];
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dS = self._softmax.backward(*dout)[0];
+        dS = np.expand_dims(dS, axis = -1);
+        dH = self._vLayer.backward(dS)[0];
+        dH = dH * tanhGradient(self._H);
+        dQ = self._qLayer.backward(np.sum(dH, axis = -2))[0];
+        dK = self._kLayer.backward(np.sum(dH, axis = -3))[0];
+
+        return dK, dQ;
+
+
+# dot-product attention weight for 1 time step
+class DotProductAttentionWeight1TModule(NetModuleBase):
+    def __init__(self):
+        super().__init__();
+
+        self._K = None;
+        self._Q = None;
+        self._softmax = SoftmaxLayer();
+        self._name = "DotProductAttentionWeight1T";
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        # K: keys, N1 ...Nm * T1 * D, Q: queries, N1 ... Nm * D
+        K, Q = data;
+        self._K, self._Q = K, np.expand_dims(Q, axis = -2);
+        Y = self._softmax.forward(np.sum(self._K * self._Q, axis = -1) / math.sqrt(Q.shape[-1]))[0];
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = self._softmax.backward(*dout)[0] / math.sqrt(self._Q.shape[-1]);
+        dY = np.repeat(np.expand_dims(dY, axis = -1), self._Q.shape[-1], axis = -1);
+        dK = dY * self._Q;
+        dQ = np.sum(dY * self._K, axis = -2);
+
+        return dK, dQ;
+
+
+# dot-product attention weight for N time step
+class DotProductAttentionWeightNTModule(DotProductAttentionWeight1TModule):
+    def __init__(self):
+        super().__init__();
+
+        self._name = "DotProductAttentionWeightNT";
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        # K: keys N1 ...Nm * T1 * D, Q: queries, N1 ... Nm * T2 * D
+        K, Q = data;
+        self._K, self._Q = np.expand_dims(K, axis = -3), np.expand_dims(Q, axis = -2);
+        Y = self._softmax.forward(np.sum(self._K * self._Q, axis = -1) / math.sqrt(Q.shape[-1]))[0];
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = self._softmax.backward(*dout)[0] / math.sqrt(self._Q.shape[-1]);
+        dY = np.repeat(np.expand_dims(dY, axis = -1), self._Q.shape[-1], axis = -1);
+        dK = np.sum(dY * self._Q, axis = -3);
+        dQ = np.sum(dY * self._K, axis = -2);
+
+        return dK, dQ;
+
+
+class QKVAttentionLayer(AggregateNetModule):
+    def __init__(self, weightModule : INetModule, selectModule : INetModule):
+        super().__init__(weightModule, selectModule);
+
+        self._attentionWeight = None;
+        self._weightModule = weightModule;
+        self._selectModule = selectModule;
+        self._name = "QKVAttention";
+
+
+    @property
+    def attentionWeight(self) -> np.ndarray:
+        return self._attentionWeight;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        Q, K, V = data;
+        self._attentionWeight = self._weightModule.forward(K, Q)[0];
+        Y = self._selectModule.forward(V, self._attentionWeight)[0];
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dV, dW = self._selectModule.backward(*dout);
+        dK, dQ = self._weightModule.backward(dW);
+
+        return dQ, dK, dV;
+
+
 class SequentialDataIterator(IDataIterator):
     def __init__(self, data : List[np.ndarray], batchSize : int = 2 ** 8, shuffle : bool = True):
         self._step = 0;
