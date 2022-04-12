@@ -1240,6 +1240,38 @@ class LstmLayer(NetModuleBase):
         self._H, self._C = H, C;
 
 
+class BiRnnLayer(AggregateNetModule):
+    def __init__(self, forwardRnn : INetModule, backwardRnn : INetModule):
+        super().__init__(forwardRnn, backwardRnn);
+        self._forwardRnn = forwardRnn;
+        self._backwardRnn = backwardRnn;
+
+
+    @property
+    def forwardRnn(self) -> INetModule:
+        return self._forwardRnn;
+
+
+    @property
+    def backwardRnn(self) -> INetModule:
+        return self._backwardRnn;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        X = data[0];
+        Y1 = self._forwardRnn.forward(X)[0];
+        Y2 = self._backwardRnn.forward(X[..., ::-1, :])[0];
+        return Y1, Y2[..., ::-1, :];
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY1, dY2 = dout;
+        dX1 = self._forwardRnn.backward(dY1)[0];
+        dX2 = self._backwardRnn.backward(dY2[..., ::-1, :])[0];
+        dX = dX1 + dX2[..., ::-1, :];
+        return dX, ;
+
+
 class GruCell(NetModuleBase):
     def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None):
         super().__init__();
