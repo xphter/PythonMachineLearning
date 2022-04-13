@@ -2119,8 +2119,8 @@ class SelectByWeight1TModule(NetModuleBase):
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        # V: values, N1 ...Nm * T1 * V, W: weights, N1 ... Nm * T1
-        V, W = data;
+        # W: weights, N1 ... Nm * T1, V: values, N1 ...Nm * T1 * V
+        W, V = data;
         self._V, self._W = V, np.expand_dims(W, axis = -1);
         Y = np.sum(self._V * self._W, axis = -2);
 
@@ -2132,7 +2132,7 @@ class SelectByWeight1TModule(NetModuleBase):
         dV = dY * self._W;
         dW = np.sum(dY * self._V, axis = -1);
 
-        return dV, dW;
+        return dW, dV;
 
 
 # select value by weights for N time step
@@ -2144,8 +2144,8 @@ class SelectByWeightNTModule(SelectByWeight1TModule):
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        # V: values, N1 ...Nm * T1 * D, W: weights, N1 ... Nm * T2 * T1
-        V, W = data;
+        # W: weights, N1 ... Nm * T2 * T1, V: values, N1 ...Nm * T1 * D
+        W, V = data;
         self._V, self._W = np.expand_dims(V, axis = -3), np.expand_dims(W, axis = -1);
         Y = np.sum(self._V * self._W, axis = -2);
 
@@ -2157,7 +2157,7 @@ class SelectByWeightNTModule(SelectByWeight1TModule):
         dV = np.sum(dY * self._W, axis = -3);
         dW = np.sum(dY * self._V, axis = -1);
 
-        return dV, dW;
+        return dW, dV;
 
 
 # additive attention weight for 1 time step
@@ -2175,8 +2175,8 @@ class AdditiveAttentionWeight1TModule(AggregateNetModule):
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        # K: keys, N1 ...Nm * T1 * K, Q: queries, N1 ... Nm * Q
-        K, Q = data;
+        # Q: queries, N1 ... Nm * Q, K: keys, N1 ...Nm * T1 * K
+        Q, K = data;
 
         QY = self._qLayer.forward(Q)[0];
         KY = self._kLayer.forward(K)[0];
@@ -2198,7 +2198,7 @@ class AdditiveAttentionWeight1TModule(AggregateNetModule):
         dQ = self._qLayer.backward(np.sum(dH, axis = -2))[0];
         dK = self._kLayer.backward(dH)[0];
 
-        return dK, dQ;
+        return dQ, dK;
 
 
 # additive attention weight for N time step
@@ -2210,8 +2210,8 @@ class AdditiveAttentionWeightNTModule(AdditiveAttentionWeight1TModule):
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        # K: keys, N1 ...Nm * T1 * K, Q: queries, N1 ... Nm * T2 * Q
-        K, Q = data;
+        # Q: queries, N1 ... Nm * T2 * Q, K: keys, N1 ...Nm * T1 * K
+        Q, K = data;
 
         QY = self._qLayer.forward(Q)[0];
         KY = self._kLayer.forward(K)[0];
@@ -2234,7 +2234,7 @@ class AdditiveAttentionWeightNTModule(AdditiveAttentionWeight1TModule):
         dQ = self._qLayer.backward(np.sum(dH, axis = -2))[0];
         dK = self._kLayer.backward(np.sum(dH, axis = -3))[0];
 
-        return dK, dQ;
+        return dQ, dK;
 
 
 # dot-product attention weight for 1 time step
@@ -2249,8 +2249,8 @@ class DotProductAttentionWeight1TModule(NetModuleBase):
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        # K: keys, N1 ...Nm * T1 * D, Q: queries, N1 ... Nm * D
-        K, Q = data;
+        # Q: queries, N1 ... Nm * D, K: keys, N1 ...Nm * T1 * D
+        Q, K = data;
         self._K, self._Q = K, np.expand_dims(Q, axis = -2);
         Y = self._softmax.forward(np.sum(self._K * self._Q, axis = -1) / math.sqrt(Q.shape[-1]))[0];
 
@@ -2263,7 +2263,7 @@ class DotProductAttentionWeight1TModule(NetModuleBase):
         dK = dY * self._Q;
         dQ = np.sum(dY * self._K, axis = -2);
 
-        return dK, dQ;
+        return dQ, dK;
 
 
 # dot-product attention weight for N time step
@@ -2275,8 +2275,8 @@ class DotProductAttentionWeightNTModule(DotProductAttentionWeight1TModule):
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        # K: keys N1 ...Nm * T1 * D, Q: queries, N1 ... Nm * T2 * D
-        K, Q = data;
+        # Q: queries, N1 ... Nm * T2 * D, K: keys N1 ...Nm * T1 * D
+        Q, K = data;
         self._K, self._Q = np.expand_dims(K, axis = -3), np.expand_dims(Q, axis = -2);
         Y = self._softmax.forward(np.sum(self._K * self._Q, axis = -1) / math.sqrt(Q.shape[-1]))[0];
 
@@ -2289,7 +2289,7 @@ class DotProductAttentionWeightNTModule(DotProductAttentionWeight1TModule):
         dK = np.sum(dY * self._Q, axis = -3);
         dQ = np.sum(dY * self._K, axis = -2);
 
-        return dK, dQ;
+        return dQ, dK;
 
 
 class QKVAttentionLayer(AggregateNetModule):
@@ -2309,15 +2309,15 @@ class QKVAttentionLayer(AggregateNetModule):
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
         Q, K, V = data;
-        self._attentionWeight = self._weightModule.forward(K, Q)[0];
-        Y = self._selectModule.forward(V, self._attentionWeight)[0];
+        self._attentionWeight = self._weightModule.forward(Q, K)[0];
+        Y = self._selectModule.forward(self._attentionWeight, V)[0];
 
         return Y, ;
 
 
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dV, dW = self._selectModule.backward(*dout);
-        dK, dQ = self._weightModule.backward(dW);
+        dW, dV = self._selectModule.backward(*dout);
+        dQ, dK = self._weightModule.backward(dW);
 
         return dQ, dK, dV;
 
