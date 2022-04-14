@@ -1792,6 +1792,29 @@ class IdentityWithMeanSquareLoss(NetLossBase):
         return dX, ;
 
 
+class IdentityWithMeanAbsoluteLoss(NetLossBase):
+    def __init__(self):
+        super().__init__();
+
+        self._mask = None;
+
+
+    def forward(self, *data: np.ndarray) -> float:
+        Y, T = data;
+        self._mask = Y < T;
+        self._loss = meanAbsoluteError(Y, T);
+
+        return self._loss;
+
+
+    def backward(self) -> Tuple[np.ndarray]:
+        dX = np.ones_like(self._mask, dtype = defaultDType);
+        dX[self._mask] = -1;
+        dX /= lengthExceptLastDimension(self._mask)
+
+        return dX, ;
+
+
 class SumWithMeanSquareLossLayer(NetLossBase):
     def __init__(self):
         super().__init__();
