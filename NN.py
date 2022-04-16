@@ -1162,12 +1162,12 @@ class LstmLayer(NetModuleBase):
 
     def _forward(self, *data : np.ndarray) -> np.ndarray:
         X, = data;
-        N, T, D = X.shape;
+        N, T = X.shape[: 2];
 
         Y = np.zeros((N, T, self._outputSize), dtype = X.dtype);
         for t in range(T):
-            self._H, self._C = self._lstmModules[t].forward(X[:, t, :], self._H, self._C);
-            Y[:, t, :] = self._H;
+            self._H, self._C = self._lstmModules[t].forward(X[:, t], self._H, self._C);
+            Y[:, t] = self._H;
 
         return Y;
 
@@ -1178,7 +1178,7 @@ class LstmLayer(NetModuleBase):
 
         for t in reversed(range(T)):
             lstm = self._lstmModules[t];
-            dX[:, t, :], self._dH, self._dC = lstm.backward(dY[:, t, :] + self._dH, self._dC);
+            dX[:, t], self._dH, self._dC = lstm.backward(dY[:, t] + self._dH, self._dC);
 
             for i in range(len(lstm.grads)):
                 self._grads[i] += lstm.grads[i];
@@ -1217,7 +1217,7 @@ class LstmLayer(NetModuleBase):
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
         X = data[0];
-        N, T, D = X.shape;
+        N, T = X.shape[: 2];
 
         self._T = T;
         if len(self._lstmModules) != T:
@@ -1230,7 +1230,7 @@ class LstmLayer(NetModuleBase):
 
         Y = self._forward(*data);
 
-        return Y if self._returnSequences else Y[:, -1, :], ;
+        return Y if self._returnSequences else Y[:, -1], ;
 
 
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
@@ -1240,7 +1240,7 @@ class LstmLayer(NetModuleBase):
         if not self._returnSequences:
             dH = dY;
             dY = np.zeros((N, T, dY.shape[-1]), dtype = dY.dtype);
-            dY[:, -1, :] = dH;
+            dY[:, -1] = dH;
 
         # truncated BPTT
         self._dH = np.zeros_like(self._H);
@@ -1286,7 +1286,7 @@ class BahdanauAttentionLstmLayer(LstmLayer):
 
     def _forward(self, *data : np.ndarray) -> np.ndarray:
         X, H = data;
-        N, T, D = X.shape;
+        N, T = X.shape[: 2];
         self._shapeH = H.shape;
         self._attentionWeight = np.zeros((N, T, H.shape[-2]), dtype = X.dtype);
 
@@ -1299,9 +1299,9 @@ class BahdanauAttentionLstmLayer(LstmLayer):
             attention = self._attentionModules[t];
 
             context = attention.forward(self._H, H, H)[0];
-            self._attentionWeight[:, t, :] = attention.attentionWeight;
-            self._H, self._C = lstm.forward(np.concatenate((context, X[:, t, :]), axis = -1), self._H, self._C);
-            Y[:, t, :] = self._H;
+            self._attentionWeight[:, t] = attention.attentionWeight;
+            self._H, self._C = lstm.forward(np.concatenate((context, X[:, t]), axis = -1), self._H, self._C);
+            Y[:, t] = self._H;
 
         return Y;
 
@@ -1315,7 +1315,7 @@ class BahdanauAttentionLstmLayer(LstmLayer):
             lstm = self._lstmModules[t];
             attention = self._attentionModules[t];
 
-            dX[:, t, :], self._dH, self._dC = lstm.backward(dY[:, t, :] + self._dH, self._dC);
+            dX[:, t], self._dH, self._dC = lstm.backward(dY[:, t] + self._dH, self._dC);
             dContext = dX[:, t, : self._outputSize];
             dQ, dK, dV = attention.backward(dContext);
             self._dH += dQ;
