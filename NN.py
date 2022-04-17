@@ -237,8 +237,8 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
 
 
     def reset(self):
-        self._isTrainingMode = False;
-        self._trainingEpoch = 0;
+        self.isTrainingMode = False;
+        self.trainingEpoch = 0;
         self._reset();
 
 
