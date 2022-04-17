@@ -2547,6 +2547,44 @@ class QKVAttentionLayer(AggregateNetModule):
         return dQ, dK, dV;
 
 
+class BinaryChoiceModule(NetModuleBase):
+    def __init__(self, p : float = 0.5):
+        super().__init__();
+
+        self._p = p;
+        self._select1 = None;
+        self._name = "BinaryChoice";
+
+
+    @property
+    def p(self) -> float:
+        return self._p;
+
+
+    @p.setter
+    def p(self, value: float):
+        self._p = value;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        X1, X2 = data;
+
+        if self._p == 1:
+            self._select1 = True;
+        elif self._p == 0:
+            self._select1 = False;
+        else:
+            self._select1 = float(np.random.rand(1)[0]) <= self._p;
+
+        return (X1 if self._select1 else X2), ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
+
+        return (dY, 0) if self._select1 else (0, dY);
+
+
 class SequentialDataIterator(IDataIterator):
     def __init__(self, data : List[np.ndarray], batchSize : int = 2 ** 8, shuffle : bool = True):
         self._step = 0;
