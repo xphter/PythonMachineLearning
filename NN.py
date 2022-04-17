@@ -170,7 +170,7 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
         self._name = None;
         self._params = [];
         self._grads = [];
-        self._isTrainingMode = True;
+        self._isTrainingMode = False;
         self._trainingEpoch = 0;
 
 
@@ -232,8 +232,14 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
         pass;
 
 
-    def reset(self):
+    def _reset(self):
         pass;
+
+
+    def reset(self):
+        self._isTrainingMode = False;
+        self._trainingEpoch = 0;
+        self._reset();
 
 
 class AggregateNetModule(NetModuleBase, metaclass = abc.ABCMeta):
@@ -272,7 +278,7 @@ class AggregateNetModule(NetModuleBase, metaclass = abc.ABCMeta):
             i += n;
 
 
-    def reset(self):
+    def _reset(self):
         for m in self._modules:
             m.reset();
 
@@ -341,6 +347,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
         for epoch in range(maxEpoch):
             lossValues.clear();
+            self.isTrainingMode = True;
             self.trainingEpoch = epoch;
 
             for data in trainingIterator:
@@ -379,6 +386,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                 print("evaluating final test data...");
                 print(f"the final test {evaluator.name} is {self._calcAccuracy(lossFunc, optimizer, evaluator, None, testIterator)}");
 
+        self.isTrainingMode = False;
         print(f"[{datetime.datetime.now()}] complete to train model, elapsed time: {int(time.time() - startTime)}s");
 
         if plot:
@@ -1040,7 +1048,7 @@ class RnnLayer(NetModuleBase):
         return self._dH;
 
 
-    def reset(self):
+    def _reset(self):
         self._H = None;
 
 
@@ -1245,7 +1253,7 @@ class LstmLayer(NetModuleBase):
         return self._dC;
 
 
-    def reset(self):
+    def _reset(self):
         self._H, self._C = None, None;
 
 
