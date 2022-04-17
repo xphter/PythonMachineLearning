@@ -105,6 +105,18 @@ class INetModule(metaclass = abc.ABCMeta):
 
     @property
     @abc.abstractmethod
+    def trainingEpoch(self) -> int:
+        pass;
+
+
+    @trainingEpoch.setter
+    @abc.abstractmethod
+    def trainingEpoch(self, value: int):
+        pass;
+
+
+    @property
+    @abc.abstractmethod
     def params(self) -> List[np.ndarray]:
         pass;
 
@@ -159,6 +171,7 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
         self._params = [];
         self._grads = [];
         self._isTrainingMode = True;
+        self._trainingEpoch = 0;
 
 
     def __repr__(self):
@@ -181,6 +194,17 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
 
 
     @property
+    def trainingEpoch(self) -> int:
+        return self._trainingEpoch;
+
+
+    @trainingEpoch.setter
+    def trainingEpoch(self, value: int):
+        self._trainingEpoch = value;
+        self._setTrainingEpoch(value);
+
+
+    @property
     def params(self) -> List[np.ndarray]:
         return self._params;
 
@@ -197,6 +221,10 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
 
 
     def _setTrainingMode(self, value : bool):
+        pass;
+
+
+    def _setTrainingEpoch(self, value : int):
         pass;
 
 
@@ -226,6 +254,11 @@ class AggregateNetModule(NetModuleBase, metaclass = abc.ABCMeta):
     def _setTrainingMode(self, value: bool):
         for m in self._modules:
             m.isTrainingMode = value;
+
+
+    def _setTrainingEpoch(self, value : int):
+        for m in self._modules:
+            m.trainingEpoch = value;
 
 
     def _setParams(self, value: List[np.ndarray]):
@@ -308,6 +341,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
         for epoch in range(maxEpoch):
             lossValues.clear();
+            self.trainingEpoch = epoch;
 
             for data in trainingIterator:
                 Y = self.forward(*data);
