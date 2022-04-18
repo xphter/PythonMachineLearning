@@ -1,4 +1,5 @@
 import abc;
+import copy;
 import math;
 import time;
 import datetime;
@@ -138,6 +139,11 @@ class INetModule(metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
+    def copy(self, shareParams : bool = False):
+        pass;
+
+
+    @abc.abstractmethod
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
         pass;
 
@@ -220,6 +226,11 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
         return self._grads;
 
 
+    @grads.setter
+    def grads(self, value: List[np.ndarray]):
+        self._grads = value;
+
+
     def _setTrainingMode(self, value : bool):
         pass;
 
@@ -236,10 +247,27 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
         pass;
 
 
+    def _copy(self, module : INetModule, shareParams : bool):
+        pass;
+
+
     def reset(self):
         self.isTrainingMode = False;
         self.trainingEpoch = 0;
         self._reset();
+
+
+    def copy(self, shareParams : bool = False) -> INetModule:
+        module = copy.copy(self);
+        self._copy(module, shareParams);
+
+        if shareParams:
+            module.params = [p for p in self.params];
+        else:
+            module.params = [np.copy(p) for p in self.params];
+        module.grads = [np.zeros_like(g) for g in self.grads];
+
+        return module;
 
 
 class AggregateNetModule(NetModuleBase, metaclass = abc.ABCMeta):
@@ -281,6 +309,22 @@ class AggregateNetModule(NetModuleBase, metaclass = abc.ABCMeta):
     def _reset(self):
         for m in self._modules:
             m.reset();
+
+
+    def _copy(self, module : INetModule, shareParams : bool):
+        module._modules = [m.copy(True) for m in self.modules];
+
+
+    def copy(self, shareParams : bool = False) -> INetModule:
+        module = super().copy(shareParams);
+
+        module.params.clear();
+        module.grads.clear();
+        for m in modules:
+            self._params.extend(m.params);
+            self._grads.extend(m.grads);
+
+        return module;
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
@@ -2583,6 +2627,80 @@ class BinaryChoiceModule(NetModuleBase):
         dY = dout[0];
 
         return (dY, 0) if self._select1 else (0, dY);
+
+
+# Note: the module must have no inner connection in each step!
+class RepeatedWrapper(NetModuleBase):
+    def __init__(self, target : INetModule):
+        super().__init__();
+
+        self._modules = [];
+        self._target = target;
+        self._stepIndex = 0;
+        self._clearGrads = False;
+        self._name = f"Repeated{str(self._target)}";
+
+        self._params.extend(target.params);
+        self._grads.extend(target.grads);
+
+
+    def _setTrainingMode(self, value : bool):
+        self._target.isTrainingMode = value;
+        for m in self._modules:
+            m.isTrainingMode = value;
+
+
+    def _setTrainingEpoch(self, value : int):
+        self._target.trainingEpoch = value;
+        for m in self._modules:
+            m.trainingEpoch = value;
+
+
+    def _setParams(self, value: List[np.ndarray]):
+        self._target.params = value;
+        for m in self._modules:
+            m.params = value;
+
+
+    def _reset(self):
+        self._stepIndex = 0;
+        self._clearGrads = False;
+        self._target.reset();
+        for m in self._modules:
+            m.reset();
+
+
+    def _copy(self, module : INetModule, shareParams : bool):
+        raise NotImplemented();
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        if not self._clearGrads:
+            for i in range(len(self._grads)):
+                self._grads[i][...] = 0;
+
+            self._clearGrads = True;
+
+        while len(self._modules) < self._stepIndex + 1:
+            self._modules.append(self._target.copy(True));
+
+        Y = self._modules[self._stepIndex].forward(*data);
+        self._stepIndex += 1;
+
+        return Y;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        self._stepIndex -= 1;
+        self._clearGrads = False;
+
+        module = self._modules[self._stepIndex];
+        dX = module.backward(*dout);
+
+        for i in range(len(self._grads)):
+            self._grads[i] += module.grads[i];
+
+        return dX;
 
 
 class SequentialDataIterator(IDataIterator):
