@@ -153,6 +153,11 @@ class INetModule(metaclass = abc.ABCMeta):
         pass;
 
 
+    @abc.abstractmethod
+    def clearGrads(self):
+        pass;
+
+
 class INetModel(INetModule, metaclass = abc.ABCMeta):
     @abc.abstractmethod
     def getFinalTag(self, T : np.ndarray) -> np.ndarray:
@@ -268,6 +273,11 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
         module.grads = [np.zeros_like(g) for g in self.grads];
 
         return module;
+
+
+    def clearGrads(self):
+        for g in self.grads:
+            g[...] = 0;
 
 
 class AggregateNetModule(NetModuleBase, metaclass = abc.ABCMeta):
@@ -401,6 +411,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
                 self.backward(*lossFunc.backward());
                 optimizer.update(self.params, self.grads);
+                self.clearGrads();
 
                 if evaluator is not None and evalIterations is not None and len(lossValues) % evalIterations == 0:
                     accuracy = self._calcAccuracy(lossFunc, optimizer, evaluator, lossValues[-evalIterations:], None);
@@ -905,7 +916,7 @@ class EmbeddingLayer(NetModuleBase):
         dY = dY.reshape(-1, self._outputSize);
 
         dW = self._grads[0];
-        dW[...] = 0;
+        # dW[...] = 0;
 
         # np.add.at(dW, self._index, dY);
         npAddAt(dW, self._index, dY);
@@ -1118,8 +1129,8 @@ class RnnLayer(NetModuleBase):
         # truncated BPTT
         self._dH = np.zeros_like(self._H);
         dX = np.zeros((N, T, self._inputSize), dY.dtype);
-        for i in range(len(self._grads)):
-            self._grads[i][...] = 0;
+        # for i in range(len(self._grads)):
+        #     self._grads[i][...] = 0;
 
         for t in reversed(range(T)):
             rnn = self._rnnModules[t];
@@ -1349,8 +1360,8 @@ class LstmLayer(NetModuleBase):
             # truncated BPTT
             self._dH = np.zeros_like(self._H);
             self._dC = np.zeros_like(self._H);
-            for i in range(len(self._grads)):
-                self._grads[i][...] = 0;
+            # for i in range(len(self._grads)):
+            #     self._grads[i][...] = 0;
 
         if not self._stepwise:
             N, T = len(dY), self._T;
@@ -2634,7 +2645,6 @@ class RepeatedWrapper(NetModuleBase):
         self._modules = [];
         self._target = target;
         self._stepIndex = 0;
-        self._clearGrads = False;
         self._name = f"Repeated{str(self._target)}";
 
         self._params.extend(target.params);
@@ -2661,7 +2671,6 @@ class RepeatedWrapper(NetModuleBase):
 
     def _reset(self):
         self._stepIndex = 0;
-        self._clearGrads = False;
         self._target.reset();
         for m in self._modules:
             m.reset();
@@ -2672,12 +2681,6 @@ class RepeatedWrapper(NetModuleBase):
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        if not self._clearGrads:
-            for i in range(len(self._grads)):
-                self._grads[i][...] = 0;
-
-            self._clearGrads = True;
-
         while len(self._modules) < self._stepIndex + 1:
             self._modules.append(self._target.copy(True));
 
@@ -2689,7 +2692,6 @@ class RepeatedWrapper(NetModuleBase):
 
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
         self._stepIndex -= 1;
-        self._clearGrads = False;
 
         module = self._modules[self._stepIndex];
         dX = module.backward(*dout);
