@@ -2785,12 +2785,13 @@ class RegressionAccuracyEvaluator(INetAccuracyEvaluator):
 
     @property
     def name(self) -> str:
-        return "RMSE";
+        return "MAE";
 
 
     @property
     def accuracy(self) -> Optional[float]:
-        return math.sqrt(self._rss / self._totalCount) if self._totalCount > 0 else None;
+        # return math.sqrt(self._rss / self._totalCount) if self._totalCount > 0 else None;
+        return (self._rss / self._totalCount) if self._totalCount > 0 else None;
 
 
     def fromLoss(self, lossValues : List[float] = None) -> bool:
@@ -2799,7 +2800,8 @@ class RegressionAccuracyEvaluator(INetAccuracyEvaluator):
 
     def update(self, *data: np.ndarray):
         Y, T = data;
-        self._rss += float(np.sum(np.square(Y - T)));
+        # self._rss += float(np.sum(np.square(Y - T)));
+        self._rss += float(np.sum(np.abs(Y - T)));
         self._totalCount += lengthExceptLastDimension(Y);
 
 
