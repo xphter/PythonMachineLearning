@@ -578,6 +578,7 @@ class DropoutLayer(NetModuleBase):
         return dX, ;
 
 
+# the index of time dimension is 1
 class VariationalDropoutLayer(DropoutLayer):
     def __init__(self, dropoutRatio = 0.5):
         super().__init__(dropoutRatio);
@@ -586,15 +587,11 @@ class VariationalDropoutLayer(DropoutLayer):
 
 
     def _getMask(self, shape : Tuple, dtype) -> np.ndarray:
-        D = len(shape);
-        if D <= 2:
+        if len(shape) <= 2:
             return super()._getMask(shape, dtype);
 
-        mask = super()._getMask((shape[0], shape[-1]), dtype);
-        for _ in range(D - 2):
-            mask = np.expand_dims(mask, axis = -2);
-        for d in range(1, D - 1):
-            mask = np.repeat(mask, shape[d], axis = d);
+        mask = super()._getMask((shape[0], ) + shape[2:], dtype);
+        mask = np.repeat(np.expand_dims(mask, axis = 1), shape[1], axis = 1);
 
         return mask;
 
