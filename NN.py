@@ -555,10 +555,11 @@ class TanhLayer(NetModuleBase):
 
 
 class DropoutLayer(NetModuleBase):
-    def __init__(self, dropoutRatio = 0.5):
+    def __init__(self, dropoutRatio = 0.5, reuseMask : bool = False):
         super().__init__();
 
         self._mask = None;
+        self._reuseMask = reuseMask;
         self._dropoutRatio = dropoutRatio;
         self._name = f"Dropout {dropoutRatio}";
 
@@ -571,7 +572,8 @@ class DropoutLayer(NetModuleBase):
         X = data[0];
 
         if self._isTrainingMode:
-            self._mask = self._getMask(X.shape, X.dtype);
+            if self._mask is None or not self._reuseMask:
+                self._mask = self._getMask(X.shape, X.dtype);
             return X * self._mask, ;
         else:
             return X, ;
@@ -587,6 +589,10 @@ class DropoutLayer(NetModuleBase):
         dX = dY * self._mask;
 
         return dX, ;
+
+
+    def clearMask(self):
+        self._mask = None;
 
 
 # the index of time dimension is 1
@@ -1226,7 +1232,7 @@ class LstmCell(NetModuleBase):
 
 
 class LstmLayer(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, returnSequences : bool = False, stateful : bool = False, stepwise = False):
+    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, returnSequences : bool = False, stateful : bool = False, stepwise = False, dropoutRatio : float = 0.0):
         super().__init__();
 
         self._T = 0;
@@ -1236,6 +1242,7 @@ class LstmLayer(NetModuleBase):
         self._stateful = stateful;
         self._stepwise = stepwise;
         self._stepIndex = 0;
+        self._dropoutRatio = max(0.0, min(1.0, dropoutRatio));
         self._inputSize = inputSize;
         self._outputSize = outputSize;
         self._name = f"LSTM {inputSize}*{outputSize}";
@@ -1244,6 +1251,7 @@ class LstmLayer(NetModuleBase):
         self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 4 * outputSize).astype(defaultDType) if Wh is None else Wh;
         self._bias = np.zeros(4 * outputSize, dtype = defaultDType) if b is None else b;
         self._lstmModules : List[LstmCell] = [];
+        self._dropoutModule = (VariationalDropoutLayer(self._dropoutRatio) if not self._stepwise else DropoutLayer(self._dropoutRatio, True)) if self._dropoutRatio > 0 else None;
 
         weights = [self._weightX, self._weightH, self._bias];
         self._params.extend(weights);
@@ -1254,6 +1262,16 @@ class LstmLayer(NetModuleBase):
         self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
         for cell in self._lstmModules:
             cell.params = value;
+
+
+    def _setTrainingMode(self, value : bool):
+        if self._dropoutModule is not None:
+            self._dropoutModule.isTrainingMode = value;
+
+
+    def _setTrainingEpoch(self, value : int):
+        if self._dropoutModule is not None:
+            self._dropoutModule.trainingEpoch = value;
 
 
     def _forwardStep(self, t : int, *data : np.ndarray):
@@ -1334,6 +1352,9 @@ class LstmLayer(NetModuleBase):
             if not self._stateful or self._C is None:
                 self._C = np.zeros((N, self._outputSize), dtype = X.dtype);
 
+            if self._dropoutModule is not None:
+                self._dropoutModule.clearMask();
+
         if not self._stepwise:
             self._T = T = X.shape[1];
 
@@ -1341,8 +1362,8 @@ class LstmLayer(NetModuleBase):
                 self._lstmModules = [LstmCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias) for _ in range(T)];
 
             Y = self._forward(*data);
-
-            return Y if self._returnSequences else Y[:, -1],;
+            if not self._returnSequences:
+                Y = Y[:, -1];
         else:
             while len(self._lstmModules) < self._stepIndex + 1:
                 self._lstmModules.append(LstmCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias));
@@ -1350,7 +1371,12 @@ class LstmLayer(NetModuleBase):
             self._forwardStep(self._stepIndex, *data);
             self._stepIndex += 1;
 
-            return self._H, ;
+            Y = self._H;
+
+        if self._dropoutModule is not None:
+            Y = self._dropoutModule.forward(Y)[0];
+
+        return Y, ;
 
 
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
@@ -1362,6 +1388,9 @@ class LstmLayer(NetModuleBase):
             self._dC = np.zeros_like(self._H);
             # for i in range(len(self._grads)):
             #     self._grads[i][...] = 0;
+
+        if self._dropoutModule is not None:
+            dY = self._dropoutModule.backward(dY)[0];
 
         if not self._stepwise:
             N, T = len(dY), self._T;
@@ -1388,8 +1417,8 @@ class LstmLayer(NetModuleBase):
 
 
 class BahdanauAttentionLstmLayer(LstmLayer):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, Wq : np.ndarray = None, Wk : np.ndarray = None, wv : np.ndarray = None, returnSequences : bool = False, stateful : bool = False, stepwise = False):
-        super().__init__(outputSize + inputSize, outputSize, Wx, Wh, b, returnSequences, stateful, stepwise);
+    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, Wq : np.ndarray = None, Wk : np.ndarray = None, wv : np.ndarray = None, returnSequences : bool = False, stateful : bool = False, stepwise = False, dropoutRatio : float = 0.0):
+        super().__init__(outputSize + inputSize, outputSize, Wx, Wh, b, returnSequences, stateful, stepwise, dropoutRatio);
 
         self._shapeH = None;
         self._attentionWeight = None;
