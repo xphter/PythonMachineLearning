@@ -1421,10 +1421,10 @@ class LstmLayer(NetModuleBase):
                 dY = np.zeros((N, T, dY.shape[-1]), dtype = dY.dtype);
                 dY[:, -1] = dH;
 
-            din = self._backwardAll(*dout);
+            din = self._backwardAll(*((dY, ) + dout[1:]));
         else:
             self._stepIndex -= 1;
-            din = self._backwardStep(self._stepIndex, *dout);
+            din = self._backwardStep(self._stepIndex, *((dY, ) + dout[1:]));
 
         if self._inputState:
             if not self._stepwise:
