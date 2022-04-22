@@ -1232,13 +1232,15 @@ class LstmCell(NetModuleBase):
 
 
 class LstmLayer(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, returnSequences : bool = False, stateful : bool = False, stepwise = False, dropoutRatio : float = 0.0):
+    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, dropoutRatio : float = 0.0):
         super().__init__();
 
         self._T = 0;
         self._H, self._C = None, None;
         self._dH, self._dC = None, None;
         self._returnSequences = returnSequences;
+        self._returnState = returnState;
+        self._inputState = False;
         self._stateful = stateful;
         self._stepwise = stepwise;
         self._stepIndex = 0;
@@ -1274,13 +1276,20 @@ class LstmLayer(NetModuleBase):
             self._dropoutModule.trainingEpoch = value;
 
 
+    def _getInputState(self, *data: np.ndarray):
+        if len(data) > 1:
+            return True, data[1], data[2];
+        else:
+            return False, None, None;
+
+
     def _forwardStep(self, t : int, *data : np.ndarray):
-        X, = data;
+        X = data[0];
         self._H, self._C = self._lstmModules[t].forward(X, self._H, self._C);
 
 
     def _backwardStep(self, t : int, *dout: np.ndarray) -> Tuple[np.ndarray]:
-        dY, = dout;
+        dY = dout[0];
         lstm = self._lstmModules[t];
         dX, self._dH, self._dC = lstm.backward(dY + self._dH, self._dC);
 
@@ -1290,8 +1299,8 @@ class LstmLayer(NetModuleBase):
         return dX, ;
 
 
-    def _forward(self, *data : np.ndarray) -> np.ndarray:
-        X, = data;
+    def _forwardAll(self, *data : np.ndarray) -> np.ndarray:
+        X = data[0];
         N, T = X.shape[: 2];
 
         Y = np.zeros((N, T, self._outputSize), dtype = X.dtype);
@@ -1302,7 +1311,8 @@ class LstmLayer(NetModuleBase):
         return Y;
 
 
-    def _backward(self, dY : np.ndarray) -> Tuple[np.ndarray]:
+    def _backwardAll(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
         N, T = len(dY), self._T;
         dX = np.zeros((N, T, self._inputSize), dtype = dY.dtype);
 
@@ -1342,7 +1352,8 @@ class LstmLayer(NetModuleBase):
         self.resetStepState();
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    # input: X, H, C
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
         X = data[0];
         N = len(X);
 
@@ -1355,13 +1366,18 @@ class LstmLayer(NetModuleBase):
             if self._dropoutModule is not None:
                 self._dropoutModule.clearMask();
 
+        self._inputState, H, C = self._getInputState(*data);
+        if self._inputState:
+            self._H = H if H is not None else np.zeros((N, self._outputSize), dtype = X.dtype);
+            self._C = C if C is not None else np.zeros((N, self._outputSize), dtype = X.dtype);
+
         if not self._stepwise:
             self._T = T = X.shape[1];
 
             if len(self._lstmModules) != T:
                 self._lstmModules = [LstmCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias) for _ in range(T)];
 
-            Y = self._forward(*data);
+            Y = self._forwardAll(*data);
             if not self._returnSequences:
                 Y = Y[:, -1];
         else:
@@ -1376,9 +1392,10 @@ class LstmLayer(NetModuleBase):
         if self._dropoutModule is not None:
             Y = self._dropoutModule.forward(Y)[0];
 
-        return Y, ;
+        return (Y, self._H, self._C) if self._returnState else (Y, );
 
 
+    # input: dY, dH, dC
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
         dY = dout[0];
 
@@ -1392,6 +1409,10 @@ class LstmLayer(NetModuleBase):
         if self._dropoutModule is not None:
             dY = self._dropoutModule.backward(dY)[0];
 
+        if self._returnState:
+            self._dH += dout[1];
+            self._dC += dout[2];
+
         if not self._stepwise:
             N, T = len(dY), self._T;
 
@@ -1400,11 +1421,20 @@ class LstmLayer(NetModuleBase):
                 dY = np.zeros((N, T, dY.shape[-1]), dtype = dY.dtype);
                 dY[:, -1] = dH;
 
-            return self._backward(dY);
+            din = self._backwardAll(*dout);
         else:
             self._stepIndex -= 1;
+            din = self._backwardStep(self._stepIndex, *dout);
 
-            return self._backwardStep(self._stepIndex, *dout);
+        if self._inputState:
+            if not self._stepwise:
+                din += (self._dH, self._dC);
+            else:
+                din += (np.copy(self._dH), np.copy(self._dC));
+                self._dH[...] = 0;
+                self._dC[...] = 0;
+
+        return din;
 
 
     def setState(self, H : np.ndarray, C : np.ndarray = None):
@@ -1417,10 +1447,10 @@ class LstmLayer(NetModuleBase):
 
 
 class BahdanauAttentionLstmLayer(LstmLayer):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, Wq : np.ndarray = None, Wk : np.ndarray = None, wv : np.ndarray = None, returnSequences : bool = False, stateful : bool = False, stepwise = False, dropoutRatio : float = 0.0):
-        super().__init__(outputSize + inputSize, outputSize, Wx, Wh, b, returnSequences, stateful, stepwise, dropoutRatio);
+    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, Wq : np.ndarray = None, Wk : np.ndarray = None, wv : np.ndarray = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, dropoutRatio : float = 0.0):
+        super().__init__(outputSize + inputSize, outputSize, Wx, Wh, b, returnSequences, returnState, stateful, stepwise, dropoutRatio);
 
-        self._shapeH = None;
+        self._shapeK = None;
         self._attentionWeight = None;
         self._name = f"BahdanauAttentionLSTM {inputSize}*{outputSize}";
 
@@ -1445,19 +1475,26 @@ class BahdanauAttentionLstmLayer(LstmLayer):
             cell.params = (self._weightQ, self._weightK, self._weightV);
 
 
+    def _getInputState(self, *data: np.ndarray):
+        if len(data) > 2:
+            return True, data[2], data[3];
+        else:
+            return False, None, None;
+
+
     def _forwardStep(self, t : int, *data : np.ndarray):
-        X, H = data;
+        X, K = data[: 2];
 
         lstm = self._lstmModules[t];
         attention = self._attentionModules[t];
 
-        context = attention.forward(self._H, H, H)[0];
+        context = attention.forward(self._H, K, K)[0];
         self._attentionWeight.append(attention.attentionWeight);
         self._H, self._C = lstm.forward(np.concatenate((context, X), axis = -1), self._H, self._C);
 
 
     def _backwardStep(self, t : int, *dout: np.ndarray) -> Tuple[np.ndarray]:
-        dY, = dout;
+        dY = dout[0];
 
         lstm = self._lstmModules[t];
         attention = self._attentionModules[t];
@@ -1474,34 +1511,34 @@ class BahdanauAttentionLstmLayer(LstmLayer):
         return dX[:, self._outputSize:], dK + dV;
 
 
-    def _forward(self, *data : np.ndarray) -> np.ndarray:
-        X, H = data;
+    def _forwardAll(self, *data : np.ndarray) -> np.ndarray:
+        X, K = data[: 2];
         N, T = X.shape[: 2];
         Y = np.zeros((N, T, self._outputSize), dtype = X.dtype);
 
         for t in range(T):
-            self._forwardStep(t, X[:, t], H);
+            self._forwardStep(t, X[:, t], K);
             Y[:, t] = self._H;
 
         return Y;
 
 
-    def _backward(self, dY : np.ndarray) -> Tuple[np.ndarray]:
+    def _backwardAll(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
         N, T = len(dY), self._T;
         dX = np.zeros((N, T, self._inputSize - self._outputSize), dtype = dY.dtype);
-        dH = np.zeros(self._shapeH, dtype = dY.dtype);
+        dK = np.zeros(self._shapeK, dtype = dY.dtype);
 
         for t in reversed(range(T)):
-            dX[:, t], dK = self._backwardStep(t, dY[:, t]);
-            dH += dK;
+            dX[:, t], dKS = self._backwardStep(t, dY[:, t]);
+            dK += dKS;
 
-        return dX, dH;
+        return dX, dK;
 
 
     def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
-        X, H = data;
-        N = len(X);
-        self._shapeH = H.shape;
+        X, K = data[: 2];
+        self._shapeK = K.shape;
 
         if not self._stepwise or self._stepIndex == 0:
             self._attentionWeight = [];
