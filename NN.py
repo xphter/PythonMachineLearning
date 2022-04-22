@@ -252,8 +252,19 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
         pass;
 
 
-    def _copy(self, module : INetModule, shareParams : bool):
+    def _copyMembers(self, module : INetModule, shareParams : bool):
         pass;
+
+
+    def _copyParams(self, module : INetModule, shareParams : bool):
+        if shareParams:
+            module.params = [p for p in self.params];
+        else:
+            module.params = [np.copy(p) for p in self.params];
+
+
+    def _copyGrads(self, module : INetModule, shareParams : bool):
+        module.grads = [np.zeros_like(g) for g in self.grads];
 
 
     def reset(self):
@@ -264,13 +275,10 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
 
     def copy(self, shareParams : bool = False) -> INetModule:
         module = copy.copy(self);
-        self._copy(module, shareParams);
 
-        if shareParams:
-            module.params = [p for p in self.params];
-        else:
-            module.params = [np.copy(p) for p in self.params];
-        module.grads = [np.zeros_like(g) for g in self.grads];
+        self._copyMembers(module, shareParams);
+        self._copyParams(module, shareParams);
+        self._copyGrads(module, shareParams);
 
         return module;
 
@@ -321,20 +329,20 @@ class AggregateNetModule(NetModuleBase, metaclass = abc.ABCMeta):
             m.reset();
 
 
-    def _copy(self, module : INetModule, shareParams : bool):
-        module._modules = [m.copy(True) for m in self.modules];
+    def _copyMembers(self, module : INetModule, shareParams : bool):
+        module._modules = [m.copy(shareParams) for m in self.modules];
 
 
-    def copy(self, shareParams : bool = False) -> INetModule:
-        module = super().copy(shareParams);
+    def _copyParams(self, module : INetModule, shareParams : bool):
+        module._params = [];
+        for m in module.modules:
+            module.params.extend(m.params);
 
-        module.params.clear();
-        module.grads.clear();
-        for m in modules:
-            self._params.extend(m.params);
-            self._grads.extend(m.grads);
 
-        return module;
+    def _copyGrads(self, module : NetModuleBase, shareParams : bool):
+        module._grads = [];
+        for m in module.modules:
+            module.grads.extend(m.grads);
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
@@ -2742,7 +2750,7 @@ class RepeatedWrapper(NetModuleBase):
             m.reset();
 
 
-    def _copy(self, module : INetModule, shareParams : bool):
+    def _copyMembers(self, module : INetModule, shareParams : bool):
         raise NotImplemented();
 
 
