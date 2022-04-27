@@ -650,6 +650,38 @@ class ReshapeLayer(NetModuleBase):
         return tuple(dX);
 
 
+class FlattenLayer(NetModuleBase):
+    def __init__(self):
+        super().__init__();
+
+        self._shapes = [];
+        self._name = "Flatten";
+
+
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
+        self._shapes.clear();
+        output : List[np.ndarray] = [];
+
+        for X in data:
+            self._shapes.append(X.shape);
+
+            if X.ndim > 1:
+                output.append(np.reshape(X, (len(X), -1)));
+            else:
+                output.append(X);
+
+        return tuple(output);
+
+
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray]:
+        dX : List[np.ndarray] = [];
+
+        for dY, shape in zip(dout, self._shapes):
+            dX.append(np.reshape(dY, shape));
+
+        return tuple(dX);
+
+
 class AffineLayer(NetModuleBase):
     def __init__(self, inputSize : int, outputSize : int, includeBias : bool = True, W : np.ndarray = None, b : np.ndarray = None):
         super().__init__();
