@@ -7,7 +7,7 @@ import collections;
 
 import matplotlib.pyplot as plt;
 
-from typing import Union, List, Tuple, Callable, Any, Optional, Iterable;
+from typing import Union, List, Tuple, Callable, Any, Optional, Iterable, Generator;
 from Functions import *;
 
 
@@ -2806,6 +2806,26 @@ class RepeatedWrapper(NetModuleBase):
             self._grads[i] += module.grads[i];
 
         return dX;
+
+
+class GeneratorDataIterator(IDataIterator):
+    def __init__(self, generator : Generator, epochSize : int):
+        self._generator = generator;
+        self._epochSize = epochSize;
+
+
+    def _iterate(self):
+        for _ in range(self._epochSize):
+            yield next(self._generator);
+
+
+    def __iter__(self):
+        return self._iterate();
+
+
+    @property
+    def totalIterations(self) -> int:
+        return self._epochSize;
 
 
 class SequentialDataIterator(IDataIterator):
