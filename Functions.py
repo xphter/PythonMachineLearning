@@ -41,17 +41,35 @@ def lengthExceptLastDimension(X : np.ndarray):
     return X.size // X.shape[-1] if X.ndim > 2 else len(X);
 
 
-def meanSquareError(Y, T):
+def meanSquareError(Y : np.ndarray, T : np.ndarray):
+    if Y.shape != T.shape:
+        raise ValueError("the shapes is not same.");
+
     return float(np.sum(np.square(Y - T))) / (2 * lengthExceptLastDimension(T));
 
 
-def meanAbsoluteError(Y, T):
+def meanAbsoluteError(Y : np.ndarray, T : np.ndarray):
+    if Y.shape != T.shape:
+        raise ValueError("the shapes is not same.");
+
     return float(np.sum(np.abs(Y - T))) / lengthExceptLastDimension(T);
 
 
 # Y and T has the same shape
 def crossEntropyError(Y : np.ndarray, T : np.ndarray, epsilon : float = 1e-8) -> float:
+    if Y.shape != T.shape:
+        raise ValueError("the shapes is not same.");
+
     return float(np.sum(-(T * np.log(Y + epsilon)))) / lengthExceptLastDimension(T);
+
+
+def getDropoutMask(inputs : np.ndarray, dropoutRatio : float):
+    if dropoutRatio == 0:
+        return np.ones_like(inputs);
+    if dropoutRatio == 1:
+        return np.zeros_like(inputs);
+    else:
+        return (np.random.rand(*inputs.shape) > dropoutRatio).astype(inputs.dtype);
 
 
 # T was used as a 1-D index array
