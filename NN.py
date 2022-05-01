@@ -1192,8 +1192,11 @@ class RnnLayer(NetModuleBase):
         self._H = H;
 
 
+'''
+dropout mechanism: https://arxiv.org/abs/1603.05118 <Recurrent Dropout without Memory Loss>
+'''
 class LstmCell(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None):
+    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, inputDropout : float = 0, recurrentDropout : float = 0):
         super().__init__();
 
         self._X, self._H, self._C = None, None, None;
@@ -1206,6 +1209,10 @@ class LstmCell(NetModuleBase):
         self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 4 * outputSize).astype(defaultDType) if Wx is None else Wx;
         self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 4 * outputSize).astype(defaultDType) if Wh is None else Wh;
         self._bias = np.zeros(4 * outputSize, dtype = defaultDType) if b is None else b;
+        self._inputDropout = inputDropout;
+        self._recurrentDropout = recurrentDropout;
+        self._inputDropoutMask = None;
+        self._recurrentDropoutMask = None;
 
         weights = [self._weightX, self._weightH, self._bias];
         self._params.extend(weights);
@@ -1214,6 +1221,11 @@ class LstmCell(NetModuleBase):
 
     def _setParams(self, value: List[np.ndarray]):
         self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
+
+
+    def _reset(self):
+        self.setInputDropoutMask();
+        self.setRecurrentDropoutMask();
 
 
     @property
@@ -1234,11 +1246,22 @@ class LstmCell(NetModuleBase):
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
         self._X, self._H, self._C = data;
 
-        A = self._X @ self._weightX + self._H @ self._weightH + self._bias;
+        if self._inputDropoutMask is None:
+            self._inputDropoutMask = getDropoutMask(self._H, self._inputDropout);
+        if self._recurrentDropoutMask is None:
+            self._recurrentDropoutMask = getDropoutMask(self._C, self._recurrentDropout);
+
+        if self.isTrainingMode:
+            A = self._X @ self._weightX + (self._inputDropoutMask * self._H) @ self._weightH + self._bias;
+        else:
+            A = self._X @ self._weightX + ((1 - self._inputDropout) * self._H) @ self._weightH + self._bias;
         self._F, self._G, self._I, self._O = tuple(np.hsplit(A, 4));
         self._F, self._G, self._I, self._O = sigmoid(self._F), tanh(self._G), sigmoid(self._I), sigmoid(self._O);
 
-        self._YC = self._C * self._F + self._G * self._I;
+        if self.isTrainingMode:
+            self._YC = self._C * self._F + self._recurrentDropoutMask * self._G * self._I;
+        else:
+            self._YC = self._C * self._F + (1 - self._recurrentDropout) * self._G * self._I;
         self._tanhYC = tanh(self._YC);
         self._YH = self._tanhYC * self._O;
 
@@ -1249,7 +1272,7 @@ class LstmCell(NetModuleBase):
         dYH, dYC = dout;
 
         dYC += dYH * self._O * tanhGradient(self._tanhYC);
-        dF, dG, dI, dO = dYC * self._C, dYC * self._I, dYC * self._G, dYH * self._tanhYC;
+        dF, dG, dI, dO = dYC * self._C, dYC * self._I * self._recurrentDropoutMask, dYC * self._G * self._recurrentDropoutMask, dYH * self._tanhYC;
         dF *= sigmoidGradient(self._F);
         dG *= tanhGradient(self._G);
         dI *= sigmoidGradient(self._I);
@@ -1257,11 +1280,11 @@ class LstmCell(NetModuleBase):
         dA = np.hstack((dF, dG, dI, dO));
 
         dWx = self._X.T @ dA;
-        dWh = self._H.T @ dA;
+        dWh = (self._inputDropoutMask * self._H).T @ dA;
         db = np.sum(dA, axis = 0);
 
         dX = dA @ self._weightX.T;
-        dH = dA @ self._weightH.T;
+        dH = (dA @ self._weightH.T) * self._inputDropoutMask;
         dC = dYC * self._F;
 
         self._grads[0][...] = dWx;
@@ -1271,8 +1294,16 @@ class LstmCell(NetModuleBase):
         return dX, dH, dC;
 
 
+    def setInputDropoutMask(self, mask : np.ndarray = None):
+        self._inputDropoutMask = mask;
+
+
+    def setRecurrentDropoutMask(self, mask : np.ndarray = None):
+        self._recurrentDropoutMask = mask;
+
+
 class LstmLayer(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, dropoutRatio : float = 0.0):
+    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, inputDropout : float = 0, recurrentDropout : float = 0):
         super().__init__();
 
         self._T = 0;
@@ -1284,7 +1315,6 @@ class LstmLayer(NetModuleBase):
         self._stateful = stateful;
         self._stepwise = stepwise;
         self._stepIndex = 0;
-        self._dropoutRatio = max(0.0, min(1.0, dropoutRatio));
         self._inputSize = inputSize;
         self._outputSize = outputSize;
         self._name = f"LSTM {inputSize}*{outputSize}";
@@ -1292,12 +1322,26 @@ class LstmLayer(NetModuleBase):
         self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 4 * outputSize).astype(defaultDType) if Wx is None else Wx;
         self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 4 * outputSize).astype(defaultDType) if Wh is None else Wh;
         self._bias = np.zeros(4 * outputSize, dtype = defaultDType) if b is None else b;
+        self._inputDropout = inputDropout;
+        self._recurrentDropout = recurrentDropout;
+        self._inputDropoutMask = None;
+        self._recurrentDropoutMask = None;
         self._lstmModules : List[LstmCell] = [];
-        self._dropoutModule = (VariationalDropoutLayer(self._dropoutRatio) if not self._stepwise else DropoutLayer(self._dropoutRatio, True)) if self._dropoutRatio > 0 else None;
+
 
         weights = [self._weightX, self._weightH, self._bias];
         self._params.extend(weights);
         self._grads.extend([np.zeros_like(w) for w in weights]);
+
+
+    def _setTrainingMode(self, value: bool):
+        for cell in self._lstmModules:
+            cell.isTrainingMode = value;
+
+
+    def _setTrainingEpoch(self, value : int):
+        for cell in self._lstmModules:
+            cell.trainingEpoch = value;
 
 
     def _setParams(self, value: List[np.ndarray]):
@@ -1306,14 +1350,9 @@ class LstmLayer(NetModuleBase):
             cell.params = value;
 
 
-    def _setTrainingMode(self, value : bool):
-        if self._dropoutModule is not None:
-            self._dropoutModule.isTrainingMode = value;
-
-
-    def _setTrainingEpoch(self, value : int):
-        if self._dropoutModule is not None:
-            self._dropoutModule.trainingEpoch = value;
+    def _reset(self):
+        for cell in self._lstmModules:
+            cell.reset();
 
 
     def _getInputState(self, *data: np.ndarray):
@@ -1321,6 +1360,15 @@ class LstmLayer(NetModuleBase):
             return True, data[1], data[2];
         else:
             return False, None, None;
+
+
+    def _createCell(self) -> LstmCell:
+        cell = LstmCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias, inputDropout = self._inputDropout, recurrentDropout = self._recurrentDropout);
+        cell.isTrainingMode = self.isTrainingMode;
+        cell.trainingEpoch = self.trainingEpoch;
+        cell.setInputDropoutMask(self._inputDropoutMask);
+        cell.setRecurrentDropoutMask(self._recurrentDropoutMask);
+        return cell;
 
 
     def _forwardStep(self, t : int, *data : np.ndarray):
@@ -1403,8 +1451,18 @@ class LstmLayer(NetModuleBase):
             if not self._stateful or self._C is None:
                 self._C = np.zeros((N, self._outputSize), dtype = X.dtype);
 
-            if self._dropoutModule is not None:
-                self._dropoutModule.clearMask();
+            # only used in unit test!
+            # if self._inputDropoutMask is None:
+            #     self._inputDropoutMask = getDropoutMask(self._H, self._inputDropout);
+            # if self._recurrentDropoutMask is None:
+            #     self._recurrentDropoutMask = getDropoutMask(self._C, self._recurrentDropout);
+
+            self._inputDropoutMask = getDropoutMask(self._H, self._inputDropout);
+            self._recurrentDropoutMask = getDropoutMask(self._C, self._recurrentDropout);
+
+            for cell in self._lstmModules:
+                cell.setInputDropoutMask(self._inputDropoutMask);
+                cell.setRecurrentDropoutMask(self._recurrentDropoutMask);
 
         self._inputState, H, C = self._getInputState(*data);
         if self._inputState:
@@ -1414,23 +1472,20 @@ class LstmLayer(NetModuleBase):
         if not self._stepwise:
             self._T = T = X.shape[1];
 
-            if len(self._lstmModules) != T:
-                self._lstmModules = [LstmCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias) for _ in range(T)];
+            if len(self._lstmModules) < T:
+                self._lstmModules.extend([self._createCell() for _ in range(T - len(self._lstmModules))]);
 
             Y = self._forwardAll(*data);
             if not self._returnSequences:
                 Y = Y[:, -1];
         else:
             while len(self._lstmModules) < self._stepIndex + 1:
-                self._lstmModules.append(LstmCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias));
+                self._lstmModules.append(self._createCell());
 
             self._forwardStep(self._stepIndex, *data);
             self._stepIndex += 1;
 
             Y = self._H;
-
-        if self._dropoutModule is not None:
-            Y = self._dropoutModule.forward(Y)[0];
 
         return (Y, self._H, self._C) if self._returnState else (Y, );
 
@@ -1445,9 +1500,6 @@ class LstmLayer(NetModuleBase):
             self._dC = np.zeros_like(self._H);
             # for i in range(len(self._grads)):
             #     self._grads[i][...] = 0;
-
-        if self._dropoutModule is not None:
-            dY = self._dropoutModule.backward(dY)[0];
 
         if self._returnState:
             self._dH += dout[1];
@@ -1486,9 +1538,25 @@ class LstmLayer(NetModuleBase):
             self._stepIndex = 0;
 
 
+    # only used in unit test!
+    def setInputDropoutMask(self, mask : np.ndarray = None):
+        self._inputDropoutMask = mask;
+
+        for cell in self._lstmModules:
+            cell.setInputDropoutMask(self._inputDropoutMask);
+
+
+    # only used in unit test!
+    def setRecurrentDropoutMask(self, mask : np.ndarray = None):
+        self._recurrentDropoutMask = mask;
+
+        for cell in self._lstmModules:
+            cell.setRecurrentDropoutMask(self._recurrentDropoutMask);
+
+
 class BahdanauAttentionLstmLayer(LstmLayer):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, Wq : np.ndarray = None, Wk : np.ndarray = None, wv : np.ndarray = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, dropoutRatio : float = 0.0):
-        super().__init__(outputSize + inputSize, outputSize, Wx, Wh, b, returnSequences, returnState, stateful, stepwise, dropoutRatio);
+    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, Wq : np.ndarray = None, Wk : np.ndarray = None, wv : np.ndarray = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, inputDropout : float = 0, recurrentDropout : float = 0):
+        super().__init__(outputSize + inputSize, outputSize, Wx, Wh, b, returnSequences, returnState, stateful, stepwise, inputDropout, recurrentDropout);
 
         self._shapeK = None;
         self._attentionWeight = None;
@@ -1504,6 +1572,20 @@ class BahdanauAttentionLstmLayer(LstmLayer):
         self._grads.extend([np.zeros_like(w) for w in weights]);
 
 
+    def _setTrainingMode(self, value: bool):
+        super()._setTrainingMode(value);
+
+        for m in self._attentionModules:
+            m.isTrainingMode = value;
+
+
+    def _setTrainingEpoch(self, value : int):
+        super()._setTrainingEpoch(value);
+
+        for m in self._attentionModules:
+            m.trainingEpoch = value;
+
+
     def _setParams(self, value: List[np.ndarray]):
         self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
         self._weightQ, self._weightK, self._weightV = value[3], value[4], value[5];
@@ -1511,8 +1593,15 @@ class BahdanauAttentionLstmLayer(LstmLayer):
         for cell in self._lstmModules:
             cell.params = (self._weightX, self._weightH, self._bias);
 
-        for cell in self._attentionModules:
-            cell.params = (self._weightQ, self._weightK, self._weightV);
+        for m in self._attentionModules:
+            m.params = (self._weightQ, self._weightK, self._weightV);
+
+
+    def _reset(self):
+        super()._reset();
+
+        for m in self._attentionModules:
+            m.reset();
 
 
     def _getInputState(self, *data: np.ndarray):
@@ -1520,6 +1609,13 @@ class BahdanauAttentionLstmLayer(LstmLayer):
             return True, data[2], data[3];
         else:
             return False, None, None;
+
+
+    def _createAttention(self):
+        layer = QKVAttentionLayer(AdditiveAttentionWeight1TModule(self._outputSize, self._outputSize, self._outputSize, Wq = self._weightQ, Wk = self._weightK, wv = self._weightV), SelectByWeight1TModule());
+        layer.isTrainingMode = self.isTrainingMode;
+        layer.trainingEpoch = self.trainingEpoch;
+        return layer;
 
 
     def _forwardStep(self, t : int, *data : np.ndarray):
@@ -1586,11 +1682,11 @@ class BahdanauAttentionLstmLayer(LstmLayer):
         if not self._stepwise:
             T = X.shape[1];
 
-            if len(self._attentionModules) != T:
-                self._attentionModules = [QKVAttentionLayer(AdditiveAttentionWeight1TModule(self._outputSize, self._outputSize, self._outputSize, Wq = self._weightQ, Wk = self._weightK, wv = self._weightV), SelectByWeight1TModule()) for _ in range(T)];
+            if len(self._attentionModules) < T:
+                self._attentionModules = [self._createAttention() for _ in range(T - len(self._attentionModules))];
         else:
             while len(self._attentionModules) < self._stepIndex + 1:
-                self._attentionModules.append(QKVAttentionLayer(AdditiveAttentionWeight1TModule(self._outputSize, self._outputSize, self._outputSize, Wq = self._weightQ, Wk = self._weightK, wv = self._weightV), SelectByWeight1TModule()));
+                self._attentionModules.append(self._createAttention());
 
         return super().forward(*data);
 
