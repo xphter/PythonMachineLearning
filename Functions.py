@@ -1,5 +1,5 @@
 from ImportNumpy import *;
-from typing import Callable, Tuple;
+from typing import Callable, Tuple, List;
 
 
 def sigmoid(X : np.ndarray) -> np.ndarray:
@@ -153,10 +153,19 @@ def convOutputSize(inputSize : int, filterSize : int, stride : int = 1, pad : in
     return (inputSize + 2 * pad - filterSize) // stride + 1;
 
 
-def convert2OneHot(X : np.ndarray, size : int) -> np.ndarray:
-    Y = np.zeros((X.size, size), dtype = X.dtype);
+# expand elements of last axis to a one-hot vector
+def expand2OneHot(X : np.ndarray, size : int, dtype = np.float64) -> np.ndarray:
+    Y = np.zeros((X.size, size), dtype = dtype);
     Y[list(range(X.size)), X.flatten().tolist()] = 1;
     return Y.reshape(X.shape + (size,));
+
+
+# change list of last axis to a one-hot vector
+def list2OneHot(X : List[List[int]], size : int, dtype = np.float64) -> np.ndarray:
+    Y = np.zeros((len(X), size));
+    for i, x in enumerate(X):
+        Y[i, x] = 1;
+    return Y;
 
 
 def npAddAt(X : np.ndarray, indices, Y : np.ndarray):
