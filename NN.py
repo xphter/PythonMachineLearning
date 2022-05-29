@@ -72,6 +72,12 @@ class INetAccuracyEvaluator(metaclass = abc.ABCMeta):
 
     @property
     @abc.abstractmethod
+    def high(self) -> bool:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
     def accuracy(self) -> Optional[float]:
         pass;
 
@@ -2958,17 +2964,18 @@ class SequentialDataIterator(IDataIterator):
 
 
 class PartitionedDataIterator(IDataIterator):
-    def __init__(self, data : List[np.ndarray], batchSize : int, stepSize : int, shuffle : bool = False):
+    def __init__(self, data : List[np.ndarray], batchSize : int, stepSize : int, shuffle : bool = False, randomOffset : bool = True):
         self._data = data;
         self._length = len(data[0]);
         self._batchSize = batchSize;
         self._stepSize = stepSize;
         self._totalIterations = 1;
         self._shuffle = shuffle;
+        self._randomOffset = randomOffset;
 
 
     def _sequentialSample(self):
-        offset = int(np.random.randint(0, self._stepSize));
+        offset = int(np.random.randint(0, self._stepSize)) if self._randomOffset else 0;
         totalLength = ((self._length - offset) // self._batchSize) * self._batchSize;
         data = [d[offset: offset + totalLength].reshape((self._batchSize, -1) + d.shape[1:]) for d in self._data];
         self._totalIterations = data[0].shape[1] // self._stepSize
@@ -2978,7 +2985,7 @@ class PartitionedDataIterator(IDataIterator):
 
 
     def _randomSample(self):
-        offset = int(np.random.randint(0, self._stepSize));
+        offset = int(np.random.randint(0, self._stepSize)) if self._randomOffset else 0;
         data = [d[offset:] for d in self._data];
         subIdx = list(range(0, ((self._length - offset) // self._stepSize) * self._stepSize, self._stepSize));
         self._totalIterations = len(subIdx) // self._batchSize;
@@ -3010,6 +3017,11 @@ class RegressionAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     @property
+    def high(self) -> bool:
+        return False;
+
+
+    @property
     def accuracy(self) -> Optional[float]:
         # return math.sqrt(self._rss / self._totalCount) if self._totalCount > 0 else None;
         return (self._rss / self._totalCount) if self._totalCount > 0 else None;
@@ -3032,14 +3044,20 @@ class RegressionAccuracyEvaluator(INetAccuracyEvaluator):
 
 
 class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
-    def __init__(self):
+    def __init__(self, sigmoid4BinaryClass : bool = True):
         self._rightCount = 0.0;
         self._totalCount = 0.0;
+        self._sigmoid4BinaryClass = sigmoid4BinaryClass;
 
 
     @property
     def name(self) -> str:
         return "Classification Accuracy";
+
+
+    @property
+    def high(self) -> bool:
+        return True;
 
 
     @property
@@ -3053,7 +3071,17 @@ class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
 
     def update(self, *data: np.ndarray):
         Y, T = data;
-        self._rightCount += int(np.sum(np.argmax(Y, -1) == np.argmax(T, -1)));
+        if Y.shape[-1] == 1:
+            if self._sigmoid4BinaryClass:
+                Y = sigmoid(Y);
+
+            Y = np.column_stack((Y, 1 - Y));
+            T = np.column_stack((T, 1 - T));
+
+        if T.ndim > 1:
+            self._rightCount += int(np.sum(np.argmax(Y, axis = -1) == np.argmax(T, axis = -1)));
+        else:
+            self._rightCount += int(np.sum(np.argmax(Y, axis = -1) == T));
         self._totalCount += Y.size / Y.shape[-1];
 
 
@@ -3070,6 +3098,11 @@ class PerplexityAccuracyEvaluator(INetAccuracyEvaluator):
     @property
     def name(self) -> str:
         return "Perplexity";
+
+
+    @property
+    def high(self) -> bool:
+        return False;
 
 
     @property
