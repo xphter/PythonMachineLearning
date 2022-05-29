@@ -171,9 +171,14 @@ class INetModel(INetModule, metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
+    def eval(self, lossFunc: INetLoss, evaluator: INetAccuracyEvaluator, lossValues: List[float] = None, iterator: Iterable = None) -> Tuple[float, float]:
+        pass;
+
+
+    @abc.abstractmethod
     def fit(self, trainingIterator : IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch : int, testIterator : IDataIterator = None,
             evaluator: INetAccuracyEvaluator = None, evalEpoch : bool = True, evalIterations : int = None, evalTrainingData : bool = False, evalTestData : bool = True,
-            plot = False):
+            minEpoch : int = None, plot = False) -> Tuple[List[float], List[float], List[float], List[float]]:
         pass;
 
 
@@ -374,7 +379,11 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         super().__init__(*modules);
 
 
-    def _calcAccuracy(self, lossFunc : INetLoss, optimizer : INetOptimizer, evaluator : INetAccuracyEvaluator, lossValues : List[float] = None, iterator : Iterable = None) -> float:
+    def getFinalTag(self, T : np.ndarray) -> np.ndarray:
+        return T;
+
+
+    def eval(self, lossFunc : INetLoss, evaluator : INetAccuracyEvaluator, lossValues : List[float] = None, iterator : Iterable = None) -> Tuple[float, float]:
         self.isTrainingMode = False;
 
         try:
@@ -385,75 +394,92 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
                 for data in iterator:
                     Y = self.forward(*data);
-                    loss = lossFunc.forward(*Y, self.getFinalTag(data[-1]));
+                    T = self.getFinalTag(data[-1]);
+                    loss = lossFunc.forward(*Y, T);
 
                     lossValues.append(loss);
-                    evaluator.update(*Y, self.getFinalTag(data[-1]));
+                    evaluator.update(*Y, T);
 
                 evaluator.fromLoss(lossValues);
         finally:
             self.reset();
             self.isTrainingMode = True;
 
-        return evaluator.accuracy;
-
-
-    def getFinalTag(self, T : np.ndarray) -> np.ndarray:
-        return T;
+        return sum(lossValues) / len(lossValues), evaluator.accuracy;
 
 
     def fit(self, trainingIterator: IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch: int, testIterator: IDataIterator = None,
             evaluator: INetAccuracyEvaluator = None, evalEpoch: bool = True, evalIterations: int = None, evalTrainingData: bool = False, evalTestData: bool = True,
-            plot = False):
-        lossData = [];
+            minEpoch : int = None, plot = False) -> Tuple[List[float], List[float], List[float], List[float]]:
         lossValues = [];
+        trainingLossData = [];
         trainingAccuracyData = [];
+        testLossData = [];
         testAccuracyData = [];
+        paramsData = [];
 
         startTime = time.time();
         print(f"[{datetime.datetime.now()}] start to train model {self}");
 
         for epoch in range(maxEpoch):
             lossValues.clear();
+            if evaluator is not None:
+                evaluator.reset();
+
             self.isTrainingMode = True;
             self.trainingEpoch = epoch;
 
             for data in trainingIterator:
                 Y = self.forward(*data);
-                loss = lossFunc.forward(*Y, self.getFinalTag(data[-1]));
+                T = self.getFinalTag(data[-1]);
+                loss = lossFunc.forward(*Y, T);
+
                 lossValues.append(loss);
+                if evaluator is not None:
+                    evaluator.update(*Y, T);
 
                 self.backward(*lossFunc.backward());
                 optimizer.update(self.params, self.grads);
                 self.clearGrads();
 
                 if evaluator is not None and evalIterations is not None and len(lossValues) % evalIterations == 0:
-                    accuracy = self._calcAccuracy(lossFunc, optimizer, evaluator, lossValues[-evalIterations:], None);
+                    loss, accuracy = self.eval(lossFunc, evaluator, lossValues[-evalIterations:], None);
                     if accuracy is not None:
-                        print(f"epoch {epoch}, iterations: {len(lossValues)} / {trainingIterator.totalIterations}, elapsed time: {int(time.time() - startTime)}s, training {evaluator.name}: {accuracy}");
+                        print(f"epoch {epoch}, iterations: {len(lossValues)} / {trainingIterator.totalIterations}, training loss: {loss}, training {evaluator.name}: {accuracy}, elapsed time: {int(time.time() - startTime)}s");
 
             self.reset();
-            lossData.append(sum(lossValues) / len(lossValues));
+            trainingLossData.append(sum(lossValues) / len(lossValues));
+            if evaluator is not None:
+                trainingAccuracyData.append(evaluator.accuracy);
 
             if evaluator is not None and evalEpoch:
                 if evalTrainingData:
                     print("evaluating training data...");
-                    trainingAccuracyData.append(self._calcAccuracy(lossFunc, optimizer, evaluator, lossValues, trainingIterator));
+                    loss, accuracy = self.eval(lossFunc, evaluator, lossValues, trainingIterator);
+                    trainingLossData[-1] = loss;
+                    trainingAccuracyData[-1] = accuracy;
                 if testIterator is not None and evalTestData:
                     print("evaluating test data...");
-                    testAccuracyData.append(self._calcAccuracy(lossFunc, optimizer, evaluator, None, testIterator,));
+                    loss, accuracy = self.eval(lossFunc, evaluator, None, testIterator);
+                    testLossData.append(loss);
+                    testAccuracyData.append(accuracy);
+                    paramsData.append([np.copy(p) for p in self.params]);
 
             trainingMessage = f", training {evaluator.name}: {trainingAccuracyData[-1]}" if len(trainingAccuracyData) > 0 else "";
-            testMessage = f", test {evaluator.name}: {testAccuracyData[-1]}" if len(testAccuracyData) > 0 else "";
-            print(f"epoch {epoch}, average loss: {lossData[-1]}{trainingMessage}{testMessage}, elapsed time: {int(time.time() - startTime)}s");
+            testMessage = f", test loss: {testLossData[-1]}, test {evaluator.name}: {testAccuracyData[-1]}" if len(testAccuracyData) > 0 else "";
+            print(f"epoch {epoch}, training loss: {trainingLossData[-1]}{trainingMessage}{testMessage}, elapsed time: {int(time.time() - startTime)}s");
+
+        if minEpoch is not None and len(paramsData) > 0:
+            index = np.argmax(testAccuracyData[minEpoch:]) if evaluator.high else np.argmin(testAccuracyData[minEpoch:]);
+            self.params = paramsData[minEpoch + int(index)];
 
         if evaluator is not None:
             print("evaluating final training data...");
-            print(f"the final training {evaluator.name} is {self._calcAccuracy(lossFunc, optimizer, evaluator, None, trainingIterator)}");
+            print(f"the final training {evaluator.name} is {self.eval(lossFunc, evaluator, None, trainingIterator)[1]}");
 
             if testIterator is not None:
                 print("evaluating final test data...");
-                print(f"the final test {evaluator.name} is {self._calcAccuracy(lossFunc, optimizer, evaluator, None, testIterator)}");
+                print(f"the final test {evaluator.name} is {self.eval(lossFunc, evaluator, None, testIterator)[1]}");
 
         self.isTrainingMode = False;
         print(f"[{datetime.datetime.now()}] complete to train model, elapsed time: {int(time.time() - startTime)}s");
@@ -464,18 +490,22 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
             ax1 = fig.add_subplot(111);
             ax1.set_xlabel("epoch");
             ax1.set_ylabel('loss');
-            ax1.plot(lossData, "o-k", label = "loss");
+            ax1.plot(trainingLossData, "o-k", label = "training loss");
+            if len(testLossData) > 0:
+                ax1.plot(testLossData, "o-b", label = "test loss");
 
             ax2 = ax1.twinx();
             ax2.set_ylabel('accuracy');
             if len(trainingAccuracyData) > 0:
-                ax2.plot(trainingAccuracyData, "D-b", label = "training accuracy");
+                ax2.plot(trainingAccuracyData, "D-m", label = f"training {evaluator.name}");
             if len(testAccuracyData) > 0:
-                ax2.plot(testAccuracyData, "s-r", label = "test accuracy");
+                ax2.plot(testAccuracyData, "D-r", label = f"test {evaluator.name}");
 
-            fig.legend(loc = "upper right", bbox_to_anchor = (1, 1), bbox_transform = ax1.transAxes)
+            fig.legend(loc = "upper left", bbox_to_anchor = (0, 1), bbox_transform = ax1.transAxes)
             plt.show(block = True);
             plt.close();
+
+        return trainingLossData, trainingAccuracyData, testLossData, testAccuracyData;
 
 
     def predict(self, iterator : IDataIterator) -> Iterable:
