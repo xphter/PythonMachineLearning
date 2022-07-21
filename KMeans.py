@@ -80,8 +80,6 @@ class KMeans:
             indices.remove(index[0]);
             center[i] = X[index];
 
-        print("the initial {0} centers are:\r\n{1}\r\n".format(k, center));
-
         return center;
 
 
@@ -108,7 +106,7 @@ class KMeans:
 
 
     # return value: (index, distance, center)
-    def clustering(self, X : np.ndarray, k : int, iterationCount : int = None) -> (np.ndarray, np.ndarray, np.ndarray):
+    def clustering(self, X : np.ndarray, k : int, iterationCount : int = None, verbose : bool = False) -> (np.ndarray, np.ndarray, np.ndarray):
         if X is None:
             raise ValueError("X is None");
         if X.ndim != 2:
@@ -121,6 +119,9 @@ class KMeans:
         previousIndex, currentIndex, distance = None, None, None;
         center = self._initialCenterSelector(X, k);
 
+        if verbose:
+            print("the initial {0} centers are:\n{1}\r\n".format(k, center));
+
         while (iterationCount is None or iterationCount is not None and count < iterationCount) and \
                 (previousIndex is None or np.any(currentIndex != previousIndex)):
             previousIndex = currentIndex;
@@ -132,7 +133,8 @@ class KMeans:
 
         # diameter = np.mat([self._calcClusterDiameter(X[(currentIndex == i).A.flatten(), :]) for i in range(0, center.shape[0])]).T;
 
-        print("the final {0} centers are:\r\n{1}\r\n".format(k, center));
+        if verbose:
+            print("the final {0} centers are:\n{1}\n".format(k, center));
 
         return currentIndex, distance, center;
 
