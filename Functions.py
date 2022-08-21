@@ -11,6 +11,18 @@ def sigmoidGradient(Y : np.ndarray) -> np.ndarray:
     return Y * (1.0 - Y);
 
 
+def hardSigmoid(X : np.ndarray) -> np.ndarray:
+    return np.maximum(np.minimum(0.25 * X + 0.5, 1.0), 0.0);
+
+
+# Y = hardSigmoid(X)
+def hardSigmoidGradient(Y : np.ndarray) -> np.ndarray:
+    G = np.zeros_like(Y);
+    G[np.logical_and(Y > 0, Y < 1)] = 0.25;
+
+    return G;
+
+
 def tanh(X : np.ndarray) -> np.ndarray:
     return 2.0 * sigmoid(2.0 * X) - 1.0;
 
@@ -18,6 +30,18 @@ def tanh(X : np.ndarray) -> np.ndarray:
 # Y = tanh(X)
 def tanhGradient(Y : np.ndarray) -> np.ndarray:
     return 1.0 - Y ** 2;
+
+
+def hardTanh(X : np.ndarray) -> np.ndarray:
+    return np.maximum(np.minimum(X, 1.0), -1.0);
+
+
+# Y = hardTanh(X)
+def hardTanhGradient(Y : np.ndarray) -> np.ndarray:
+    G = np.zeros_like(Y);
+    G[np.logical_and(Y > -1, Y < 1)] = 1;
+
+    return G;
 
 
 def relu(X : np.ndarray) -> np.ndarray:
@@ -29,6 +53,21 @@ def reluGradient(X : np.ndarray) -> np.ndarray:
     Y[X > 0] = 1;
 
     return Y;
+
+
+def softplus(X : np.ndarray) -> np.ndarray:
+    return np.log(1 + np.exp(X));
+
+
+# Y = softplus(X)
+def softplusGradient(X : np.ndarray = None, Y : np.ndarray = None) -> np.ndarray:
+    if X is not None:
+        return sigmoid(X);
+    elif Y is not None:
+        Z = np.exp(Y);
+        return (Z - 1) / Z;
+    else:
+        raise ValueError("both X and Y are None");
 
 
 def softmax(X : np.ndarray) -> np.ndarray:
