@@ -299,7 +299,7 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
             g[...] = 0;
 
 
-class AggregateNetModule(NetModuleBase, metaclass = abc.ABCMeta):
+class AggregateNetModule(NetModuleBase):
     def __init__(self, *modules : INetModule):
         super().__init__();
 
@@ -307,6 +307,7 @@ class AggregateNetModule(NetModuleBase, metaclass = abc.ABCMeta):
         for m in modules:
             self._params.extend(m.params);
             self._grads.extend(m.grads);
+        self._name = "  -->  ".join([str(m) for m in modules]);
 
 
     @property
@@ -2563,6 +2564,8 @@ class MinMaxScaler(ScalerBase):
 
 
 class StandardScaler(ScalerBase):
+    INDEX_ARGUMENT_NAME = "index";
+
     def __init__(self):
         super().__init__();
 
@@ -2581,7 +2584,8 @@ class StandardScaler(ScalerBase):
 
 
     def _inverse(self, Y : np.ndarray, *args, **kwargs) -> np.ndarray:
-        return self._sigma * Y + self._mu;
+        index = np.array(kwargs[StandardScaler.INDEX_ARGUMENT_NAME]) if StandardScaler.INDEX_ARGUMENT_NAME in kwargs else None;
+        return self._sigma * Y + self._mu if index is None else self._sigma[index] * Y + self._mu[index];
 
 
 class DiffScaler(ScalerBase):
@@ -2611,7 +2615,6 @@ class DiffScaler(ScalerBase):
 class SequentialContainer(NetModelBase):
     def __init__(self, *modules : INetModule):
         super().__init__(*modules);
-        self._name = "  -->  ".join([str(m) for m in modules]);
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
