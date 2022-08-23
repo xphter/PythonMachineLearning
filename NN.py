@@ -166,7 +166,7 @@ class INetModule(metaclass = abc.ABCMeta):
 
 class INetModel(INetModule, metaclass = abc.ABCMeta):
     @abc.abstractmethod
-    def getFinalTag(self, T : np.ndarray) -> np.ndarray:
+    def getFinalTag(self, T : np.ndarray) -> Optional[np.ndarray]:
         pass;
 
 
@@ -380,7 +380,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         super().__init__(*modules);
 
 
-    def getFinalTag(self, T : np.ndarray) -> np.ndarray:
+    def getFinalTag(self, T : np.ndarray) -> Optional[np.ndarray]:
         return T;
 
 
@@ -396,7 +396,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                 for data in iterator:
                     Y = self.forward(*data);
                     T = self.getFinalTag(data[-1]);
-                    loss = lossFunc.forward(*Y, T);
+                    loss = lossFunc.forward(*Y, T) if T is not None else lossFunc.forward(*Y);
 
                     lossValues.append(loss);
                     evaluator.update(*Y, T);
@@ -433,7 +433,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
             for data in trainingIterator:
                 Y = self.forward(*data);
                 T = self.getFinalTag(data[-1]);
-                loss = lossFunc.forward(*Y, T);
+                loss = lossFunc.forward(*Y, T) if T is not None else lossFunc.forward(*Y);
 
                 lossValues.append(loss);
                 if evaluator is not None:
