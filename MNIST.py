@@ -11,12 +11,12 @@ class MNIST:
     __TEST_LABELS_FILE_NAME = "t10k-labels-idx1-ubyte";
 
 
-    def __init__(self, folderPath : str, flatten : bool = True, normalize : bool = False):
+    def __init__(self, folderPath : str, flatten : bool = False, normalize : bool = True, onehot : bool = False):
         self.__normalize = normalize;
         self.__trainX = self.__loadData(os.path.join(folderPath, MNIST.__TRAIN_DATA_FILE_NAME), flatten, normalize);
         self.__testX = self.__loadData(os.path.join(folderPath, MNIST.__TEST_DATA_FILE_NAME), flatten, normalize);
-        self.__trainY = self.__loadLabels(os.path.join(folderPath, MNIST.__TRAIN_LABELS_FILE_NAME));
-        self.__testY = self.__loadLabels(os.path.join(folderPath, MNIST.__TEST_LABELS_FILE_NAME));
+        self.__trainY = self.__loadLabels(os.path.join(folderPath, MNIST.__TRAIN_LABELS_FILE_NAME), onehot);
+        self.__testY = self.__loadLabels(os.path.join(folderPath, MNIST.__TEST_LABELS_FILE_NAME), onehot);
 
 
     @property
@@ -62,7 +62,7 @@ class MNIST:
         return X;
 
 
-    def __loadLabels(self, path : str) -> np.ndarray:
+    def __loadLabels(self, path : str, onehot : bool) -> np.ndarray:
         if not os.path.isfile(path):
             raise FileNotFoundError(path);
 
@@ -73,7 +73,10 @@ class MNIST:
 
             labels = np.fromfile(file, np.uint8);
 
-        Y = np.zeros((n, 10), dtype = np.int8);
-        Y[list(range(n)), labels] = 1;
+        if onehot:
+            Y = np.zeros((n, 10), dtype = np.int8);
+            Y[list(range(n)), labels] = 1;
 
-        return Y;
+            return Y;
+        else:
+            return labels;
