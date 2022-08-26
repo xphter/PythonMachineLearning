@@ -60,12 +60,11 @@ def softplus(X : np.ndarray) -> np.ndarray:
 
 
 # Y = softplus(X)
-def softplusGradient(X : np.ndarray = None, Y : np.ndarray = None) -> np.ndarray:
-    if X is not None:
+def softplusGradient(Y : np.ndarray = None, X : np.ndarray = None) -> np.ndarray:
+    if Y is not None:
+        return 1 - np.exp(-Y);
+    elif X is not None:
         return sigmoid(X);
-    elif Y is not None:
-        Z = np.exp(Y);
-        return (Z - 1) / Z;
     else:
         raise ValueError("both X and Y are None");
 
@@ -100,6 +99,14 @@ def crossEntropyError(Y : np.ndarray, T : np.ndarray, epsilon : float = 1e-8) ->
         raise ValueError("the shapes is not same.");
 
     return float(np.sum(-(T * np.log(Y + epsilon)))) / lengthExceptLastDimension(T);
+
+
+# Y and T has the same shape
+def logitsCrossEntropyError(Y : np.ndarray, T : np.ndarray) -> float:
+    if Y.shape != T.shape:
+        raise ValueError("the shapes is not same.");
+
+    return float(np.sum(Y * (1 - T) + np.log(1 + np.exp(-Y)))) / lengthExceptLastDimension(T);
 
 
 def getDropoutMask(inputs : np.ndarray, dropoutRatio : float):
