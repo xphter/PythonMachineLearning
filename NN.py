@@ -3179,3 +3179,235 @@ class PerplexityAccuracyEvaluator(INetAccuracyEvaluator):
 
     def reset(self):
         self._perplexity = None;
+
+
+# the output distribution of VAE is Gaussian
+class GaussianVAE(NetModelBase):
+    def __init__(self, encoder: INetModule, decoder: INetModule, latentSize: int, sampleSize: int = 32):
+        super().__init__(encoder, decoder);
+
+        self._name = "GaussianVAE";
+        self._encoder = encoder;
+        self._decoder = decoder;
+        self._latentSize = latentSize;
+        self._sampleSize = sampleSize;
+        self._z0 = None;  # the normal distribution with 0 men
+
+
+    def getFinalTag(self, T: np.ndarray) -> Optional[np.ndarray]:
+        return None;
+
+
+    def encode(self, X : np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        M, V = tuple(np.split(self._encoder.forward(X)[0], 2, axis = -1));
+
+        return M, V;
+
+
+    def reparameterize(self, M : np.ndarray, V : np.ndarray, epsilon : np.ndarray = None) -> np.ndarray:
+        N, L, H = len(M), self._sampleSize, self._latentSize;
+        self._z0 = (np.random.randn(N, L, H).astype(defaultDType) if epsilon is None else epsilon) * np.exp(0.5 * np.expand_dims(V, axis = 1));
+        Z = self._z0 + np.expand_dims(M, axis = 1);
+
+        return Z;
+
+
+    def decode(self, Z : np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        E, U = tuple(np.split(self._decoder.forward(Z)[0], 2, axis = -1));
+
+        return E, U;
+
+
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
+        X, epsilon = data if len(data) > 1 else (data[0], None);
+        M, V = self.encode(X);
+        Z = self.reparameterize(M, V, epsilon = epsilon);
+        E, U = self.decode(Z);
+
+        return X, M, V, E, U;
+
+
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray]:
+        dX, dM, dV, dE, dU = dout;
+
+        dZ = self._decoder.backward(np.concatenate((dE, dU), axis = -1))[0];
+        dM += np.sum(dZ, axis = 1);
+        dV += np.sum(dZ * 0.5 * self._z0, axis = 1);
+        dX += self._encoder.backward(np.concatenate((dM, dV), axis = -1))[0];
+
+        return dX, ;
+
+
+# the output distribution of VAE is Gaussian
+class GaussianVAELoss(NetLossBase):
+    def __init__(self):
+        super().__init__();
+
+        self._X = None;
+        self._M = None;
+        self._V = None;
+        self._E = None;
+        self._U = None;
+
+
+    '''
+    input: X, M, V, E, U
+    Z is the latent variable.
+    X: the input data, N*D
+    M: E(Z|X), N*H
+    V: log(Var(Z|X)), N*H
+    E: E(X|Z), N*L*D
+    U: log(Var(X|Z)), N*L*D
+
+    q(z|x) ～ N(M, diagonal{exp(V)})
+    p(z)   ～ N(0, I)
+    p(x|z) ～ N(E, diagonal{exp(U)})
+    L(x) = KL(q(z|x) || p(z)) - E(log(p(x|z)))
+    '''
+    def forward(self, *data: np.ndarray) -> float:
+        X, M, V, E, U = data;
+        N, L, D = E.shape;
+        H = M.shape[-1];
+
+        self._X, self._M, self._V, self._E, self._U = np.repeat(np.expand_dims(X, axis = 1), L, axis = 1), M, V, E, U;
+
+        kl_loss = M ** 2 + np.exp(V) - V;
+        kl_loss = float(np.sum(kl_loss)) / (2 * N);
+
+        reconstruction_loss = U + (self._X - E) ** 2 / np.exp(U);
+        reconstruction_loss = float(np.sum(reconstruction_loss)) / (2 * L * N);
+
+        self._loss = kl_loss + reconstruction_loss;
+
+        return self._loss;
+
+
+    def backward(self) -> Tuple[np.ndarray]:
+        N, L, D = self._E.shape;
+
+        dX = np.sum((self._X - self._E) / np.exp(self._U), axis = 1) / (N * L);
+        dM = self._M / N;
+        dV = (np.exp(self._V) - 1) / (2 * N);
+        dE = (self._E - self._X) / np.exp(self._U) / (N * L);
+        dU = (1 - (self._X - self._E) ** 2 / np.exp(self._U)) / (2 * N * L);
+
+        return dX, dM, dV, dE, dU;
+
+
+# the output distribution of VAE is Bernoulli
+class BernoulliVAE(NetModelBase):
+    def __init__(self, encoder: INetModule, decoder: INetModule, latentSize: int, sampleSize: int = 32):
+        super().__init__(encoder, decoder);
+
+        self._name = "BernoulliVAE";
+        self._encoder = encoder;
+        self._decoder = decoder;
+        self._latentSize = latentSize;
+        self._sampleSize = sampleSize;
+        self._z0 = None;  # the normal distribution with 0 men
+
+
+    def getFinalTag(self, T: np.ndarray) -> Optional[np.ndarray]:
+        return None;
+
+
+    def encode(self, X : np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        M, V = tuple(np.split(self._encoder.forward(X)[0], 2, axis = -1));
+
+        return M, V;
+
+
+    def reparameterize(self, M : np.ndarray, V : np.ndarray, epsilon : np.ndarray = None) -> np.ndarray:
+        N, L, H = len(M), self._sampleSize, self._latentSize;
+        self._z0 = (np.random.randn(N, L, H).astype(defaultDType) if epsilon is None else epsilon) * np.exp(0.5 * np.expand_dims(V, axis = 1));
+        Z = self._z0 + np.expand_dims(M, axis = 1);
+
+        return Z;
+
+
+    def decode(self, Z : np.ndarray, toProbability : bool = False) -> np.ndarray:
+        Y = self._decoder.forward(Z)[0];
+        if toProbability:
+            Y = sigmoid(Y);
+
+        return Y;
+
+
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
+        X, epsilon = data if len(data) > 1 else (data[0], None);
+        M, V = self.encode(X);
+        Z = self.reparameterize(M, V, epsilon = epsilon);
+        Y = self.decode(Z);
+
+        return X, M, V, Y;
+
+
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray]:
+        dX, dM, dV, dY = dout;
+
+        dZ = self._decoder.backward(dY)[0];
+        dM += np.sum(dZ, axis = 1);
+        dV += np.sum(dZ * 0.5 * self._z0, axis = 1);
+        dX += self._encoder.backward(np.concatenate((dM, dV), axis = -1))[0];
+
+        return dX, ;
+
+
+    def generate(self, X : np.ndarray, L : int) -> np.ndarray:
+        epsilon = np.random.randn(len(X), L, self._latentSize).astype(defaultDType);
+        X, M, V, Y = self.forward(X, epsilon);
+
+        return sigmoid(Y);
+
+
+# the output distribution of VAE is Bernoulli
+class BernoulliVAELoss(NetLossBase):
+    def __init__(self):
+        super().__init__();
+
+        self._X = None;
+        self._M = None;
+        self._V = None;
+        self._Y = None;
+
+
+    '''
+    input: X, M, V, Y
+    Z is the latent variable.
+    X: the input data, N*D
+    M: E(Z|X), N*H
+    V: log(Var(Z|X)), N*H
+    Y: logits, N*L*D
+
+    q(z|x) ～ N(M, diagonal{exp(V)})
+    p(z)   ～ N(0, I)
+    p(x|z) ～ Bin(1, sigmoid(Y))
+    L(x) = KL(q(z|x) || p(z)) - E(log(p(x|z)))
+    '''
+    def forward(self, *data: np.ndarray) -> float:
+        X, M, V, Y = data;
+        N, L, D = Y.shape;
+        H = M.shape[-1];
+
+        self._X, self._M, self._V, self._Y = np.repeat(np.expand_dims(X, axis = 1), L, axis = 1), M, V, Y;
+
+        kl_loss = M ** 2 + np.exp(V) - V;
+        kl_loss = float(np.sum(kl_loss)) / (2 * N);
+
+        reconstruction_loss = (Y * (1 - self._X)) + np.log(1 + np.exp(-Y));
+        reconstruction_loss = float(np.sum(reconstruction_loss)) / (L * N);
+
+        self._loss = kl_loss + reconstruction_loss;
+
+        return self._loss;
+
+
+    def backward(self) -> Tuple[np.ndarray]:
+        N, L, D = self._Y.shape;
+
+        dX = np.sum(-self._Y, axis = 1) / (N * L);
+        dM = self._M / N;
+        dV = (np.exp(self._V) - 1) / (2 * N);
+        dY = (sigmoid(self._Y) - self._X) / (N * L);
+
+        return dX, dM, dV, dY;
