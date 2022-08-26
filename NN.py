@@ -555,6 +555,28 @@ class ReluLayer(NetModuleBase):
         return dX, ;
 
 
+class SoftplusLayer(NetModuleBase):
+    def __init__(self):
+        super().__init__();
+
+        self._Y = None;
+        self._name = "Softplus";
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        X = data[0];
+        self._Y = softplus(X);
+
+        return self._Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
+        dX = dY * softplusGradient(Y = self._Y);
+
+        return dX, ;
+
+
 class SigmoidLayer(NetModuleBase):
     def __init__(self):
         super().__init__();
