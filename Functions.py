@@ -219,3 +219,13 @@ def npAddAt(X : np.ndarray, indices, Y : np.ndarray):
         cpx.scatter_add(X, indices, Y);
     else:
         np.add.at(X, indices, Y);
+
+
+'''
+PS is the scores of positive samples;
+NS is the scores of negative samples;
+'''
+def auc(PS : np.ndarray, NS : np.ndarray):
+    P, N = len(PS), len(NS);
+    ranks = np.argsort(np.concatenate((NS, PS), axis = None), axis = None) + 1;
+    return (float(np.sum(ranks[N:]))  - P * (P + 1) / 2) / (P * N);
