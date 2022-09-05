@@ -3238,6 +3238,24 @@ class GaussianVAE(NetModelBase):
         return dX, ;
 
 
+    def generate(self, X : np.ndarray, L : int = 32) -> Tuple[np.ndarray, np.ndarray]:
+        epsilon = np.random.randn(len(X), L, self._latentSize).astype(defaultDType);
+        X, M, V, E, U = self.forward(X, epsilon);
+
+        return E, U;
+
+
+    def reconstructionProbability(self, X : np.ndarray, L : int = 32) -> np.ndarray:
+        E, U = self.generate(X, L);
+
+        # P = -reconstruction_loss
+        P = -(U + (np.expand_dims(X, axis = 1) - E) ** 2 / np.exp(U));
+        P = np.sum(P, axis = tuple(range(2, len(P.shape))));
+        P = np.mean(P, axis = 1);
+
+        return P;
+
+
 # the output distribution of VAE is Gaussian
 class GaussianVAELoss(NetLossBase):
     def __init__(self):
@@ -3266,8 +3284,7 @@ class GaussianVAELoss(NetLossBase):
     '''
     def forward(self, *data: np.ndarray) -> float:
         X, M, V, E, U = data;
-        N, L, D = E.shape;
-        H = M.shape[-1];
+        N, L = E.shape[: 2];
 
         self._X, self._M, self._V, self._E, self._U = np.repeat(np.expand_dims(X, axis = 1), L, axis = 1), M, V, E, U;
 
@@ -3278,12 +3295,13 @@ class GaussianVAELoss(NetLossBase):
         reconstruction_loss = float(np.sum(reconstruction_loss)) / (2 * L * N);
 
         self._loss = kl_loss + reconstruction_loss;
+        # print(f"kl_loss: {kl_loss}, reconstruction_loss: {reconstruction_loss}");
 
         return self._loss;
 
 
     def backward(self) -> Tuple[np.ndarray]:
-        N, L, D = self._E.shape;
+        N, L = self._E.shape[: 2];
 
         dX = np.sum((self._X - self._E) / np.exp(self._U), axis = 1) / (N * L);
         dM = self._M / N;
@@ -3353,11 +3371,22 @@ class BernoulliVAE(NetModelBase):
         return dX, ;
 
 
-    def generate(self, X : np.ndarray, L : int) -> np.ndarray:
+    def generate(self, X : np.ndarray, L : int = 32, toProbability : bool = True) -> np.ndarray:
         epsilon = np.random.randn(len(X), L, self._latentSize).astype(defaultDType);
         X, M, V, Y = self.forward(X, epsilon);
 
-        return sigmoid(Y);
+        return sigmoid(Y) if toProbability else Y;
+
+
+    def reconstructionProbability(self, X : np.ndarray, L : int = 32) -> np.ndarray:
+        Y = self.generate(X, L, toProbability = False);
+
+        # P = -reconstruction_loss
+        P = -(np.log(1 + np.exp(Y)) - np.expand_dims(X, axis = 1) * Y);
+        P = np.sum(P, axis = tuple(range(2, len(P.shape))));
+        P = np.mean(P, axis = 1);
+
+        return P;
 
 
 # the output distribution of VAE is Bernoulli
@@ -3386,24 +3415,25 @@ class BernoulliVAELoss(NetLossBase):
     '''
     def forward(self, *data: np.ndarray) -> float:
         X, M, V, Y = data;
-        N, L, D = Y.shape;
-        H = M.shape[-1];
+        N, L = Y.shape[: 2];
 
         self._X, self._M, self._V, self._Y = np.repeat(np.expand_dims(X, axis = 1), L, axis = 1), M, V, Y;
 
         kl_loss = M ** 2 + np.exp(V) - V;
         kl_loss = float(np.sum(kl_loss)) / (2 * N);
 
-        reconstruction_loss = (Y * (1 - self._X)) + np.log(1 + np.exp(-Y));
+        # reconstruction_loss = (Y * (1 - self._X)) + np.log(1 + np.exp(-Y));
+        reconstruction_loss = np.log(1 + np.exp(Y)) - self._X * Y;
         reconstruction_loss = float(np.sum(reconstruction_loss)) / (L * N);
 
         self._loss = kl_loss + reconstruction_loss;
+        print(f"kl_loss: {kl_loss}, reconstruction_loss: {reconstruction_loss}");
 
         return self._loss;
 
 
     def backward(self) -> Tuple[np.ndarray]:
-        N, L, D = self._Y.shape;
+        N, L = self._Y.shape[: 2];
 
         dX = np.sum(-self._Y, axis = 1) / (N * L);
         dM = self._M / N;
