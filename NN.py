@@ -435,6 +435,9 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                 T = self.getFinalTag(data[-1]);
                 loss = lossFunc.forward(*Y, T) if T is not None else lossFunc.forward(*Y);
 
+                if not math.isfinite(loss):
+                    raise OverflowError("training fail: the return value of loss function is NaN or infinity");
+
                 lossValues.append(loss);
                 if evaluator is not None:
                     evaluator.update(*Y, T);
