@@ -41,6 +41,17 @@ class INetOptimizer(metaclass = abc.ABCMeta):
 
 
 class IDataScaler(metaclass = abc.ABCMeta):
+    @property
+    @abc.abstractmethod
+    def params(self) -> List:
+        pass;
+
+
+    @params.setter
+    @abc.abstractmethod
+    def params(self, value: List):
+        pass;
+
     @abc.abstractmethod
     def fit(self, X : np.ndarray) -> np.ndarray:
         pass;
@@ -2476,6 +2487,17 @@ class AggregateScaler(IDataScaler):
         self._scalers = scalers;
 
 
+    @property
+    def params(self) -> List:
+        return [item.params for item in self._scalers];
+
+
+    @params.setter
+    def params(self, value: List):
+        for i in range(len(value)):
+            self._scalers[i].params = value[i];
+
+
     def fit(self, X : np.ndarray):
         Y = X;
         for scaler in self._scalers:
@@ -2504,6 +2526,28 @@ class ScalerBase(IDataScaler):
     def __init__(self):
         self._ndim = None;
         self._fitted = False;
+
+
+    @property
+    def params(self) -> List:
+        return [self._ndim] + self._getParams();
+
+
+    @params.setter
+    def params(self, value: List):
+        self._ndim = value[0];
+        self._setParams(tuple(value[1:]));
+        self._fitted = True;
+
+
+    @abc.abstractmethod
+    def _getParams(self) -> List:
+        pass;
+
+
+    @abc.abstractmethod
+    def _setParams(self, value: Tuple):
+        pass;
 
 
     @abc.abstractmethod
@@ -2573,6 +2617,16 @@ class MinMaxScaler(ScalerBase):
         self._valueDelta = None;
 
 
+    def _getParams(self) -> List:
+        return [self._minRange, self._maxRange, self._minValue, self._maxValue];
+
+
+    def _setParams(self, value: Tuple):
+        self._minRange, self._maxRange, self._minValue, self._maxValue = value;
+        self._rangeDelta = self._maxRange - self._minRange;
+        self._valueDelta = self._maxValue - self._minValue;
+
+
     def _fit(self, X: np.ndarray) -> np.ndarray:
         self._minValue = np.amin(X, axis = 0);
         self._maxValue = np.amax(X, axis = 0);
@@ -2598,6 +2652,14 @@ class StandardScaler(ScalerBase):
         self._sigma = None;
 
 
+    def _getParams(self) -> List:
+        return [self._mu, self._sigma];
+
+
+    def _setParams(self, value: Tuple):
+        self._mu, self._sigma = value;
+
+
     def _fit(self, X: np.ndarray):
         self._mu = np.mean(X, axis = 0);
         self._sigma = np.std(X, axis = 0);
@@ -2621,6 +2683,14 @@ class DiffScaler(ScalerBase):
 
         self._X = None;
         self._interval = interval;
+
+
+    def _getParams(self) -> List:
+        return [self._interval];
+
+
+    def _setParams(self, value: Tuple):
+        self._interval, = value;
 
 
     def _fit(self, X: np.ndarray):
