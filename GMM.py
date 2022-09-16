@@ -4,8 +4,6 @@ import math;
 import functools;
 from typing import List, Tuple;
 
-import numpy as np
-
 from ImportNumpy import *;
 from Functions import *;
 from KMeans import *;
@@ -56,6 +54,16 @@ class GaussianMixture:
         self._bic = sys.maxsize;
         self._pdfEpsilon = 1e-100;
         self._singularEpsilon = 1e-8;
+
+
+    @property
+    def params(self) -> List[np.ndarray]:
+        return [self._weight, self._mu, self._sigma];
+
+
+    @params.setter
+    def params(self, value : List[np.ndarray]):
+        self.setParams(*tuple(value));
 
 
     @property
@@ -243,8 +251,8 @@ class GaussianMixture:
         return self._pdf(X, self._weight, self._mu, self._sigma, fixSingular = False);
 
 
-    def logLikelihood(self, X : np.ndarray) -> float:
-        return self._logLikelihood(X, self._weight, self._mu, self._sigma, fixSingular = False);
+    def logPdf(self, X : np.ndarray) -> np.ndarray:
+        return np.log(self._pdf(X, self._weight, self._mu, self._sigma, fixSingular = False));
 
 
     def sample(self, *shape : int) -> np.ndarray:
