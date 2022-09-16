@@ -3256,7 +3256,7 @@ class PerplexityAccuracyEvaluator(INetAccuracyEvaluator):
 
 # the output distribution of VAE is Gaussian
 class GaussianVAE(NetModelBase):
-    def __init__(self, encoder: INetModule, decoder: INetModule, latentSize: int, sampleSize: int = 32):
+    def __init__(self, encoder: INetModule, decoder: INetModule, latentSize: int, sampleSize: int = 32, minStd : float = 1e-4):
         super().__init__(encoder, decoder);
 
         self._name = "GaussianVAE";
@@ -3264,7 +3264,10 @@ class GaussianVAE(NetModelBase):
         self._decoder = decoder;
         self._latentSize = latentSize;
         self._sampleSize = sampleSize;
-        self._z0 = None;  # the normal distribution with 0 men
+        self._minStd = minStd;
+        self._z0 = None;  # the standard normal distribution
+        self._V = None;
+        self._U = None;
 
 
     def getFinalTag(self, T: np.ndarray) -> Optional[np.ndarray]:
@@ -3274,13 +3277,13 @@ class GaussianVAE(NetModelBase):
     def encode(self, X : np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         M, V = tuple(np.split(self._encoder.forward(X)[0], 2, axis = -1));
 
-        return M, V;
+        return M, softplus(V) + self._minStd;
 
 
-    def reparameterize(self, M : np.ndarray, V : np.ndarray, epsilon : np.ndarray = None) -> np.ndarray:
-        N, L, H = len(M), self._sampleSize, self._latentSize;
-        self._z0 = (np.random.randn(N, L, H).astype(defaultDType) if epsilon is None else epsilon) * np.exp(0.5 * np.expand_dims(V, axis = 1));
-        Z = self._z0 + np.expand_dims(M, axis = 1);
+    def reparameterize(self, mu : np.ndarray, sigma : np.ndarray, epsilon : np.ndarray = None) -> np.ndarray:
+        N, L, H = len(mu), self._sampleSize, self._latentSize;
+        self._z0 = np.random.randn(N, L, H).astype(defaultDType) if epsilon is None else epsilon;
+        Z = self._z0 * np.expand_dims(sigma, axis = 1) + np.expand_dims(mu, axis = 1);
 
         return Z;
 
@@ -3288,7 +3291,7 @@ class GaussianVAE(NetModelBase):
     def decode(self, Z : np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         E, U = tuple(np.split(self._decoder.forward(Z)[0], 2, axis = -1));
 
-        return E, U;
+        return E, softplus(U) + self._minStd;
 
 
     def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
@@ -3297,16 +3300,18 @@ class GaussianVAE(NetModelBase):
         Z = self.reparameterize(M, V, epsilon = epsilon);
         E, U = self.decode(Z);
 
+        self._V, self._U = V, U;
+
         return X, M, V, E, U;
 
 
     def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray]:
         dX, dM, dV, dE, dU = dout;
 
-        dZ = self._decoder.backward(np.concatenate((dE, dU), axis = -1))[0];
+        dZ = self._decoder.backward(np.concatenate((dE, dU * softplusGradient(Y = self._U)), axis = -1))[0];
         dM += np.sum(dZ, axis = 1);
-        dV += np.sum(dZ * 0.5 * self._z0, axis = 1);
-        dX += self._encoder.backward(np.concatenate((dM, dV), axis = -1))[0];
+        dV += np.sum(dZ * self._z0, axis = 1);
+        dX += self._encoder.backward(np.concatenate((dM, dV * softplusGradient(Y = self._V)), axis = -1))[0];
 
         return dX, ;
 
@@ -3322,7 +3327,7 @@ class GaussianVAE(NetModelBase):
         E, U = self.generate(X, L);
 
         # P = -reconstruction_loss
-        P = -(U + (np.expand_dims(X, axis = 1) - E) ** 2 / np.exp(U));
+        P = -(2 * np.log(U) + (np.expand_dims(X, axis = 1) - E) ** 2 / U ** 2) / 2;
         P = np.sum(P, axis = tuple(range(2, len(P.shape))));
         P = np.mean(P, axis = 1);
 
@@ -3346,13 +3351,13 @@ class GaussianVAELoss(NetLossBase):
     Z is the latent variable.
     X: the input data, N*D
     M: E(Z|X), N*H
-    V: log(Var(Z|X)), N*H
+    V: Std(Z|X), N*H
     E: E(X|Z), N*L*D
-    U: log(Var(X|Z)), N*L*D
+    U: Std(X|Z), N*L*D
 
-    q(z|x) ～ N(M, diagonal{exp(V)})
+    q(z|x) ～ N(M, diagonal{ V^2 })
     p(z)   ～ N(0, I)
-    p(x|z) ～ N(E, diagonal{exp(U)})
+    p(x|z) ～ N(E, diagonal{ U^2 })
     L(x) = KL(q(z|x) || p(z)) - E(log(p(x|z)))
     '''
     def forward(self, *data: np.ndarray) -> float:
@@ -3361,10 +3366,10 @@ class GaussianVAELoss(NetLossBase):
 
         self._X, self._M, self._V, self._E, self._U = np.repeat(np.expand_dims(X, axis = 1), L, axis = 1), M, V, E, U;
 
-        kl_loss = M ** 2 + np.exp(V) - V;
+        kl_loss = M ** 2 + V ** 2 - 2 * np.log(V);
         kl_loss = float(np.sum(kl_loss)) / (2 * N);
 
-        reconstruction_loss = U + (self._X - E) ** 2 / np.exp(U);
+        reconstruction_loss = 2 * np.log(U) + (self._X - E) ** 2 / U ** 2;
         reconstruction_loss = float(np.sum(reconstruction_loss)) / (2 * L * N);
 
         self._loss = kl_loss + reconstruction_loss;
@@ -3375,19 +3380,20 @@ class GaussianVAELoss(NetLossBase):
 
     def backward(self) -> Tuple[np.ndarray]:
         N, L = self._E.shape[: 2];
+        U2 = self._U ** 2;
 
-        dX = np.sum((self._X - self._E) / np.exp(self._U), axis = 1) / (N * L);
+        dX = np.sum((self._X - self._E) / U2, axis = 1) / (N * L);
         dM = self._M / N;
-        dV = (np.exp(self._V) - 1) / (2 * N);
-        dE = (self._E - self._X) / np.exp(self._U) / (N * L);
-        dU = (1 - (self._X - self._E) ** 2 / np.exp(self._U)) / (2 * N * L);
+        dV = (self._V - 1 / self._V) / N;
+        dE = (self._E - self._X) / U2 / (N * L);
+        dU = (1 - (self._X - self._E) ** 2 / U2) / self._U / (N * L);
 
         return dX, dM, dV, dE, dU;
 
 
 # the output distribution of VAE is Bernoulli
 class BernoulliVAE(NetModelBase):
-    def __init__(self, encoder: INetModule, decoder: INetModule, latentSize: int, sampleSize: int = 32):
+    def __init__(self, encoder: INetModule, decoder: INetModule, latentSize: int, sampleSize: int = 32, minStd : float = 1e-4):
         super().__init__(encoder, decoder);
 
         self._name = "BernoulliVAE";
@@ -3395,7 +3401,9 @@ class BernoulliVAE(NetModelBase):
         self._decoder = decoder;
         self._latentSize = latentSize;
         self._sampleSize = sampleSize;
-        self._z0 = None;  # the normal distribution with 0 men
+        self._minStd = minStd;
+        self._z0 = None;  # the standard normal distribution
+        self._V = None;
 
 
     def getFinalTag(self, T: np.ndarray) -> Optional[np.ndarray]:
@@ -3405,13 +3413,13 @@ class BernoulliVAE(NetModelBase):
     def encode(self, X : np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         M, V = tuple(np.split(self._encoder.forward(X)[0], 2, axis = -1));
 
-        return M, V;
+        return M, softplus(V) + self._minStd;
 
 
-    def reparameterize(self, M : np.ndarray, V : np.ndarray, epsilon : np.ndarray = None) -> np.ndarray:
-        N, L, H = len(M), self._sampleSize, self._latentSize;
-        self._z0 = (np.random.randn(N, L, H).astype(defaultDType) if epsilon is None else epsilon) * np.exp(0.5 * np.expand_dims(V, axis = 1));
-        Z = self._z0 + np.expand_dims(M, axis = 1);
+    def reparameterize(self, mu: np.ndarray, sigma: np.ndarray, epsilon: np.ndarray = None) -> np.ndarray:
+        N, L, H = len(mu), self._sampleSize, self._latentSize;
+        self._z0 = np.random.randn(N, L, H).astype(defaultDType) if epsilon is None else epsilon;
+        Z = self._z0 * np.expand_dims(sigma, axis = 1) + np.expand_dims(mu, axis = 1);
 
         return Z;
 
@@ -3430,6 +3438,8 @@ class BernoulliVAE(NetModelBase):
         Z = self.reparameterize(M, V, epsilon = epsilon);
         Y = self.decode(Z);
 
+        self._V = V;
+
         return X, M, V, Y;
 
 
@@ -3438,8 +3448,8 @@ class BernoulliVAE(NetModelBase):
 
         dZ = self._decoder.backward(dY)[0];
         dM += np.sum(dZ, axis = 1);
-        dV += np.sum(dZ * 0.5 * self._z0, axis = 1);
-        dX += self._encoder.backward(np.concatenate((dM, dV), axis = -1))[0];
+        dV += np.sum(dZ * self._z0, axis = 1);
+        dX += self._encoder.backward(np.concatenate((dM, dV * softplusGradient(Y = self._V)), axis = -1))[0];
 
         return dX, ;
 
@@ -3455,7 +3465,7 @@ class BernoulliVAE(NetModelBase):
         Y = self.generate(X, L, toProbability = False);
 
         # P = -reconstruction_loss
-        P = -(np.log(1 + np.exp(Y)) - np.expand_dims(X, axis = 1) * Y);
+        P = -(softplus(Y) - np.expand_dims(X, axis = 1) * Y);
         P = np.sum(P, axis = tuple(range(2, len(P.shape))));
         P = np.mean(P, axis = 1);
 
@@ -3478,10 +3488,10 @@ class BernoulliVAELoss(NetLossBase):
     Z is the latent variable.
     X: the input data, N*D
     M: E(Z|X), N*H
-    V: log(Var(Z|X)), N*H
+    V: Std(Z|X), N*H
     Y: logits, N*L*D
 
-    q(z|x) ～ N(M, diagonal{exp(V)})
+    q(z|x) ～ N(M, diagonal{ V^2 })
     p(z)   ～ N(0, I)
     p(x|z) ～ Bin(1, sigmoid(Y))
     L(x) = KL(q(z|x) || p(z)) - E(log(p(x|z)))
@@ -3492,15 +3502,15 @@ class BernoulliVAELoss(NetLossBase):
 
         self._X, self._M, self._V, self._Y = np.repeat(np.expand_dims(X, axis = 1), L, axis = 1), M, V, Y;
 
-        kl_loss = M ** 2 + np.exp(V) - V;
+        kl_loss = M ** 2 + V ** 2 - 2 * np.log(V);
         kl_loss = float(np.sum(kl_loss)) / (2 * N);
 
         # reconstruction_loss = (Y * (1 - self._X)) + np.log(1 + np.exp(-Y));
-        reconstruction_loss = np.log(1 + np.exp(Y)) - self._X * Y;
+        reconstruction_loss = softplus(Y) - self._X * Y;
         reconstruction_loss = float(np.sum(reconstruction_loss)) / (L * N);
 
         self._loss = kl_loss + reconstruction_loss;
-        print(f"kl_loss: {kl_loss}, reconstruction_loss: {reconstruction_loss}");
+        # print(f"kl_loss: {kl_loss}, reconstruction_loss: {reconstruction_loss}");
 
         return self._loss;
 
@@ -3510,7 +3520,7 @@ class BernoulliVAELoss(NetLossBase):
 
         dX = np.sum(-self._Y, axis = 1) / (N * L);
         dM = self._M / N;
-        dV = (np.exp(self._V) - 1) / (2 * N);
+        dV = (self._V - 1 / self._V) / N;
         dY = (sigmoid(self._Y) - self._X) / (N * L);
 
         return dX, dM, dV, dY;
