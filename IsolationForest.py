@@ -45,27 +45,27 @@ class _Node:
 
 
 class IsolationForest:
-    def __init__(self, treeCount = 100, subSamplingSize = 256, thresholdFinder = None):
+    def __init__(self, treeCount = 100, subsamplingSize = 256, thresholdFinder = None):
         if thresholdFinder is None or not isinstance(thresholdFinder, IThresholdFinder):
             raise ValueError();
 
-        self.__treeCount = treeCount;
-        self.__subSamplingSize = subSamplingSize;
-        self.__treesList = [];
+        self._treeCount = treeCount;
+        self._subsamplingSize = subsamplingSize;
+        self._treesList = [];
 
-        self.__scores = None;
-        self.__threshold = None;
-        self.__thresholdFinder = thresholdFinder;
+        self._scores = None;
+        self._threshold = None;
+        self._finder = thresholdFinder;
 
 
     @property
     def scores(self):
-        return self.__scores;
+        return self._scores;
 
 
     @property
     def threshold(self):
-        return self.__threshold;
+        return self._threshold;
 
 
     @threshold.setter
@@ -73,7 +73,7 @@ class IsolationForest:
         if value <= 0.5 or value >= 1:
             raise ValueError();
 
-        self.__threshold = value;
+        self._threshold = value;
 
 
     def __calcHarmonicNumber(self, i):
@@ -103,11 +103,11 @@ class IsolationForest:
     def __getAnomalyScore(self, instance, lengthLimit):
         length = 0;
 
-        for tree in self.__treesList:
+        for tree in self._treesList:
             length += self.__getPathLength(instance, tree, 0, lengthLimit);
-        length /= self.__treeCount;
+        length /= self._treeCount;
 
-        return 1 / (2 ** (length / self.__calcAveragePathLength(self.__subSamplingSize)));
+        return 1 / (2 ** (length / self.__calcAveragePathLength(self._subsamplingSize)));
 
 
     def __hasSameFeatureValues(self, dataSet, featureIndex):
@@ -170,34 +170,34 @@ class IsolationForest:
         if dataSet is None or not isinstance(dataSet, np.matrix):
             raise ValueError();
 
-        self.__scores = None;
-        self.__threshold = None;
+        self._scores = None;
+        self._threshold = None;
 
         n = dataSet.shape[0];
         with multiprocessing.Pool(max(1, psutil.cpu_count(False) - 2)) as pool:
-            self.__treesList = pool.map(self._createTree, [dataSet[np.random.choice(n, self.__subSamplingSize, False), :] for i in range(0, self.__treeCount)]);
+            self._treesList = pool.map(self._createTree, [dataSet[np.random.choice(n, self._subsamplingSize, False), :] for i in range(0, self._treeCount)]);
 
 
     def getAnomalyScore(self, instance):
         if instance is None:
             raise ValueError();
 
-        return self.__getAnomalyScore(instance, self.__subSamplingSize - 1);
+        return self.__getAnomalyScore(instance, self._subsamplingSize - 1);
 
 
     def train(self, dataSet):
-        if self.__threshold is not None and self.__scores is not None:
+        if self._threshold is not None and self._scores is not None:
             return False;
 
         if dataSet is None or not isinstance(dataSet, np.matrix):
             raise ValueError();
-        if len(self.__treesList) != self.__treeCount:
+        if len(self._treesList) != self._treeCount:
             raise InvalidOperationError();
 
         with multiprocessing.Pool(max(1, psutil.cpu_count(False) - 2)) as pool:
-            self.__scores = pool.map(self.getAnomalyScore, [item for item in dataSet]);
+            self._scores = pool.map(self.getAnomalyScore, [item for item in dataSet]);
 
-        self.__threshold = self.__thresholdFinder.find(self.__scores);
+        self._threshold = self._finder.find(self._scores);
 
         return True;
 
@@ -234,7 +234,7 @@ class CurvesThresholdFinder(IThresholdFinder):
         self._rightLines = None;
 
 
-    def __reset(self):
+    def _reset(self):
         self._curves = None;
         self._leftLines = None;
         self._rightLines = None;
@@ -424,6 +424,6 @@ class CurvesThresholdFinder(IThresholdFinder):
         threshold = (np.mean(self._values) if len(self._values) > 0 else defaultThreshold) / scale;
         print("threshold found: {0}".format(threshold));
 
-        self.__reset();
+        self._reset();
 
         return threshold;
