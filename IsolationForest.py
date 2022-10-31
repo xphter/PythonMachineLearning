@@ -45,8 +45,8 @@ class _Node:
 
 
 class IsolationForest:
-    def __init__(self, treeCount = 100, subsamplingSize = 256, thresholdFinder = None):
-        if thresholdFinder is None or not isinstance(thresholdFinder, IThresholdFinder):
+    def __init__(self, treeCount = 100, subsamplingSize = 256, finder = None):
+        if finder is not None and not isinstance(finder, IThresholdFinder):
             raise ValueError();
 
         self._treeCount = treeCount;
@@ -55,7 +55,7 @@ class IsolationForest:
 
         self._scores = None;
         self._threshold = None;
-        self._finder = thresholdFinder;
+        self._finder = finder;
 
 
     @property
@@ -197,7 +197,8 @@ class IsolationForest:
         with multiprocessing.Pool(max(1, psutil.cpu_count(False) - 2)) as pool:
             self._scores = pool.map(self.getAnomalyScore, [item for item in dataSet]);
 
-        self._threshold = self._finder.find(self._scores);
+        if self._finder is not None:
+            self._threshold = self._finder.find(self._scores);
 
         return True;
 
