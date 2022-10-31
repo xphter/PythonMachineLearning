@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt;
 from Errors import *;
 from KMeans import *;
 from UnaryLinearRegression import *;
+from typing import Union, List, Tuple, Callable, Any, Optional;
 
 
 class _Node:
@@ -26,9 +27,9 @@ class _Node:
 
     def __str__(self):
         if self.isLeaf():
-            return "Leaf node, {0} samples".format(self.samplesCount);
+            return f"Leaf node, {self.samplesCount} samples";
         else:
-            return "Internal node, {0} samples, feature {1} of value {2}".format(self.samplesCount, self.featureIndex, self.featureValue);
+            return f"Internal node, {self.samplesCount} samples, feature {self.featureIndex} of value {self.featureValue}";
 
 
     def isLeaf(self):
@@ -203,18 +204,18 @@ class IsolationForest:
 
 class IThresholdFinder(metaclass = abc.ABCMeta):
     @abc.abstractmethod
-    def find(self, scores):
+    def find(self, scores : List[float]):
         pass;
 
 
 class ProportionThresholdFinder(IThresholdFinder):
     def __init__(self, proportion):
-        self.__proportion = max(0, max(1, proportion));
+        self.__proportion = max(0, min(1, proportion));
 
 
-    def find(self, scores):
+    def find(self, scores : List[float]):
         scores.sort(reverse = True);
-        return np.quantile(scores, self.__proportion);
+        return float(np.quantile(scores, self.__proportion));
 
 
 class CurvesThresholdFinder(IThresholdFinder):
@@ -243,7 +244,7 @@ class CurvesThresholdFinder(IThresholdFinder):
         maxValue = y.max();
         value, residual = None, None;
 
-        for i in range(CurvesThresholdFinder.MIN_SAMPLES_NUMBER, y.shape[0]):
+        for i in range(max(2, CurvesThresholdFinder.MIN_SAMPLES_NUMBER), y.shape[0]):
             line = UnaryLinearRegression();
             line.fit(np.mat(np.arange(i)).T, y[:i, 0]);
             line.sigLevel = None;
@@ -264,7 +265,7 @@ class CurvesThresholdFinder(IThresholdFinder):
         n, maxValue = y.shape[0], y.max();
         value, residual = None, None;
 
-        for j in range(n - CurvesThresholdFinder.MIN_SAMPLES_NUMBER, 0, -1):
+        for j in range(n - max(2, CurvesThresholdFinder.MIN_SAMPLES_NUMBER), 0, -1):
             line = UnaryLinearRegression();
             line.fit(np.mat(np.arange(j, n)).T, y[j:, 0]);
             line.sigLevel = None;
@@ -374,18 +375,18 @@ class CurvesThresholdFinder(IThresholdFinder):
             return None, None;
 
 
-    def find(self, scores):
+    def find(self, scores : List[float]):
         scale = 100;
-        data = np.mat(scores).T * scale;
-        indices, distances, center = KMeans(lambda X, k: np.mat([X.min(), X.mean(), X.max()]).T).clustering(data, 3, 1);
+        data = np.array(scores).reshape(-1, 1) * scale;
+        indices, distances, center = KMeans(lambda X, k: np.array([X.min(), X.mean(), X.max()]).reshape(-1, 1)).clustering(data, 3, 1);
         print("anomaly score centers:{0}".format(center.T));
 
         checkValue = center[2, 0];
         minCheckValue = self._minCheckValue * scale;
         maxCheckValue = self._maxCheckValue * scale;
         defaultThreshold = self._defaultThreshold * scale;
-        minValue = data[(indices == 2).A.flatten(), :].min(0)[0, 0];
-        maxValue = data[(indices == 2).A.flatten(), :].max(0)[0, 0];
+        minValue = float(np.amin(data[indices == 2, :], axis = 0));
+        maxValue = float(np.amax(data[indices == 2, :], axis = 0));
 
         if maxValue <= defaultThreshold:
             return defaultThreshold / scale;
@@ -401,6 +402,7 @@ class CurvesThresholdFinder(IThresholdFinder):
         print("threshold check value: {0}".format(checkValue));
 
         i = None;
+        data = np.mat(data);  # compatible for old code
         for j in range(0, data.shape[0]):
             if data[j, 0] >= checkValue and i is None:
                 i = j;
