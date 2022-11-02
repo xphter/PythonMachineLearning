@@ -44,8 +44,14 @@ class _Node:
                (self.rightChild.getLeafCount() if self.rightChild is not None else 0);
 
 
+class IThresholdFinder(metaclass = abc.ABCMeta):
+    @abc.abstractmethod
+    def find(self, scores : List[float]):
+        pass;
+
+
 class IsolationForest:
-    def __init__(self, treeCount = 100, subsamplingSize = 256, finder = None):
+    def __init__(self, treeCount : int = 100, subsamplingSize : int = 256, finder : IThresholdFinder = None):
         if finder is not None and not isinstance(finder, IThresholdFinder):
             raise ValueError();
 
@@ -74,6 +80,17 @@ class IsolationForest:
             raise ValueError();
 
         self._threshold = value;
+
+
+    @property
+    def params(self) -> List:
+        return [self._subsamplingSize, self._treesList, self._scores, self._threshold];
+
+
+    @params.setter
+    def params(self, value : List):
+        self._subsamplingSize, self._treesList, self._scores, self._threshold = tuple(value);
+        self._treeCount = len(self._treesList);
 
 
     def _calcHarmonicNumber(self, i):
@@ -193,12 +210,6 @@ class IsolationForest:
             self._threshold = self._finder.find(self._scores);
 
         return True;
-
-
-class IThresholdFinder(metaclass = abc.ABCMeta):
-    @abc.abstractmethod
-    def find(self, scores : List[float]):
-        pass;
 
 
 class ProportionThresholdFinder(IThresholdFinder):
