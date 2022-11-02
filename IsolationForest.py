@@ -114,15 +114,7 @@ class IsolationForest:
         if dataSet.shape[0] == 0:
             return True;
 
-        result = True;
-        value = dataSet[0, featureIndex];
-
-        for rowIndex in range(0, dataSet.shape[0]):
-            if dataSet[rowIndex, featureIndex] != value:
-                result = False;
-                break;
-
-        return result;
+        return bool(np.all(dataSet[:, featureIndex] == dataSet[0, featureIndex]));
 
 
     def _choiceFeatureIndex(self, features):
