@@ -76,41 +76,41 @@ class IsolationForest:
         self._threshold = value;
 
 
-    def __calcHarmonicNumber(self, i):
+    def _calcHarmonicNumber(self, i):
         return np.log(i) + np.euler_gamma;
 
 
-    def __calcAveragePathLength(self, psi):
+    def _calcAveragePathLength(self, psi):
         if psi < 2:
             return 0;
 
         if psi == 2:
             return 1;
 
-        return 2 * self.__calcHarmonicNumber(psi - 1) - 2 * (psi - 1) / psi;
+        return 2 * self._calcHarmonicNumber(psi - 1) - 2 * (psi - 1) / psi;
 
 
-    def __getPathLength(self, instance, node, currentLength, lengthLimit):
+    def _getPathLength(self, instance, node, currentLength, lengthLimit):
         if node.isLeaf() or currentLength >= lengthLimit:
-            return currentLength + self.__calcAveragePathLength(node.samplesCount);
+            return currentLength + self._calcAveragePathLength(node.samplesCount);
 
         if instance[0, node.featureIndex] < node.featureValue:
-            return self.__getPathLength(instance, node.leftChild, currentLength + 1, lengthLimit);
+            return self._getPathLength(instance, node.leftChild, currentLength + 1, lengthLimit);
         else:
-            return self.__getPathLength(instance, node.rightChild, currentLength + 1, lengthLimit);
+            return self._getPathLength(instance, node.rightChild, currentLength + 1, lengthLimit);
 
 
-    def __getAnomalyScore(self, instance, lengthLimit):
+    def _getAnomalyScore(self, instance, lengthLimit):
         length = 0;
 
         for tree in self._treesList:
-            length += self.__getPathLength(instance, tree, 0, lengthLimit);
+            length += self._getPathLength(instance, tree, 0, lengthLimit);
         length /= self._treeCount;
 
-        return 1 / (2 ** (length / self.__calcAveragePathLength(self._subsamplingSize)));
+        return 1 / (2 ** (length / self._calcAveragePathLength(self._subsamplingSize)));
 
 
-    def __hasSameFeatureValues(self, dataSet, featureIndex):
+    def _hasSameFeatureValues(self, dataSet, featureIndex):
         if dataSet.shape[0] == 0:
             return True;
 
@@ -125,21 +125,21 @@ class IsolationForest:
         return result;
 
 
-    def __choiceFeatureIndex(self, features):
+    def _choiceFeatureIndex(self, features):
         if len(features) == 1:
             return features[0];
 
         return features[np.random.randint(0, len(features))];
 
 
-    def __choiceFeatureValue(self, dataSet, featureIndex):
+    def _choiceFeatureValue(self, dataSet, featureIndex):
         values = dataSet[:, featureIndex];
         minValue, maxValue = values.min(), values.max();
 
         return minValue + (maxValue - minValue) * np.random.random();
 
 
-    def __createNode(self, dataSet, features, currentHeight):
+    def _createNode(self, dataSet, features, currentHeight):
         samplesCount = dataSet.shape[0];
 
         if samplesCount == 0:
@@ -148,22 +148,22 @@ class IsolationForest:
         if samplesCount == 1:
             return _Node(samplesCount);
 
-        for index in [item for item in features if self.__hasSameFeatureValues(dataSet, item)]:
+        for index in [item for item in features if self._hasSameFeatureValues(dataSet, item)]:
             features.remove(index);
 
         if len(features) == 0:
             return _Node(samplesCount);
 
-        featureIndex = self.__choiceFeatureIndex(features);
-        featureValue = self.__choiceFeatureValue(dataSet, featureIndex);
+        featureIndex = self._choiceFeatureIndex(features);
+        featureValue = self._choiceFeatureValue(dataSet, featureIndex);
 
         return _Node(samplesCount, featureIndex, featureValue,
-                     self.__createNode(dataSet[(dataSet[:, featureIndex] < featureValue).A.flatten(), :], features[:], currentHeight + 1),
-                     self.__createNode(dataSet[(dataSet[:, featureIndex] >= featureValue).A.flatten(), :], features[:], currentHeight + 1));
+                     self._createNode(dataSet[(dataSet[:, featureIndex] < featureValue).A.flatten(), :], features[:], currentHeight + 1),
+                     self._createNode(dataSet[(dataSet[:, featureIndex] >= featureValue).A.flatten(), :], features[:], currentHeight + 1));
 
 
     def _createTree(self, subSet):
-        return self.__createNode(subSet, list(range(0, subSet.shape[1])), 0);
+        return self._createNode(subSet, list(range(0, subSet.shape[1])), 0);
 
 
     def fill(self, dataSet):
@@ -182,7 +182,7 @@ class IsolationForest:
         if instance is None:
             raise ValueError();
 
-        return self.__getAnomalyScore(instance, self._subsamplingSize - 1);
+        return self._getAnomalyScore(instance, self._subsamplingSize - 1);
 
 
     def train(self, dataSet):
