@@ -6,7 +6,6 @@ import psutil;
 import numpy as np;
 import matplotlib.pyplot as plt;
 
-from Errors import *;
 from KMeans import *;
 from UnaryLinearRegression import *;
 from typing import Union, List, Tuple, Callable, Any, Optional;
@@ -199,9 +198,9 @@ class IsolationForest:
             return False;
 
         if dataSet is None or not isinstance(dataSet, np.matrix):
-            raise ValueError();
+            raise ValueError("dataset is None or is not a matrix");
         if len(self._treesList) != self._treeCount:
-            raise InvalidOperationError();
+            raise ValueError("inconsistent trees length");
 
         with multiprocessing.Pool(max(1, psutil.cpu_count(False) - 2)) as pool:
             self._scores = pool.map(self.getAnomalyScore, [item for item in dataSet]);
