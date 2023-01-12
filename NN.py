@@ -35,6 +35,12 @@ class INetOptimizer(metaclass = abc.ABCMeta):
         pass;
 
 
+    @learningRate.setter
+    @abc.abstractmethod
+    def learningRate(self, value : float):
+        pass;
+
+
     @abc.abstractmethod
     def update(self, params : List[np.ndarray], grads : List[np.ndarray]):
         pass;
@@ -543,8 +549,14 @@ class NetOptimizerBase(INetOptimizer, metaclass = abc.ABCMeta):
         self._lr = lr;
 
 
+    @property
     def learningRate(self) -> float:
         return self._lr;
+
+
+    @learningRate.setter
+    def learningRate(self, value : float):
+        self._lr = value;
 
 
 class ReluLayer(NetModuleBase):
@@ -2298,8 +2310,14 @@ class ParametersShare(INetOptimizer):
         self._sharesInfo: Optional[List[_ParametersShareInfo]] = None;
 
 
+    @property
     def learningRate(self) -> float:
         return self._optimizer.learningRate;
+
+
+    @learningRate.setter
+    def learningRate(self, value: float):
+        self._optimizer.learningRate = value;
 
 
     def _find(self, params : List[np.ndarray]):
@@ -2357,8 +2375,14 @@ class GradientsClipping(INetOptimizer):
         self._epsilon = epsilon;
 
 
+    @property
     def learningRate(self) -> float:
         return self._optimizer.learningRate;
+
+
+    @learningRate.setter
+    def learningRate(self, value: float):
+        self._optimizer.learningRate = value;
 
 
     def update(self, params : List[np.ndarray], grads : List[np.ndarray]):
@@ -2480,7 +2504,6 @@ class Adam(NetOptimizerBase):
             v = self._v[i] / (1 - self._beta2 ** self._t);
 
             params[i] -= self._lr * m / (np.sqrt(v) + self._epsilon);
-            params[i] -= lr * m;
 
 
 class AggregateScaler(IDataScaler):
