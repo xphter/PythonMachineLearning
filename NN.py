@@ -2382,82 +2382,82 @@ class SGD(NetOptimizerBase):
             params[i] -= self._lr * grads[i];
 
 
-class Momentum(NetOptimizerBase):
-    def __init__(self, lr : float = 0.001, momentum : float = 0.9):
+class SGDM(NetOptimizerBase):
+    def __init__(self, lr : float = 0.001, beta : float = 0.9):
         super().__init__(lr);
 
-        self._v = None;
-        self._momentum = momentum;
+        self._m = None;
+        self._beta = beta;
 
 
     def update(self, params: List[np.ndarray], grads: List[np.ndarray]):
-        if self._v is None:
-            self._v = [np.zeros_like(item) for item in params];
+        if self._m is None:
+            self._m = [np.zeros_like(item) for item in params];
 
         for i in range(len(params)):
-            self._v[i] = self._momentum * self._v[i] + self._lr * grads[i];
-            params[i] -= self._v[i];
+            self._m[i] = self._beta * self._m[i] + self._lr * grads[i];
+            params[i] -= self._m[i];
 
 
 class Nesterov(NetOptimizerBase):
-    def __init__(self, lr : float = 0.001, momentum : float = 0.9):
+    def __init__(self, lr : float = 0.001, beta : float = 0.9):
         super().__init__(lr);
 
-        self._v = None;
-        self._momentum = momentum;
+        self._m = None;
+        self._beta = beta;
 
 
     def update(self, params: List[np.ndarray], grads: List[np.ndarray]):
-        if self._v is None:
-            self._v = [np.zeros_like(item) for item in params];
+        if self._m is None:
+            self._m = [np.zeros_like(item) for item in params];
 
         for i in range(len(params)):
-            v = self._v[i];
-            self._v[i] = self._momentum * self._v[i] + self._lr * grads[i];
-            params[i] -= (1 + self._momentum) * self._v[i] - self._momentum * v;
+            m = self._m[i];
+            self._m[i] = self._beta * self._m[i] + self._lr * grads[i];
+            params[i] -= (1 + self._beta) * self._m[i] - self._beta * m;
 
 
 class AdaGrad(NetOptimizerBase):
     def __init__(self, lr : float = 0.001, epsilon : float = 1e-8):
         super().__init__(lr);
 
-        self._s = None;
+        self._v = None;
         self._epsilon = epsilon;
 
 
     def update(self, params: List[np.ndarray], grads: List[np.ndarray]):
-        if self._s is None:
-            self._s = [np.zeros_like(item) for item in params];
+        if self._v is None:
+            self._v = [np.zeros_like(item) for item in params];
 
         for i in range(len(params)):
-            self._s[i] += grads[i] ** 2;
-            params[i] -= self._lr * grads[i] / (np.sqrt(self._s[i]) + self._epsilon);
+            self._v[i] += grads[i] ** 2;
+            params[i] -= self._lr * grads[i] / (np.sqrt(self._v[i]) + self._epsilon);
 
 
-class RMSprop(NetOptimizerBase):
+class RMSProp(NetOptimizerBase):
     def __init__(self, lr : float = 0.001, beta : float = 0.9, epsilon : float = 1e-8):
         super().__init__(lr);
 
-        self._s = None;
+        self._v = None;
         self._beta = beta;
         self._epsilon = epsilon;
 
 
     def update(self, params: List[np.ndarray], grads: List[np.ndarray]):
-        if self._s is None:
-            self._s = [np.zeros_like(item) for item in params];
+        if self._v is None:
+            self._v = [np.zeros_like(item) for item in params];
 
         for i in range(len(params)):
-            self._s[i] = self._beta * self._s[i] + (1 - self._beta) * grads[i] ** 2;
-            params[i] -= self._lr * grads[i] / (np.sqrt(self._s[i]) + self._epsilon);
+            self._v[i] = self._beta * self._v[i] + (1 - self._beta) * grads[i] ** 2;
+            params[i] -= self._lr * grads[i] / (np.sqrt(self._v[i]) + self._epsilon);
 
 
 class Adam(NetOptimizerBase):
     def __init__(self, lr : float = 0.001, beta1 : float = 0.9, beta2 : float = 0.999, epsilon : float = 1e-8):
         super().__init__(lr);
 
+        self._m = None;
         self._v = None;
-        self._s = None;
         self._beta1 = beta1;
         self._beta2 = beta2;
         self._epsilon = epsilon;
@@ -2465,21 +2465,22 @@ class Adam(NetOptimizerBase):
 
 
     def update(self, params: List[np.ndarray], grads: List[np.ndarray]):
+        if self._m is None:
+            self._m = [np.zeros_like(item) for item in params];
         if self._v is None:
             self._v = [np.zeros_like(item) for item in params];
-        if self._s is None:
-            self._s = [np.zeros_like(item) for item in params];
 
         self._t += 1;
 
         for i in range(len(params)):
-            self._v[i] = self._beta1 * self._v[i] + (1 - self._beta1) * grads[i];
-            self._s[i] = self._beta2 * self._s[i] + (1 - self._beta2) * grads[i] ** 2;
+            self._m[i] = self._beta1 * self._m[i] + (1 - self._beta1) * grads[i];
+            self._v[i] = self._beta2 * self._v[i] + (1 - self._beta2) * grads[i] ** 2;
 
-            v = self._v[i] / (1 - self._beta1 ** self._t);
-            s = self._s[i] / (1 - self._beta2 ** self._t);
+            m = self._m[i] / (1 - self._beta1 ** self._t);
+            v = self._v[i] / (1 - self._beta2 ** self._t);
 
-            params[i] -= self._lr * v / (np.sqrt(s) + self._epsilon);
+            params[i] -= self._lr * m / (np.sqrt(v) + self._epsilon);
+            params[i] -= lr * m;
 
 
 class AggregateScaler(IDataScaler):
