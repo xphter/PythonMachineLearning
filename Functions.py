@@ -55,8 +55,17 @@ def reluGradient(X : np.ndarray) -> np.ndarray:
     return Y;
 
 
-def softplus(X : np.ndarray) -> np.ndarray:
-    return np.log(1 + np.exp(X));
+# when x ≥ 20, log(1 + exp(x)) == x in numerical
+def softplus(X : np.ndarray, threshold : float = 20) -> np.ndarray:
+    mask = X >= threshold;
+
+    if np.any(mask):
+        Y = np.log(1 + np.exp(~mask * X));
+        Y[mask] = X[mask];
+    else:
+        Y = np.log(1 + np.exp(X));
+
+    return Y;
 
 
 # Y = softplus(X)
