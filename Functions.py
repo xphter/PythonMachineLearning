@@ -2,8 +2,20 @@ from ImportNumpy import *;
 from typing import Callable, Tuple, List;
 
 
-def sigmoid(X : np.ndarray) -> np.ndarray:
-    return 1 / (1 + np.exp(-X));
+def sigmoid(X : np.ndarray, threshold : float = -20) -> np.ndarray:
+    mask = X <= -20;
+
+    if np.any(mask):
+        Y1 = np.exp(mask * X);
+        Y1 = Y1 / (1 + Y1);
+
+        Y2 = 1 / (1 + np.exp(-(~mask * X)));
+
+        Y = mask * Y1 + ~mask * Y2;
+    else:
+        Y = 1 / (1 + np.exp(-X));
+
+    return Y;
 
 
 # Y = sigmoid(X)
