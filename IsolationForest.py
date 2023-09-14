@@ -50,7 +50,9 @@ class IThresholdFinder(metaclass = abc.ABCMeta):
 
 
 class IsolationForest:
-    def __init__(self, treeCount : int = 100, subsamplingSize : int = 256, finder : IThresholdFinder = None):
+    MIN_PARALLEL_LENGTH = 10000;
+
+    def __init__(self, treeCount : int = 100, subsamplingSize : int = 256, finder : IThresholdFinder = None, maxParallelProcesses : int = None, minParallelLength : int = None):
         if finder is not None and not isinstance(finder, IThresholdFinder):
             raise ValueError();
 
@@ -61,7 +63,11 @@ class IsolationForest:
         self._scores = None;
         self._threshold = None;
         self._finder = finder;
+        self._parallelProcesses = max(1, psutil.cpu_count(True) - 2);
+        self._minParallelLength = minParallelLength if minParallelLength is not None else IsolationForest.MIN_PARALLEL_LENGTH;
 
+        if maxParallelProcesses is not None:
+            self._parallelProcesses = max(1, min(maxParallelProcesses, self._parallelProcesses));
 
     @property
     def scores(self):
@@ -182,7 +188,7 @@ class IsolationForest:
         self._threshold = None;
 
         n = dataSet.shape[0];
-        with multiprocessing.Pool(max(1, psutil.cpu_count(False) - 2)) as pool:
+        with multiprocessing.Pool(self._parallelProcesses) as pool:
             self._treesList = pool.map(self._createTree, [dataSet[np.random.choice(n, self._subsamplingSize, False), :] for i in range(0, self._treeCount)]);
 
 
@@ -202,8 +208,11 @@ class IsolationForest:
         if len(self._treesList) != self._treeCount:
             raise ValueError("inconsistent trees length");
 
-        with multiprocessing.Pool(max(1, psutil.cpu_count(False) - 2)) as pool:
-            self._scores = pool.map(self.getAnomalyScore, [item for item in dataSet]);
+        if len(dataSet) >= self._minParallelLength:
+            with multiprocessing.Pool(self._parallelProcesses) as pool:
+                self._scores = pool.map(self.getAnomalyScore, [item for item in dataSet]);
+        else:
+            self._scores = [self.getAnomalyScore(item) for item in dataSet];
 
         if self._finder is not None:
             self._threshold = self._finder.find(self._scores);
@@ -223,18 +232,22 @@ class ProportionThresholdFinder(IThresholdFinder):
 
 class CurvesThresholdFinder(IThresholdFinder):
     MIN_SAMPLES_NUMBER = 10;
-    MIN_PARALLEL_NUMBER = 10000;
+    MIN_PARALLEL_LENGTH = 10000;
 
-    def __init__(self, minCheckValue, maxCheckValue, defaultThreshold, showPlot = False):
+    def __init__(self, minCheckValue, maxCheckValue, defaultThreshold, maxParallelProcesses : int = None, showPlot = False):
         self._minCheckValue = minCheckValue;
         self._maxCheckValue = maxCheckValue;
         self._defaultThreshold = defaultThreshold;
+        self._parallelProcesses = max(1, psutil.cpu_count(True) - 2);
         self.__showPlot = showPlot;
 
         self._values = [];
         self._curves = None;
         self._leftLines = None;
         self._rightLines = None;
+
+        if maxParallelProcesses is not None:
+            self._parallelProcesses = max(1, min(maxParallelProcesses, self._parallelProcesses));
 
 
     def _reset(self):
@@ -329,8 +342,8 @@ class CurvesThresholdFinder(IThresholdFinder):
                 points.append((i, j, y, maxValue));
 
         curves = None;
-        if len(points) >= CurvesThresholdFinder.MIN_PARALLEL_NUMBER:
-            with multiprocessing.Pool(max(1, psutil.cpu_count(False) - 2)) as pool:
+        if len(points) >= CurvesThresholdFinder.MIN_PARALLEL_LENGTH:
+            with multiprocessing.Pool(self._parallelProcesses) as pool:
                 curves = pool.starmap(self._processItem, points);
         else:
             curves = list(map(lambda obj: self._processItem(*obj), points));
