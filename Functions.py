@@ -145,6 +145,29 @@ def crossEntropyError1D(Y : np.ndarray, T : np.ndarray, epsilon : float = 1e-8) 
     return float(np.sum(-np.log(Y.reshape((n, -1))[np.arange(n), T.flatten()] + epsilon))) / n;
 
 
+def labelSmoothing(T : np.ndarray, alpha : float = 0.1) -> np.ndarray:
+    if len(T.shape) < 2:
+        # T is a 1-D label vector
+        N = len(T);
+        D = int(np.amax(T)) + 1;
+
+        if D < 2:
+            return T;
+        else:
+            Y = alpha / (D - 1) * np.ones((N, D), dtype = defaultDType);
+            Y[np.arange(N), T.flatten()] = 1 - alpha;
+            return Y;
+    else:
+        # each row of T is a one-hot vector
+        D = T.shape[-1];
+        if D < 2:
+            raise ValueError("invalid one-hot vector");
+
+        Y = alpha / (D - 1) * np.ones_like(T, dtype = defaultDType);
+        Y[T == 1] = 1- alpha;
+        return np.reshape(Y, T.shape);
+
+
 def numericGradient(f : Callable, X : np.ndarray):
     h = 1e-4;
     grad = np.zeros_like(X);
