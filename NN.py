@@ -204,6 +204,11 @@ class INetModel(INetModule, metaclass = abc.ABCMeta):
         pass;
 
 
+    @abc.abstractmethod
+    def predictOne(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        pass;
+
+
 class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
     def __init__(self):
         self._name = None;
@@ -532,6 +537,10 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
     def predict(self, iterator : IDataIterator) -> Iterable:
         for data in iterator:
             yield self.forward(*data);
+
+
+    def predictOne(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        return self.forward(*data);
 
 
 class NetLossBase(INetLoss, metaclass = abc.ABCMeta):
@@ -2736,8 +2745,11 @@ class SequentialContainer(NetModelBase):
         super().__init__(*modules);
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        return super().forward(*data[:-1]);
+    # def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    #     if self.isTrainingMode:
+    #         return super().forward(*data[:-1]);
+    #     else:
+    #         return super().forward(*data);
 
 
     def apply(self, func : Callable):
