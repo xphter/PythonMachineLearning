@@ -208,9 +208,23 @@ class IsolationForest:
         if len(self._treesList) != self._treeCount:
             raise ValueError("inconsistent trees length");
 
-        if len(dataSet) >= self._minParallelLength:
-            with multiprocessing.Pool(self._parallelProcesses) as pool:
-                self._scores = pool.map(self.getAnomalyScore, [item for item in dataSet]);
+        availableMemory = psutil.virtual_memory().available;
+        if len(dataSet) >= self._minParallelLength and availableMemory > 2 ** 30:
+            proportion = 0.6;
+            usableMemory = proportion * availableMemory;
+            if 2 * dataSet.nbytes > usableMemory:
+                segmentSize = int(math.ceil(usableMemory / (2 * dataSet[0, :].nbytes)));
+                chunkSize = int(math.ceil(segmentSize / self._parallelProcesses));
+                self._scores = [];
+
+                print(f"chop dataset to some segments, total length: {dataSet.shape[0]}, segment size: {segmentSize}");
+
+                for i in range(0, dataSet.shape[0], segmentSize):
+                    with multiprocessing.Pool(self._parallelProcesses) as pool:
+                        self._scores.extend(pool.map(self.getAnomalyScore, [item for item in dataSet[i: i + segmentSize, :]], chunkSize));
+            else:
+                with multiprocessing.Pool(self._parallelProcesses) as pool:
+                    self._scores = pool.map(self.getAnomalyScore, [item for item in dataSet], int(math.ceil(dataSet.shape[0] / self._parallelProcesses)));
         else:
             self._scores = [self.getAnomalyScore(item) for item in dataSet];
 
