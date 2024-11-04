@@ -1,5 +1,5 @@
 from ImportNumpy import *;
-from typing import Callable, Tuple, List;
+from typing import Callable, Union, Tuple, List;
 
 
 def sigmoid(X : np.ndarray, threshold : float = -20) -> np.ndarray:
@@ -88,6 +88,21 @@ def softplusGradient(Y : np.ndarray = None, X : np.ndarray = None) -> np.ndarray
         return sigmoid(X);
     else:
         raise ValueError("both X and Y are None");
+
+
+# return (sigmoid(beta * X), swish(X))
+def swish(X : np.ndarray, beta : Union[float, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+    S = sigmoid(beta * X);
+    return S, X * S;
+
+
+# Y = swish(X, beta), S = sigmoid(beta * X)
+# return dX, dBeta
+def swishGradient(Y : np.ndarray, S : np.ndarray, X : np.ndarray, beta : Union[float, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+    dX = S + beta * Y * (1 - S);
+    dBeta = Y * (X - Y);
+
+    return dX, dBeta;
 
 
 def softmax(X : np.ndarray) -> np.ndarray:
