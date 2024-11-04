@@ -612,6 +612,60 @@ class SoftplusLayer(NetModuleBase):
         return dX, ;
 
 
+class SwishLayer(NetModuleBase):
+    def __init__(self, beta : Union[float, np.ndarray] = None, outputSize : int = None):
+        super().__init__();
+
+        self._X = None;
+        self._Y = None;
+        self._S  = None;
+        self._name = "Swish";
+
+        if beta is not None:
+            if isinstance(beta, np.ndarray):
+                self._beta = beta;
+            else:
+                self._beta = np.array([float(beta)]);
+        else:
+            self._beta = np.exp(np.random.randn(outputSize if outputSize is not None else 1), dtype = defaultDType);
+
+            self._params.append(self._beta);
+            self._grads.append(np.zeros_like(self._beta));
+
+
+    @property
+    def beta(self) -> np.ndarray:
+        return self._beta;
+
+
+    def _setParams(self, value: List[np.ndarray]):
+        self._beta = value[0];
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        self._X = data[0];
+        self._S, self._Y = swish(self._X, self._beta);
+
+        return self._Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
+        dX, dBeta = swishGradient(self._Y, self._S, self._X, self._beta);
+        dX *= dY;
+        dBeta *= dY;
+
+        if len(self._params) > 0:
+            if len(self._beta) == 1:
+                dBeta = np.sum(dBeta);
+            else:
+                dBeta = np.sum(dBeta, axis = tuple(range(len(dBeta.shape) - 1)));
+
+            self._grads[0][...] = dBeta;
+
+        return dX, ;
+
+
 class SigmoidLayer(NetModuleBase):
     def __init__(self):
         super().__init__();
