@@ -1,126 +1,31 @@
+import json
 import re;
+import os;
+import os.path;
 import abc;
 import math;
 import time;
 import pickle;
+import random;
 import collections;
+import urllib;
 
 import cupy as cp;
 import numpy as np;
+import pandas as pd;
 import scipy.stats;
 import matplotlib.pyplot as plt;
 import mpl_toolkits.mplot3d as p3d;
 
-from typing import List, Tuple, Callable, Any;
+from typing import List, Tuple, Dict, Callable, Any;
 
-import torch
-from sklearn.utils.extmath import randomized_svd;
-
-import DataHelper
-import NN
+import DataHelper;
+from IsolationForest import *;
 from ImportNumpy import *;
+from GMM import *;
 from NN import *;
 from MNIST import *;
 from PTB import *;
-
-
-class MultiLayerNet:
-    def __init__(self, inputSize, hiddenSizes, outputSize, activeLayerType = ReluLayer, lastLayerType = SoftmaxWithCrossEntropyLoss, initStd = None, initCoef = None, useBatchNormalization = False, weightDecayLambda: float = 0, useDropout = False, dropoutRatio = 0.5):
-        if initStd is None and initCoef is None:
-            initCoef = math.sqrt(2);
-
-        self.__inputSize = inputSize;
-        self.__hiddenSizes = hiddenSizes;
-        self.__outputSize = outputSize;
-        self.__useBatchNormalization = useBatchNormalization;
-        self.__weightDecayLambda = weightDecayLambda;
-        self.__useDropout = useDropout;
-
-        self.params = {};
-        self.__layers = collections.OrderedDict();
-
-        allSizes = hiddenSizes + [outputSize];
-        for i in range(len(allSizes)):
-            currentSize = allSizes[i];
-            previousSize = inputSize if i == 0 else allSizes[i - 1];
-
-            self.params["W{0}".format(i + 1)] = (W := self.__initWeight((previousSize, currentSize), initStd, initCoef));
-            self.params["b{0}".format(i + 1)] = (b := np.zeros(currentSize));
-            self.__layers["Affine{0}".format(i + 1)] = AffineLayer(W, b);
-
-            if i < len(allSizes) - 1:
-                if useBatchNormalization:
-                    self.params["gamma{0}".format(i + 1)] = (gamma := np.ones(currentSize));
-                    self.params["beta{0}".format(i + 1)] = (beta := np.zeros(currentSize));
-                    self.__layers["BatchNormalization{0}".format(i + 1)] = BatchNormalizationLayer(gamma, beta);
-
-                self.__layers["Activation{0}".format(i + 1)] = activeLayerType();
-
-                if useDropout:
-                    self.__layers["Dropout{0}".format(i + 1)] = DropoutLayer(dropoutRatio);
-
-        self.__lastLayer = lastLayerType();
-
-        backLayers = list(self.__layers.values());
-        backLayers.reverse();
-        self.__backLayers = backLayers;
-
-
-    def __initWeight(self, shape, initStd, initCoef):
-        return np.random.randn(*shape) * (initCoef / math.sqrt(shape[0]) if initCoef is not None else initStd);
-
-
-    def predict(self, X, isTraining):
-        Y = X;
-        for layer in self.__layers.values():
-            Y = layer.forward(Y, isTraining);
-        return Y;
-
-
-    def loss(self, X, T, isTraining):
-        weightDecay = 0;
-
-        if self.__weightDecayLambda != 0:
-            for i in range(len(self.__hiddenSizes) + 1):
-                weightDecay += 0.5 * self.__weightDecayLambda * np.square(self.params["W{0}".format(i + 1)]).sum();
-
-        return self.__lastLayer.forward(self.predict(X, isTraining), T, isTraining) + weightDecay;
-
-
-    def predictWithdX(self, X):
-        Y = self.predict(X, False);
-
-        dout = np.ones((X.shape[0], self.__outputSize));
-        for layer in self.__backLayers:
-            dout = layer.backward(dout);
-
-        return Y, dout;
-
-
-    def gradient(self, X, T, isTraining):
-        loss = self.loss(X, T, isTraining);
-
-        dout = self.__lastLayer.backward(1);
-        for layer in self.__backLayers:
-            dout = layer.backward(dout);
-
-        gradients = {};
-        hiddenLayersNum = len(self.__hiddenSizes);
-        for i in range(hiddenLayersNum + 1):
-            gradients["W{0}".format(i + 1)] = self.__layers["Affine{0}".format(i + 1)].dW + self.__weightDecayLambda * self.params["W{0}".format(i + 1)];
-            gradients["b{0}".format(i + 1)] = self.__layers["Affine{0}".format(i + 1)].db;
-
-            if self.__useBatchNormalization and i < hiddenLayersNum:
-                gradients["gamma{0}".format(i + 1)] = self.__layers["BatchNormalization{0}".format(i + 1)].dGamma;
-                gradients["beta{0}".format(i + 1)] = self.__layers["BatchNormalization{0}".format(i + 1)].dBeta;
-
-
-        return gradients, loss;
-
-
-    def accuracy(self, X, T):
-        Y = self.predict(X, False);
-        return (Y.argmax(1) == T.argmax(1)).sum() / float(X.shape[0]);
 
 
 def preprocess(text : str) -> (np.ndarray, dict, dict):
@@ -190,7 +95,7 @@ def createContextsAndTarget(corpus : np.ndarray, windowSize : int = 1) -> (np.nd
 
         contexts.append(cs);
 
-    return np.array(contexts), target;
+    return np.array(contexts, dtype = np.int32), target;
 
 
 def loadSpiral(N = 1000, C = 3):
@@ -255,7 +160,18 @@ def filter_show(filters, nx=8, margin=3, scale=10):
     plt.close();
 
 
-def createMNISTNN() -> INetModel:
+def createMNIST_DNN() -> INetModel:
+    D = 784;
+    return SequentialContainer(
+        AffineLayer(D, D * 2),
+        ReluLayer(),
+        AffineLayer(D * 2, D // 2),
+        ReluLayer(),
+        AffineLayer(D // 2, 10),
+    );
+
+
+def createMNIST_CNN() -> INetModel:
     return SequentialContainer(
         ConvolutionLayer(16, 1, 3, 3, 1, 1),
         ReluLayer(),
@@ -282,20 +198,24 @@ def createMNISTNN() -> INetModel:
 
 
 def testMNIST():
-    mnist = MNIST("/media/WindowsE/Data/MNIST", normalize = True, flatten = False);
+    mnist = MNIST("/media/WindowsE/Data/MNIST", normalize = True, flatten = True);
+    batchSize, maxEpoch = 32, 100;
 
-    model = createMNISTNN();
-    lossFunc = SoftmaxWithCrossEntropyLoss();
-    optimizer = Adam();
-    trainIterator = DataIterator([mnist.trainX, mnist.trainY], batchSize = 2 ** 9);
-    testIterator = DataIterator([mnist.testX, mnist.testY], batchSize = 2 ** 9, shuffle = False);
+    model = createMNIST_DNN();
+    lossFunc = SoftmaxWithCrossEntropy1DLoss();
+    optimizer = Adam(0.1);
+    trainIterator = SequentialDataIterator([mnist.trainX, mnist.trainY], batchSize = batchSize);
+    testIterator = SequentialDataIterator([mnist.testX, mnist.testY], batchSize = batchSize, shuffle = False);
     evaluator = ClassifierAccuracyEvaluator();
 
     # filter_show(model.modules[0].weight.get());
 
-    trainer = NetTrainer(model, lossFunc, optimizer, evaluator);
-    trainer.train(20, trainIterator, testIterator);
-    trainer.plot();
+    # trainer = NetTrainer(model, lossFunc, optimizer, evaluator);
+    # trainer.train(20, trainIterator, testIterator);
+    # trainer.plot();
+    model.fit(trainIterator, lossFunc, optimizer, maxEpoch, testIterator, evaluator, plot = True);
+    with open("adam.lr", "wb") as file:
+        pickle.dump(optimizer.learningRate, file);
 
     # filter_show(model.modules[0].weight.get());
 
@@ -303,9 +223,9 @@ def testMNIST():
 def testWord2Vec():
     ptb = PTB("/media/WindowsE/Data/PTB");
     corpus, word2ID, id2Word = ptb.trainCorpus, ptb.word2ID, ptb.id2Word;
-    windowSize, hiddenSize, batchSize, negativeSize, maxEpoch = 5, 100, 2 ** 7, 5, 10;
+    windowSize, hiddenSize, batchSize, negativeSize, maxEpoch = 5, 100, 2 ** 8, 5, 10;
 
-    # with open("ptb_cbow.weights", "br") as file:
+    # with open("ptb_skipgram.weights", "br") as file:
     #     wordVec = pickle.load(file)[0];
     #
     # for word in ["you", "year", "car", "toyota"]:
@@ -325,11 +245,13 @@ def testWord2Vec():
     negativeSampler = CorpusNegativeSampler(corpus, negativeSize);
 
     # model = CBOWModel(windowSize, vocabSize, hiddenSize, negativeSampler);
-    # data = [contexts, target, np.ones_like(target)];
+    # # data = [contexts, target, np.ones_like(target)];
+    # data = [contexts, target];
     # filename = "ptb_cbow.weights";
 
     model = SkipGramModel(windowSize, vocabSize, hiddenSize, negativeSampler);
-    data = [target, contexts, np.ones_like(contexts)];
+    # data = [target, contexts, np.ones_like(contexts)];
+    data = [target, contexts];
     filename = "ptb_skipgram.weights";
 
     lossFunc = SigmoidWithCrossEntropyLoss();
@@ -337,100 +259,3143 @@ def testWord2Vec():
     trainIterator = SequentialDataIterator(data, batchSize = batchSize);
     evaluator = ClassifierAccuracyEvaluator();
 
-    trainer = NetTrainer(model, lossFunc, optimizer, evaluator);
-    trainer.train(maxEpoch, trainIterator);
+    # trainer = NetTrainer(model, lossFunc, optimizer, evaluator);
+    # trainer.train(maxEpoch, trainIterator);
+    model.fit(trainIterator, lossFunc, optimizer, maxEpoch, evaluator = evaluator, plot = True);
     with open(filename, "bw") as file:
         pickle.dump(model.weights, file);
-    trainer.plot();
+    # trainer.plot();
 
 
-def test():
-    # x = np.random.randn(12);
-    #
-    # data = np.load("/media/WindowsE/Data/PARS/JNLH/AllYiCuiHua/ISYS_history_20210422_20210629/__JNRTDB_TIC6201.PV.npy");
-    # # data = np.load("/media/WindowsE/Data/PARS/JNLH/AllYiCuiHua/PI_history_20190101_20201101/__JNRTDB_YCH_TIC6201.PV.npy");
-    # X = data[:, 0];
-    # q1, q3 = np.quantile(X, 0.25), np.quantile(X, 0.75);
-    # IQR = 1.5 * (q3 - q1);
-    #
-    # c1 = np.sum(X <= q1 - IQR);
-    # c2 = np.sum(X >= q3 + IQR);
-    #
-    # plt.figure();
-    # plt.hist(X[X >=0], bins = 1000);
-    # plt.show(block = True);
-    # plt.close();
-    #
-    # print("exit");
-    # return;
-
-    # plt.figure(1);
-    # for j in range(C):
-    #     plt.scatter(X[T[:, j] == 1, 0].get(), X[T[:, j] == 1, 1].get(), marker = markers[j], color = colors[j]);
-    # plt.show(block = True);
-    # plt.close();
-
+def testPTB():
     # text = "you say goodbye and i say hello.";
     # corpus, word2ID, id2Word = preprocess(text);
     # windowSize, hiddenSize, batchSize, negativeSize, maxEpoch = 1, 5, 3, 2, 1000;
 
+    filename = "ptb_lm.weights";
     ptb = PTB("/media/WindowsE/Data/PTB");
     trainingCorpus, testCorpus, word2ID, id2Word = ptb.trainCorpus, ptb.testCorpus, ptb.word2ID, ptb.id2Word;
     vocabSize = len(word2ID);
-    vecSize, hiddenSize, batchSize, timeSize, maxEpoch = 120, 100, 20, 35, 4;
+    vecSize, hiddenSize, batchSize, timeSize, maxEpoch = 650, 650, 20, 35, 10;
 
     # trainingCorpus = trainingCorpus[:10000];
     # vocabSize = int(np.amax(trainingCorpus)) + 1;
 
+    embedding = EmbeddingLayer(vocabSize, hiddenSize);
+
     model = SequentialContainer(
-        EmbeddingLayer(vocabSize, vecSize),
-        LstmLayer(vecSize, hiddenSize),
+        embedding,
+        VariationalDropoutLayer(),
+        LstmLayer(vecSize, hiddenSize, returnSequences = True),
+        VariationalDropoutLayer(),
+        LstmLayer(hiddenSize, hiddenSize, returnSequences = True),
+        VariationalDropoutLayer(),
         ReshapeLayer((-1, hiddenSize)),
-        AffineLayer(hiddenSize, vocabSize),
+        AffineLayer(hiddenSize, vocabSize, W = embedding.weight.T),
         ReshapeLayer((batchSize, -1, vocabSize)),
     );
 
+    if os.path.isfile(filename):
+        with open(filename, "br") as file:
+            params = pickle.load(file);
+        model.params = params;
+
     lossFunc = SoftmaxWithCrossEntropy1DLoss();
-    optimizer = GradientsClipping(0.25, SGD(20));
+    optimizer = ParametersShare(GradientsClipping(1, Adam()));
     # optimizer = GradientsClipping(0.25, Adam(1.0));
     # optimizer = SGD(0.1);
     # trainIterator = SequentialDataIterator([corpus[:-1], corpus[1:]], batchSize = timeSize);
-    trainingIterator = PartitionedDataIterator([trainingCorpus[:-1], trainingCorpus[1:]], partitionNumber = batchSize, batchSize = timeSize);
-    testIterator = PartitionedDataIterator([testCorpus[:-1], testCorpus[1:]], partitionNumber = batchSize, batchSize = timeSize);
+    trainingIterator = PartitionedDataIterator([trainingCorpus[:-1], trainingCorpus[1:]], batchSize = batchSize,
+                                               stepSize = timeSize);
+    testIterator = PartitionedDataIterator([testCorpus[:-1], testCorpus[1:]], batchSize = batchSize,
+                                           stepSize = timeSize);
     evaluator = PerplexityAccuracyEvaluator();
 
     trainer = NetTrainer(model, lossFunc, optimizer, evaluator);
-    trainer.train(maxEpoch, trainingIterator, testIterator = testIterator, evalIterations = 20, evalEpoch = True, evalTrainingData = True);
+    trainer.train(maxEpoch, trainingIterator, testIterator = testIterator, evalIterations = 20, evalEpoch = True,
+                  evalTrainingData = True);
     trainer.plot();
 
-    # U, S, V = U.get(), S.get(), V.get();
-    #
-    # plt.figure();
-    # for word, wordID in word2ID.items():
-    #     plt.annotate(word, (U[wordID, 0], U[wordID, 1]));
-    # plt.scatter(U[:, 0], U[:, 1], alpha = 0.5);
-    # plt.show(block = True);
-    # plt.close();
-    # vocabSize = len(word2ID);
-    # contexts, target = createContextsAndTarget(corpus);
-    # contexts = convert2OneHot(contexts, vocabSize);
-    # target = convert2OneHot(target, vocabSize);
-    #
-    # # ptb = PTB.PTB("/media/WindowsE/Data/PTB");
-    # # vocabSize = len(ptb.word2ID);
-    # # contexts, target = createContextsAndTarget(ptb.trainCorpus);
-    # # contexts = convert2OneHot(contexts, vocabSize);
-    # # target = convert2OneHot(target, vocabSize);
-    #
-    # net = CBOW(1, vocabSize, 5);
-    # # net = SkipGram(1, vocabSize, 5);
-    #
-    # lossValues = trainFNN(net, SoftmaxWithCrossEntropyLoss(), Adam(), DataIterator([contexts, target], 3), 2000);
-    # plt.figure(1, (12, 8));
-    # plt.plot(lossValues, "-");
-    # plt.show(block = True);
-    # plt.close();
-    #
-    # print(net.forward(contexts));
+    with open(filename, "bw") as file:
+        pickle.dump(model.params, file);
+
+
+def testKeras():
+    def getData(X : np.ndarray, size : int) -> np.ndarray:
+        return list2OneHot([[i if i < size else 0 for i in x] for x in X], size, defaultDType);
+
+
+    vocabSize = 10000;
+    filePath = "/media/WindowsE/Data/IMDB/imdb.npz";
+    with np.load(filePath, allow_pickle = True) as file:
+        X_train, X_test = file["x_train"], file["x_test"];
+        Y_train, Y_test = file["y_train"], file["y_test"];
+
+    X_train, X_test = getData(X_train, vocabSize), getData(X_test, vocabSize);
+    Y_train, Y_test = Y_train.reshape(-1, 1), Y_test.reshape(-1, 1);
+
+    inputSize, hiddenSize, outputSize, batchSize, maxEpoch = X_train.shape[-1], 16, 1, 32, 20;
+    model = SequentialContainer(
+        AffineLayer(inputSize, hiddenSize),
+        ReluLayer(),
+        # DropoutLayer(0.2),
+        AffineLayer(hiddenSize, hiddenSize),
+        ReluLayer(),
+        # DropoutLayer(0.2),
+        AffineLayer(hiddenSize, outputSize),
+    );
+
+    lossFunc = SigmoidWithCrossEntropyLoss();
+    optimizer = RMSProp();
+    trainingIterator = SequentialDataIterator([X_train, Y_train], batchSize);
+    testIterator = SequentialDataIterator([X_test, Y_test], batchSize);
+    evaluator = ClassifierAccuracyEvaluator();
+    model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, minEpoch = 0, testIterator = testIterator, evaluator = evaluator, plot = True);
+
+    # Y_test_hat = np.concatenate(tuple([sigmoid(item[0]) for item in model.predict(SequentialDataIterator([X_test, Y_test], batchSize, shuffle = False))]), axis = 0);
+
 
     print("exit.");
+
+
+def test():
+    # with open("adam.lr", "rb") as file:
+    #     learningRate = pickle.load(file);
+
+    # testMNIST();
+    # testKeras();
+    unitTest();
+    # testSeq2Seq();
+    # testAddition();
+    # testTS_Many2One();
+    # testTS_Many2Many();
+    # testTS1_Seq2Seq();
+    # testTS2_BoostingSeq2Seq();
+    # testTS3_LM_11_1step();
+    # testTS3_LM_N1_1step();
+    # testTS4_LM_Nstep();
+    # testTS5_LM_1step_All();
+    # testAE_NASABearing();
+    # testAE_TagData();
+    # testIF_TagData();
+    # testGMM_TagData();
+    # testGaussianVAE_TagData();
+    # testBernoulliVAE_TagData();
+
+    return;
+
+
+def readTimeMachine():
+    with open("/media/WindowsE/Data/timemachine.txt", "rt") as file:
+        lines = file.readlines();
+
+    return [re.sub("[^A-Za-z]+", " ", line).strip().lower() for line in lines];
+
+
+def tokenize(lines : List[str], token : str = "word") -> List[List[str]]:
+    if token == "word":
+        return [line.split() for line in lines];
+    elif token == "char":
+        return [list(line) for line in lines];
+    else:
+        print(f"error: unknown token type {token}");
+
+
+class Vocab:
+    def __init__(self, tokens : Union[List[str], List[List[str]]], minFreq : int = 0, reservedTokens : List[str] = None):
+        counter = self._countCorpus(tokens);
+
+        self._tokenFreq = sorted(counter.items(), key = lambda item: item[1], reverse = True);
+        self._id2Token = ["<unk>"] + (reservedTokens if reservedTokens is not None else []);
+        self._token2ID = {token : idx for idx, token in enumerate(self._id2Token)};
+
+        for token, freq in self._tokenFreq:
+            if freq < minFreq:
+                break;
+
+            self._token2ID[token] = len(self._id2Token);
+            self._id2Token.append(token);
+
+
+    def __len__(self):
+        return len(self._id2Token);
+
+
+    def __getitem__(self, tokens):
+        if isinstance(tokens, (list, tuple)):
+            return [self.__getitem__(token) for token in tokens];
+        else:
+            return self._token2ID[tokens];
+
+
+    def getTokens(self, indices):
+        if isinstance(indices, (list, tuple)):
+            return [self.getTokens(idx) for idx in indices];
+        else:
+            return self._id2Token[indices];
+
+
+    @property
+    def unk(self) -> int:
+        return 0;
+
+
+    @property
+    def tokenFreq(self) -> List[Tuple[str, int]]:
+        return self._tokenFreq;
+
+
+    @property
+    def token2ID(self) -> Dict[str, int]:
+        return self._token2ID;
+
+
+    @property
+    def id2Token(self) -> List[str]:
+        return self._id2Token;
+
+
+    def _countCorpus(self, tokens) -> collections.Counter:
+        if len(tokens) > 0 and isinstance(tokens[0], list):
+            tokens = [token for line in tokens for token in line];
+
+        return collections.Counter(tokens);
+
+
+def loadCorpusTimeMachine(maxTokens : int = -1):
+    lines = readTimeMachine();
+    tokens = tokenize(lines, "char");
+    vocab = Vocab(tokens);
+    corpus = [vocab[token] for line in tokens for token in line];
+
+    if maxTokens > 0:
+        corpus = corpus[:maxTokens];
+
+    return corpus, vocab;
+
+
+def loadDataTimeMachine(batchSize : int, stepSize : int, shuffle : bool = False, maxTokens : int = -1):
+    corpus, vocab = loadCorpusTimeMachine(maxTokens);
+    X, Y = expand2OneHot(np.array(corpus[:-1]), len(vocab)).astype(defaultDType), np.array(corpus[1:]);
+    iterator = PartitionedDataIterator([X, Y], batchSize, stepSize, shuffle);
+
+    return iterator, vocab;
+
+
+def predict(prefix : str, count : int, model : INetModel, vocab : Vocab) -> str:
+    vocabSize = len(vocab);
+    X = expand2OneHot(np.array([vocab[c] for c in prefix[:-1]]).reshape((1, -1)), vocabSize).astype(defaultDType);
+
+    model.reset();
+    Y, = model.forward(X);
+
+    outputs = prefix;
+    for _ in range(count):
+        X = expand2OneHot(np.array([vocab[outputs[-1]]]).reshape((1, -1)), vocabSize).astype(defaultDType);
+        Y, = model.forward(X);
+
+        idx = int(Y.flatten().argmax());
+        if idx == vocab.unk:
+            break;
+
+        outputs += vocab.id2Token[idx];
+
+    return outputs;
+
+
+def testPyTorch():
+    testTS2();
+    return;
+
+    batchSize, stepSize, maxTokens, maxEpoch = 32, 35, 10000, 500;
+    iterator, vocab = loadDataTimeMachine(batchSize, stepSize, maxTokens = maxTokens);
+
+    vocabSize, hiddenSize = len(vocab), 256;
+    model = SequentialContainer(
+        GruLayer(vocabSize, hiddenSize),
+        GruLayer(hiddenSize, hiddenSize),
+        ReshapeLayer((-1, hiddenSize)),
+        AffineLayer(hiddenSize, vocabSize),
+    );
+
+    lossFunc = SoftmaxWithCrossEntropy1DLoss();
+    optimizer = GradientsClipping(1.0, SGD(1.0));
+    trainingIterator = iterator;
+    testIterator = None;
+    evaluator = PerplexityAccuracyEvaluator();
+
+    trainer = NetTrainer(model, lossFunc, optimizer, evaluator);
+    trainer.train(maxEpoch, trainingIterator, testIterator = testIterator, evalEpoch = True, evalTrainingData = True);
+    trainer.plot();
+
+    print(predict('time traveller', 50, model, vocab))
+    print(predict('traveller', 50, model, vocab));
+
+    print("exit.");
+
+
+# find Longest-Continuous-Subsequence
+def findLCS(X : np.ndarray, predicate : Callable, startIndex : int = None, endIndex : int = None) -> Tuple[int, int]:
+    if len(X) == 0:
+        return 0, 0;
+
+    if startIndex is None:
+        startIndex = 0;
+    if endIndex is None:
+        endIndex = len(X);
+
+    r1, r2 = 0, 0;
+    j1, j2 = None, None;
+    X = X[startIndex: endIndex];
+
+    for i in range(len(X)):
+        if predicate(X[i], X, i):
+            if j1 is None:
+                j1 = i;
+
+            j2 = i + 1;
+        else:
+            if j1 is not None and j2 is not None and j2 - j1 > r2 - r1:
+                r1, r2 = j1, j2;
+
+            j1, j2 = None, None;
+
+    if j1 is not None and j2 is not None and j2 - j1 > r2 - r1:
+        r1, r2 = j1, j2;
+
+    return r1 + startIndex, r2;
+
+
+def findSegments(X : np.ndarray, predicate : Callable, minLength : int = 0) -> List[Tuple[int, int]]:
+    if len(X) == 0:
+        return [(0, 0)];
+
+    j = None;
+    segments = [];
+    for i in range(len(X)):
+        if predicate(X[i], X, i):
+            if j is None:
+                j = i;
+        else:
+            if j is not None:
+                segments.append((j, i));
+                j = None;
+
+    if j is not None:
+        segments.append((j, len(X)));
+
+    return [(r1, r2) for r1, r2 in segments if r2 - r1 > minLength];
+
+
+def loadDataset(X : np.ndarray, M : np.ndarray, minLength : int = 0) -> List[np.ndarray]:
+    return [X[r1: r2] for r1, r2 in findSegments(M, lambda v, x, i: np.all(v == 1), minLength)];
+
+
+def lagAndForecast(dataset : np.ndarray, LN : int, FN : int) -> (np.ndarray, np.ndarray):
+    N, D = len(dataset) - LN - FN + 1, dataset.shape[-1];
+    X, Y = np.zeros((N, LN, D)), np.zeros((N, FN, D));
+
+    for i in range(N):
+        X[i] = dataset[i: i + LN];
+        Y[i] = dataset[i + LN: i + LN + FN];
+
+    return X, Y;
+
+
+def loadRawTSData(targetTags : List[str]) -> Tuple[np.ndarray, np.ndarray]:
+    data, marks = [], [];
+    folders = ["1CH", "2CH", "2JQ", "3JQ", "BW", "CA", "CA_GYGQ", "CY", "DL", "GD", "HMJQ", "JBX", "JHS", "JLSC", "LH", "QF", "RHY", "RHYJQ", "SZORB", "WUX", "XHS", "YCL", "YP"];
+
+    for name in targetTags:
+        for folder in folders:
+            filePath = f"/media/WindowsE/Data/PARS/JNLH/AiModel/isys_data_20210701_20220516_180/{folder}/__JNRTDB_{name}.npy";
+            if os.path.isfile(filePath):
+                break;
+
+            filePath = None;
+
+        if filePath is None:
+            raise FileNotFoundError(name);
+
+        d = np.load(filePath);
+        data.append(d[:, 0]);
+        marks.append(d[:, 1]);
+    data, marks = np.column_stack(tuple(data)), np.column_stack(tuple(marks));
+
+    return data.astype(defaultDType), marks.astype(defaultDType);
+
+
+def loadTSData1AndMany(targetTag : str, negativeTags : List[str], positiveTags : List[str]) -> Tuple[np.ndarray, np.ndarray]:
+    data, marks = loadRawTSData([item for item in negativeTags + positiveTags + [targetTag] if not item.endswith(".SV")]);
+
+    # remove status value, setup value
+    idx = [];
+    for j in range(data.shape[-1] - 1):
+        if len(set(data[marks[:, j] == 1, j].tolist())) > 100:
+            idx.append(j);
+    idx.append(data.shape[-1] - 1);
+    data, marks = data[:, idx], marks[:, idx];
+
+    # remove break points
+    breakPoints, M = [], np.all(marks == 1, axis = -1);
+    for i in range(1, len(data) - 1):
+        if M[i - 1] and not M[i] and M[i + 1]:
+            breakPoints.append(i);
+
+    for i in breakPoints:
+        idx = marks[i] != 1;
+        data[i, idx] = (data[i - 1, idx] + data[i + 1, idx]) * 0.5;
+        marks[i] = 1;
+
+    return data, marks;
+
+
+def testTS_Many2One():
+    targetTag = "TI6116A.PV";
+    negativeTags = [];  #['XIP301A.PV', 'DI6103.PV', 'FIC6031.SV', 'PDI6105.PV', 'DI6104.PV', 'JI6601.PV', 'TIC6522.SV'];
+    # positiveTags = [];
+    positiveTags = ['TI6116B.PV', 'TIC6115.PV', 'TI6106.PV', 'TI6901.PV', 'TI6166A.PV', 'TE6658.PV', 'TI6107D.PV', 'TI6107C.PV', 'TI6107H.PV', 'TI6107G.PV'];
+
+    data, marks = loadTSData1AndMany(targetTag, negativeTags, positiveTags);
+    segments = loadDataset(data, marks);
+    segmentIndex = -2;
+    dataSet = segments[segmentIndex];
+    trainSize, predictSize = int(len(dataSet) * 0.8), 10;
+    stepSize = 10 * predictSize;
+
+    scaler = StandardScaler();
+    scaler.fit(dataSet[:trainSize]);
+
+    X = scaler.transform(dataSet);
+    X_train, Y_train = lagAndForecast(X[: trainSize], stepSize, predictSize);
+    X_test, Y_test = lagAndForecast(X[trainSize:], stepSize, predictSize);
+
+    Y_train, Y_test = Y_train[..., -1], Y_test[..., -1];
+
+    batchSize, inputSize, hiddenSize, outputSize, maxEpoch = 32, X_train.shape[-1], 32, Y_train.shape[-1], 100;
+    filename = f"many2One_{targetTag}_{segmentIndex}_{inputSize}f_{stepSize}t_{predictSize}p.weights";
+    model = SequentialContainer(
+        LstmLayer(inputSize, hiddenSize),
+        AffineLayer(hiddenSize, outputSize),
+    );
+
+    if os.path.isfile(filename):
+        with open(filename, "br") as file:
+            params = pickle.load(file);
+        if isinstance(params[0], cp.ndarray):
+            params = [cp.asnumpy(p) for p in params];
+        model.params = params;
+
+    model.reset();
+    Y_train_hat = np.concatenate(tuple([model.forward(*item)[0] for item in SequentialDataIterator([X_train, Y_train], batchSize, shuffle = False)]), axis = 0);
+    Y_train_hat = scaler.inverse(Y_train_hat, index = -1);
+    Y_train_real = scaler.inverse(Y_train, index = -1);
+    print(f"train {predictSize}-step MAE: {meanAbsoluteError(Y_train_real, Y_train_hat)}");
+
+    idx = np.random.randint(0, len(X_train), 20);
+    for i in idx.tolist():
+        plt.figure(1, (14, 8));
+        plt.plot(np.arange(predictSize), Y_train_real[i], "D-b", label = "real data");
+        plt.plot(np.arange(predictSize), Y_train_hat[i], "s-r", label = "predict data");
+        plt.legend(loc = 'upper right');
+        plt.show(block = True);
+        plt.close();
+
+    model.reset();
+    Y_test_hat = np.concatenate(tuple([model.forward(*item)[0] for item in SequentialDataIterator([X_test, Y_test], batchSize, shuffle = False)]), axis = 0);
+    Y_test_hat = scaler.inverse(Y_test_hat, index = -1);
+    Y_test_real = scaler.inverse(Y_test, index = -1);
+    print(f"test {predictSize}-step MAE: {meanAbsoluteError(Y_test_real, Y_test_hat)}");
+
+    idx = np.random.randint(0, len(X_test), 20);
+    for i in idx.tolist():
+        plt.figure(1, (14, 8));
+        plt.plot(np.arange(predictSize), Y_test_real[i], "D-b", label = "real data");
+        plt.plot(np.arange(predictSize), Y_test_hat[i], "s-r", label = "predict data");
+        plt.legend(loc = 'upper right');
+        plt.show(block = True);
+        plt.close();
+
+    # lossFunc = IdentityWithMeanSquareLoss();
+    # optimizer = GradientsClipping(5.0, Adam());
+    # trainingIterator = SequentialDataIterator([X_train, Y_train], batchSize, shuffle = False);
+    # testIterator = SequentialDataIterator([X_test, Y_test], batchSize, shuffle = False);
+    # evaluator = RegressionAccuracyEvaluator();
+    # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, minEpoch = 1, testIterator = testIterator, evaluator = evaluator, plot = True);
+    #
+    # with open(filename, "wb") as file:
+    #     pickle.dump(model.params, file);
+
+    print("exit.");
+
+
+def testTS_Many2Many():
+    targetTag = "TI6116A.PV";
+    negativeTags = [];  #['XIP301A.PV', 'DI6103.PV', 'FIC6031.SV', 'PDI6105.PV', 'DI6104.PV', 'JI6601.PV', 'TIC6522.SV'];
+    positiveTags = [];
+    # positiveTags = ['TI6116B.PV', 'TIC6115.PV', 'TI6106.PV', 'TI6901.PV', 'TI6166A.PV', 'TE6658.PV', 'TI6107D.PV', 'TI6107C.PV', 'TI6107H.PV', 'TI6107G.PV'];
+
+    data, marks = loadTSData1AndMany(targetTag, negativeTags, positiveTags);
+    segments = loadDataset(data, marks);
+    segmentIndex = -2;
+    dataSet = segments[segmentIndex];
+    trainSize, predictSize = int(len(dataSet) * 0.8), 10;
+    stepSize = 10 * predictSize;
+
+    scaler = StandardScaler();
+    scaler.fit(dataSet[:trainSize]);
+
+    X = scaler.transform(dataSet);
+    X_train, Y_train = lagAndForecast(X[: trainSize], stepSize, predictSize);
+    X_test, Y_test = lagAndForecast(X[trainSize:], stepSize, predictSize);
+
+    Y_train, Y_test = Y_train[..., [-1]], Y_test[..., [-1]];
+
+    batchSize, inputSize, hiddenSize, outputSize, maxEpoch = 32, X_train.shape[-1], 32, Y_train.shape[-1], 100;
+    filename = f"many2Many_{targetTag}_{segmentIndex}_{inputSize}f_{stepSize}t_{predictSize}p.weights";
+    model = Seq2SeqTSModel_Seq2Seq_OnlyStateInput(inputSize, hiddenSize, outputSize);
+
+    if os.path.isfile(filename):
+        with open(filename, "br") as file:
+            params = pickle.load(file);
+        if isinstance(params[0], cp.ndarray):
+            params = [cp.asnumpy(p) for p in params];
+        model.params = params;
+
+    model.reset();
+    Y_train_hat = np.concatenate(tuple([model.forward(*item)[0] for item in SequentialDataIterator([X_train, Y_train], batchSize, shuffle = False)]), axis = 0);
+    Y_train_hat = scaler.inverse(Y_train_hat, index = -1);
+    Y_train_real = scaler.inverse(Y_train, index = -1);
+    X_train_real = scaler.inverse(X_train, index = -1);
+    print(f"train {predictSize}-step MAE: {meanAbsoluteError(Y_train_real, Y_train_hat)}");
+
+    idx = np.random.randint(0, len(X_train_real), 100);
+    for i in idx.tolist():
+        plt.figure(1, (14, 8));
+        plt.plot(np.arange(stepSize + predictSize), np.concatenate((X_train_real[i], Y_train_real[i]), axis = 0).flatten(), "D-b", label = "real data");
+        plt.plot(np.arange(stepSize, stepSize + predictSize), Y_train_hat[i].flatten(), "s-r", label = "predict data");
+        plt.legend(loc = 'upper right');
+        plt.show(block = True);
+        plt.close();
+
+    model.reset();
+    Y_test_hat = np.concatenate(tuple([model.forward(*item)[0] for item in SequentialDataIterator([X_test, Y_test], batchSize, shuffle = False)]), axis = 0);
+    Y_test_hat = scaler.inverse(Y_test_hat, index = -1);
+    Y_test_real = scaler.inverse(Y_test, index = -1);
+    print(f"test {predictSize}-step MAE: {meanAbsoluteError(Y_test_real, Y_test_hat)}");
+
+    idx = np.random.randint(0, len(X_test), 20);
+    for i in idx.tolist():
+        plt.figure(1, (14, 8));
+        plt.plot(np.arange(predictSize), Y_test_real[i].flatten(), "D-b", label = "real data");
+        plt.plot(np.arange(predictSize), Y_test_hat[i].flatten(), "s-r", label = "predict data");
+        plt.legend(loc = 'upper right');
+        plt.show(block = True);
+        plt.close();
+
+    # lossFunc = IdentityWithMeanSquareLoss();
+    # optimizer = GradientsClipping(5.0, Adam());
+    # trainingIterator = SequentialDataIterator([X_train, Y_train], batchSize, shuffle = False);
+    # testIterator = SequentialDataIterator([X_test, Y_test], batchSize, shuffle = False);
+    # evaluator = RegressionAccuracyEvaluator();
+    # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, minEpoch = 1, testIterator = testIterator, evaluator = evaluator, plot = True);
+    #
+    # with open(filename, "wb") as file:
+    #     pickle.dump(model.params, file);
+
+    print("exit.");
+
+
+def testTS1_Seq2Seq():
+    # TI6116A = np.load("/media/WindowsE/Data/PARS/JNLH/AiModel/isys_data_20210701_20220401_180/__JNRTDB_TI6116A.PV.npy");
+    # datasets = loadDataset(TI6116A[:, 0].reshape(-1, 1), TI6116A[:, 1].reshape(-1, 1), int(1440 / 3 * 7));
+    # datasets = [np.load("TI6116A.npy").reshape(-1, 1)];
+    # scaler = StandardScaler();
+    # scaler.fit(np.concatenate(tuple(datasets), axis = 0));
+    #
+    # filename = "lstm1.weights";
+    # stepSize, predictSize = 100, 10;
+    #
+    # X_train, Y_train, X_test, Y_test = [], [], [], [];
+    # for dataset in datasets:
+    #     X = dataset;
+    #     X = scaler.transform(X);
+    #     trainSize = int(len(X) * 0.8);
+    #
+    #     x, y = lagAndForecast(X[:trainSize], stepSize, predictSize);
+    #     X_train.append(x);
+    #     Y_train.append(y);
+    #
+    #     x, y = lagAndForecast(X[trainSize:], stepSize, predictSize);
+    #     X_test.append(x);
+    #     Y_test.append(y);
+    #
+    # X_train = np.concatenate(tuple(X_train), axis = 0);
+    # Y_train = np.concatenate(tuple(Y_train), axis = 0);
+    # X_test = np.concatenate(tuple(X_test), axis = 0);
+    # Y_test = np.concatenate(tuple(Y_test), axis = 0);
+
+    TI6116A = np.load("TI6116A.npy");
+    # scaler = StandardScaler();
+    # scaler.fit(TI6116A);
+
+    filename = "lstm1.weights";
+    trainSize, stepSize, predictSize = int(len(TI6116A) * 0.8), 30, 3;
+
+    # X = scaler.transform(TI6116A);
+    X = np.diff(TI6116A, axis = 0);
+    X_train, Y_train = lagAndForecast(X[:trainSize], stepSize, predictSize);
+    X_test, Y_test = lagAndForecast(X[trainSize:], stepSize, predictSize);
+
+    X = np.concatenate((X_train, Y_train), axis = 1).reshape(-1, stepSize + predictSize);
+    Y = np.repeat(np.mean(X[:, -2 * predictSize: -predictSize], axis = -1, keepdims = True), predictSize, axis = -1);
+    print(f"train base error: {meanAbsoluteError(X[:, -predictSize:], Y)}");
+
+    X = np.concatenate((X_test, Y_test), axis = 1).reshape(-1, stepSize + predictSize);
+    Y = np.repeat(np.mean(X[:, -2 * predictSize: -predictSize], axis = -1, keepdims = True), predictSize, axis = -1);
+    print(f"train base error: {meanAbsoluteError(X[:, -predictSize:], Y)}");
+
+    # for i in np.random.randint(0, len(X_train), 20).tolist():
+    #     plt.figure();
+    #     plt.plot(X_train[i].flatten(), "x-");
+    #     plt.show(block = True);
+    #     plt.close();
+
+    batchSize, inputSize, hiddenSize, maxEpoch = 32, X_train.shape[-1], 128, 40;
+    model = Seq2SeqTSModel_Seq2Seq_OnlyStateInput(inputSize, hiddenSize, inputSize, layerNum = 2, inputDropout = 0.2, recurrentDropout = 0.2);
+
+    if os.path.isfile(filename):
+        with open(filename, "br") as file:
+            params = pickle.load(file);
+        if isinstance(params[0], cp.ndarray):
+            params = [cp.asnumpy(p) for p in params];
+        model.params = params;
+
+    model.reset();
+    Y_hat = np.concatenate(tuple([item[0] for item in list(model.predict(SequentialDataIterator([X_test, Y_test], batchSize, shuffle = False)))]), axis = 0);
+    Y_real = model.getFinalTag(Y_test);
+
+    # X_test, Y_test, Y_real, Y_hat = scaler.inverse(X_test), scaler.inverse(Y_test), scaler.inverse(Y_real), scaler.inverse(Y_hat),
+    print(f"MAE: {meanAbsoluteError(Y_real, Y_hat)}");
+
+    idx = np.random.randint(0, len(X_test), 20);
+    for i in idx.tolist():
+        x = np.concatenate((X_test[i], Y_test[i]), axis = None);
+
+        plt.figure(1);
+        plt.plot(np.arange(len(x)), x, "D-b", label = "real data");
+        plt.plot(np.arange(len(x) - predictSize, len(x)), Y_hat[i].flatten(), "s-r", label = "predict data");
+        plt.legend(loc = 'upper left');
+        plt.show(block = True);
+        plt.close();
+
+    # lossFunc = IdentityWithMeanSquareLoss();
+    # optimizer = GradientsClipping(5.0, Adam());
+    # trainingIterator = SequentialDataIterator([X_train, Y_train], batchSize);
+    # testIterator = SequentialDataIterator([X_test, Y_test], batchSize);
+    # evaluator = RegressionAccuracyEvaluator();
+    # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, testIterator, evaluator, minEpoch = 5, plot = True);
+    #
+    # with open(filename, "wb") as file:
+    #     pickle.dump(model.params, file);
+
+    print("exit.");
+
+
+def testTS2_BoostingSeq2Seq():
+    # X = TI6116A[: 1000 * 480].flatten();
+    # X = np.diff(X);
+    # acf = [DataHelper.calcAcf(X, k + 1) for k in range(100)];
+    # plt.figure();
+    # plt.plot(acf, "x-");
+    # plt.show(block = True);
+    # plt.close();
+    #
+    #
+    # return;
+    TI6116A = np.load("TI6116A.npy");
+    scaler = StandardScaler();
+    scaler.fit(TI6116A);
+
+    filename = "lstm2.weights";
+    trainSize, stepSize, predictSize = int(len(TI6116A) * 0.8), 100, 10;
+
+    X = scaler.transform(TI6116A);
+    X_train, Y_train = lagAndForecast(X[:trainSize], stepSize, predictSize);
+    X_test, Y_test = lagAndForecast(X[trainSize:], stepSize, predictSize);
+
+    # for i in np.random.randint(0, len(X_train), 20).tolist():
+    #     plt.figure();
+    #     plt.plot(np.concatenate((X_train[i], Y_train[i]), axis = None), "x-");
+    #     plt.show(block = True);
+    #     plt.close();
+
+    maxModelNumber, batchSize, inputSize, hiddenSize, maxEpoch = 5, 32, X_train.shape[-1], 128, 20;
+    models = [Seq2SeqTSModel_Seq2Seq_OnlyStateInput(inputSize, hiddenSize, inputSize, inputDropout = 0.5, recurrentDropout = 0.5) for _ in range(maxModelNumber)];
+
+    if os.path.isfile(filename):
+        with open(filename, "br") as file:
+            params = pickle.load(file);
+        for i in range(len(params)):
+            models[i].params = params[i];
+
+    for m in models:
+        m.reset();
+
+    Y_hat = np.zeros_like(Y_test);
+    for m in models:
+        Y_hat += np.concatenate(tuple([item[0] for item in list(m.predict(SequentialDataIterator([X_test, Y_test], batchSize, shuffle = False)))]), axis = 0);
+    Y_real = models[0].getFinalTag(Y_test);
+
+    X_test, Y_test, Y_real, Y_hat = scaler.inverse(X_test), scaler.inverse(Y_test), scaler.inverse(Y_real), scaler.inverse(Y_hat),
+    print(f"MAE: {meanAbsoluteError(Y_real, Y_hat)}");
+
+    idx = np.random.randint(0, len(X_test), 20);
+    for i in idx.tolist():
+        x = np.concatenate((X_test[i], Y_test[i]), axis = None);
+
+        plt.figure(1);
+        plt.plot(np.arange(len(x)), x, "D-b", label = "real data");
+        plt.plot(np.arange(len(x) - predictSize, len(x)), Y_hat[i].flatten(), "s-r", label = "predict data");
+        plt.legend(loc = 'upper left');
+        plt.show(block = True);
+        plt.close();
+
+    # R_train, R_test = Y_train, Y_test;
+    # Y_train_hat, Y_test_hat = np.zeros_like(Y_train), np.zeros_like(Y_test);
+    # trainError, testError = [], [];
+    # for i, model in enumerate(models):
+    #     lossFunc = IdentityWithMeanSquareLoss();
+    #     optimizer = GradientsClipping(5.0, Adam());
+    #     trainingIterator = SequentialDataIterator([X_train, R_train], batchSize);
+    #     testIterator = SequentialDataIterator([X_test, R_test], batchSize);
+    #     evaluator = RegressionAccuracyEvaluator();
+    #     model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, testIterator, evaluator, minEpoch = 1, plot = False);
+    #
+    #     R_train_hat = np.concatenate(tuple([item[0] for item in list(model.predict(SequentialDataIterator([X_train, R_train], batchSize, shuffle = False)))]), axis = 0);
+    #     R_test_hat = np.concatenate(tuple([item[0] for item in list(model.predict(SequentialDataIterator([X_test, R_test], batchSize, shuffle = False)))]), axis = 0);
+    #     R_train = R_train - R_train_hat;
+    #     R_test = R_test - R_test_hat;
+    #
+    #     Y_train_hat += R_train_hat;
+    #     Y_test_hat += R_test_hat;
+    #     trainError.append(meanAbsoluteError(Y_train, Y_train_hat));
+    #     testError.append(meanAbsoluteError(Y_test, Y_test_hat));
+    #     print(f"{i + 1} boosting train MAE: {trainError[-1]},test MAE: {testError[-1]}");
+    #     print("\n\n");
+    #
+    # plt.figure(1);
+    # plt.plot(np.arange(len(trainError)), trainError, "D-b", label = "train MAE");
+    # plt.plot(np.arange(len(testError)), testError, "s-r", label = "test MAE");
+    # plt.legend(loc = 'upper right');
+    # plt.show(block = True);
+    # plt.close();
+    #
+    # with open(filename, "wb") as file:
+    #     pickle.dump([m.params for m in models], file);
+
+    print("exit.");
+
+
+def testTS3_LM_11_1step():
+    TI6116A = np.load("TI6116A.npy");
+    scaler = StandardScaler();
+    scaler.fit(TI6116A);
+
+    filename = "lstm31.weights";
+    trainSize, stepSize, predictSize = int(len(TI6116A) * 0.8), 240, 10;
+
+    X = scaler.transform(TI6116A);
+    X_train, Y_train = X[:trainSize - 1], X[1: trainSize];
+    X_test, Y_test = X[trainSize: -1], X[trainSize + 1:];
+
+    batchSize, inputSize, hiddenSize, maxEpoch = 4, X.shape[-1], 128, 200;
+    model = LMTSModel(inputSize, hiddenSize, inputSize, layerNum = 2, inputDropout = 0, recurrentDropout = 0);
+
+    # if os.path.isfile(filename):
+    #     with open(filename, "br") as file:
+    #         params = pickle.load(file);
+    #     if isinstance(params[0], cp.ndarray):
+    #         params = [cp.asnumpy(p) for p in params];
+    #     model.params = params;
+    #
+    # model.reset();
+    # testSize = len(X_train) // stepSize * stepSize;
+    # Y_train_hat = np.concatenate(tuple([model.forward(*item)[0] for item in PartitionedDataIterator([X_train[: testSize]], 1, stepSize, randomOffset = False)]), axis = 1);
+    # Y_train_hat = scaler.inverse(np.squeeze(Y_train_hat, axis = 0));
+    # Y_train_real = scaler.inverse(Y_train[: testSize]);
+    # print(f"train 1-step MAE: {meanAbsoluteError(Y_train_real, Y_train_hat)}");
+
+    # idx = np.random.randint(0, testSize - predictSize, 20);
+    # for i in idx.tolist():
+    #     plt.figure(1, (14, 8));
+    #     plt.plot(np.arange(predictSize), Y_train_real[i: i + predictSize].flatten(), "D-b", label = "real data");
+    #     plt.plot(np.arange(predictSize), Y_train_hat[i: i + predictSize].flatten(), "s-r", label = "predict data");
+    #     plt.legend(loc = 'upper right');
+    #     plt.show(block = True);
+    #     plt.close();
+
+    # model.reset();
+    # testSize = len(X_test) // stepSize * stepSize;
+    # Y_test_hat = np.concatenate(tuple([model.forward(*item)[0] for item in PartitionedDataIterator([X_test[: testSize]], 1, stepSize, randomOffset = False)]), axis = 1);
+    # Y_test_hat = scaler.inverse(np.squeeze(Y_test_hat, axis = 0));
+    # Y_test_real = scaler.inverse(Y_test[: testSize]);
+    # print(f"test 1-step MAE: {meanAbsoluteError(Y_test_real, Y_test_hat)}");
+
+    # idx = np.random.randint(0, testSize - predictSize, 20);
+    # for i in idx.tolist():
+    #     plt.figure(1, (14, 8));
+    #     plt.plot(np.arange(predictSize), Y_test_real[i: i + predictSize].flatten(), "D-b", label = "real data");
+    #     plt.plot(np.arange(predictSize), Y_test_hat[i: i + predictSize].flatten(), "s-r", label = "predict data");
+    #     plt.legend(loc = 'upper right');
+    #     plt.show(block = True);
+    #     plt.close();
+
+    # model.reset();
+    # heatSize = 1 * stepSize;
+    # X_predict, Y_predict = lagAndForecast(X_test, heatSize, predictSize);
+    # Y_predict_hat = np.concatenate(tuple(model.predict(SequentialDataIterator([X_predict], 128, shuffle = False), predictSize)), axis = 0);
+    # X_predict, Y_predict, Y_predict_hat = scaler.inverse(X_predict), scaler.inverse(Y_predict), scaler.inverse(Y_predict_hat);
+    # print(f"test {predictSize}-step MAE: {meanAbsoluteError(Y_predict, Y_predict_hat)}");
+    #
+    # idx = np.random.randint(0, len(X_predict), 20);
+    # for i in idx.tolist():
+    #     x = np.concatenate((X_predict[i], Y_predict[i]), axis = None)[-100:];
+    #
+    #     plt.figure(1, (14, 8));
+    #     plt.plot(np.arange(len(x)), x, "D-b", label = "real data");
+    #     plt.plot(np.arange(len(x) - predictSize, len(x)), Y_predict_hat[i].flatten(), "s-r", label = "predict data");
+    #     plt.legend(loc = 'upper left');
+    #     plt.show(block = True);
+    #     plt.close();
+
+    # lossFunc = IdentityWithMeanSquareLoss();
+    # optimizer = GradientsClipping(5.0, Adam());
+    # trainingIterator = PartitionedDataIterator([X_train, Y_train], batchSize, stepSize);
+    # testIterator = PartitionedDataIterator([X_test, Y_test], 1, stepSize, randomOffset = False);
+    # evaluator = RegressionAccuracyEvaluator();
+    # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, minEpoch = 5, testIterator = testIterator, evaluator = evaluator, plot = True);
+    #
+    # with open(filename, "wb") as file:
+    #     pickle.dump(model.params, file);
+
+    print("exit.");
+
+
+def testTS3_LM_N1_1step():
+    targetTag = "TI6116A.PV";
+    negativeTags = [];  # ['XIP301A.PV', 'DI6103.PV', 'FIC6031.SV', 'PDI6105.PV', 'DI6104.PV', 'JI6601.PV', 'TIC6522.SV'];
+    positiveTags = ['TI6116B.PV', 'TIC6115.PV', 'TI6106.PV', 'TI6901.PV', 'TI6166A.PV', 'TE6658.PV', 'TI6107D.PV', 'TI6107C.PV', 'TI6107H.PV', 'TI6107G.PV'];
+
+    data, marks = loadTSData1AndMany(targetTag, negativeTags, positiveTags);
+    segments = loadDataset(data, marks);
+    dataSet = segments[-1];
+
+    scaler = StandardScaler();
+    scaler.fit(dataSet);
+
+    filename = "lstm3_N1.weights";
+    trainSize, stepSize, predictSize = int(len(dataSet) * 0.8), 240, 10;
+
+    X = scaler.transform(dataSet);
+    X_train, Y_train = X[:trainSize - 1], X[1: trainSize, [-1]];
+    X_test, Y_test = X[trainSize: -1], X[trainSize + 1:, [-1]];
+
+    batchSize, inputSize, hiddenSize, outputSize, maxEpoch = math.ceil(len(X_train) / (7 * 480)), X_train.shape[-1], 128, Y_train.shape[-1], 200;
+    model = LMTSModel(inputSize, hiddenSize, outputSize, layerNum = 2, inputDropout = 0, recurrentDropout = 0);
+
+    if os.path.isfile(filename):
+        with open(filename, "br") as file:
+            params = pickle.load(file);
+        if isinstance(params[0], cp.ndarray):
+            params = [cp.asnumpy(p) for p in params];
+        model.params = params;
+
+    model.reset();
+    testSize = len(X_train) // stepSize * stepSize;
+    Y_train_hat = np.concatenate(tuple([model.forward(*item)[0] for item in PartitionedDataIterator([X_train[: testSize]], 1, stepSize, randomOffset = False)]), axis = 1);
+    Y_train_hat = scaler.inverse(np.squeeze(Y_train_hat, axis = 0), index = -1);
+    Y_train_real = scaler.inverse(Y_train[: testSize], index = -1);
+    print(f"train 1-step MAE: {meanAbsoluteError(Y_train_real, Y_train_hat)}");
+
+    # idx = np.random.randint(0, testSize - predictSize, 20);
+    # for i in idx.tolist():
+    #     plt.figure(1, (14, 8));
+    #     plt.plot(np.arange(predictSize), Y_train_real[i: i + predictSize].flatten(), "D-b", label = "real data");
+    #     plt.plot(np.arange(predictSize), Y_train_hat[i: i + predictSize].flatten(), "s-r", label = "predict data");
+    #     plt.legend(loc = 'upper right');
+    #     plt.show(block = True);
+    #     plt.close();
+
+    model.reset();
+    testSize = len(X_test) // stepSize * stepSize;
+    Y_test_hat = np.concatenate(tuple([model.forward(*item)[0] for item in PartitionedDataIterator([X_test[: testSize]], 1, stepSize, randomOffset = False)]), axis = 1);
+    Y_test_hat = scaler.inverse(np.squeeze(Y_test_hat, axis = 0), index = -1);
+    Y_test_real = scaler.inverse(Y_test[: testSize], index = -1);
+    print(f"test 1-step MAE: {meanAbsoluteError(Y_test_real, Y_test_hat)}");
+
+    # idx = np.random.randint(0, testSize - predictSize, 20);
+    # for i in idx.tolist():
+    #     plt.figure(1, (14, 8));
+    #     plt.plot(np.arange(predictSize), Y_test_real[i: i + predictSize].flatten(), "D-b", label = "real data");
+    #     plt.plot(np.arange(predictSize), Y_test_hat[i: i + predictSize].flatten(), "s-r", label = "predict data");
+    #     plt.legend(loc = 'upper right');
+    #     plt.show(block = True);
+    #     plt.close();
+
+    model.reset();
+    heatSize = 1 * stepSize;
+    X_predict, Y_predict = lagAndForecast(X_test, heatSize, predictSize);
+    Y_predict_hat = np.concatenate(tuple(model.predict(SequentialDataIterator([X_predict], 128, shuffle = False), predictSize)), axis = 0);
+    X_predict, Y_predict, Y_predict_hat = scaler.inverse(X_predict, index = -1), scaler.inverse(Y_predict, index = -1), scaler.inverse(Y_predict_hat, index = -1);
+    print(f"test {predictSize}-step MAE: {meanAbsoluteError(Y_predict, Y_predict_hat)}");
+
+    idx = np.random.randint(0, len(X_predict), 20);
+    for i in idx.tolist():
+        x = np.concatenate((X_predict[i], Y_predict[i]), axis = None)[-100:];
+
+        plt.figure(1, (14, 8));
+        plt.plot(np.arange(len(x)), x, "D-b", label = "real data");
+        plt.plot(np.arange(len(x) - predictSize, len(x)), Y_predict_hat[i].flatten(), "s-r", label = "predict data");
+        plt.legend(loc = 'upper left');
+        plt.show(block = True);
+        plt.close();
+
+    # lossFunc = IdentityWithMeanSquareLoss();
+    # optimizer = GradientsClipping(5.0, Adam());
+    # trainingIterator = PartitionedDataIterator([X_train, Y_train], batchSize, stepSize);
+    # testIterator = PartitionedDataIterator([X_test, Y_test], 1, stepSize, randomOffset = False);
+    # evaluator = RegressionAccuracyEvaluator();
+    # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, minEpoch = 5, testIterator = testIterator, evaluator = evaluator, plot = True);
+    #
+    # with open(filename, "wb") as file:
+    #     pickle.dump(model.params, file);
+
+    print("exit.");
+
+
+def testTS4_LM_Nstep():
+    TI6116A = np.load("TI6116A.npy");
+    scaler = StandardScaler();
+    scaler.fit(TI6116A);
+
+    filename = "lstm4.weights";
+    trainSize, stepSize, predictSize = int(len(TI6116A) * 0.8), 240, 10;
+
+    X = scaler.transform(TI6116A);
+    batchSize, inputSize, hiddenSize, maxEpoch = 4, X.shape[-1], 128, 100;
+    models = [LMTSModel(inputSize, hiddenSize, inputSize, layerNum = 1, inputDropout = 0, recurrentDropout = 0) for _ in range(predictSize)];
+
+    if os.path.isfile(filename):
+        with open(filename, "br") as file:
+            params = pickle.load(file);
+        for m, ps in zip(models, params):
+            m.params = ps;
+
+    heatSize = 1 * stepSize;
+    X_test = X[trainSize:];
+    X_predict, Y_predict = lagAndForecast(X_test, heatSize, predictSize);
+    Y_predict_hat = np.concatenate(tuple([np.concatenate(tuple(m.predict(SequentialDataIterator([X_predict], 128, shuffle = False), 1)), axis = 0) for m in models]), axis = 1);
+    X_predict, Y_predict, Y_predict_hat = scaler.inverse(X_predict), scaler.inverse(Y_predict), scaler.inverse(Y_predict_hat);
+    for i in range(1, predictSize + 1):
+        print(f"test {i}-step MAE: {meanAbsoluteError(Y_predict[:, : i], Y_predict_hat[:, : i])}");
+
+    idx = np.random.randint(0, len(X_predict), 40);
+    for i in idx.tolist():
+        x = np.concatenate((X_predict[i], Y_predict[i]), axis = None)[-50:];
+
+        plt.figure(1, (14, 8));
+        plt.plot(np.arange(len(x)), x, "D-b", label = "real data");
+        plt.plot(np.arange(len(x) - predictSize, len(x)), Y_predict_hat[i].flatten(), "s-r", label = "predict data");
+        plt.legend(loc = 'upper left');
+        plt.show(block = True);
+        plt.close();
+
+    # for i, model in enumerate(models):
+    #     gap = i + 1;
+    #     X_train, Y_train = X[:trainSize - gap], X[gap: trainSize];
+    #     X_test, Y_test = X[trainSize: -gap], X[trainSize + gap:];
+    #
+    #     lossFunc = IdentityWithMeanSquareLoss();
+    #     optimizer = GradientsClipping(5.0, Adam());
+    #     trainingIterator = PartitionedDataIterator([X_train, Y_train], batchSize, stepSize);
+    #     testIterator = PartitionedDataIterator([X_test, Y_test], 1, stepSize, randomOffset = False);
+    #     evaluator = RegressionAccuracyEvaluator();
+    #     model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, minEpoch = 5, testIterator = testIterator, evaluator = evaluator, plot = True);
+    #     print(f"complete to train model {i}\n\n");
+    #
+    # with open(filename, "wb") as file:
+    #     pickle.dump([m.params for m in models], file);
+
+    print("exit.");
+
+
+def testTS5_LM_1step_All():
+    batchStepSize = int(1440 / 3 * 7);
+    TI6116A = np.load("/media/WindowsE/Data/PARS/JNLH/AiModel/isys_data_20210701_20220401_180/__JNRTDB_TI6116A.PV.npy");
+    datasets = loadDataset(TI6116A[:, 0].reshape(-1, 1), TI6116A[:, 1].reshape(-1, 1), batchStepSize);
+    scaler = StandardScaler();
+    scaler.fit(np.concatenate(tuple(datasets), axis = 0));
+
+    filename = "lstm5.weights";
+    stepSize, predictSize = 240, 10;
+
+    inputSize, hiddenSize, minEpoch, maxEpoch = 1, 128, 5, 50;
+    trainSets, testSet = [scaler.transform(d) for d in datasets[:-1]], scaler.transform(datasets[-1]);
+    model = LMTSModel(inputSize, hiddenSize, inputSize, layerNum = 1, inputDropout = 0, recurrentDropout = 0);
+
+    if os.path.isfile(filename):
+        with open(filename, "br") as file:
+            params = pickle.load(file);
+        if isinstance(params[0], cp.ndarray):
+            params = [cp.asnumpy(p) for p in params];
+        model.params = params;
+
+    X_test, Y_test = testSet[: -1], testSet[1:];
+
+    model.reset();
+    testSize = len(X_test) // stepSize * stepSize;
+    Y_test_hat = np.concatenate(tuple([model.forward(*item)[0] for item in PartitionedDataIterator([X_test[: testSize]], 1, stepSize, randomOffset = False)]), axis = 1);
+    Y_test_hat = scaler.inverse(np.squeeze(Y_test_hat, axis = 0));
+    Y_test_real = scaler.inverse(Y_test[: testSize]);
+    print(f"test 1-step MAE: {meanAbsoluteError(Y_test_real, Y_test_hat)}");
+
+    # idx = np.random.randint(0, testSize - predictSize, 20);
+    # for i in idx.tolist():
+    #     plt.figure(1, (14, 8));
+    #     plt.plot(np.arange(predictSize), Y_test_real[i: i + predictSize].flatten(), "D-b", label = "real data");
+    #     plt.plot(np.arange(predictSize), Y_test_hat[i: i + predictSize].flatten(), "s-r", label = "predict data");
+    #     plt.legend(loc = 'upper right');
+    #     plt.show(block = True);
+    #     plt.close();
+
+    model.reset();
+    heatSize = 1 * stepSize;
+    X_predict, Y_predict = lagAndForecast(X_test, heatSize, predictSize);
+    Y_predict_hat = np.concatenate(tuple(model.predict(SequentialDataIterator([X_predict], 128, shuffle = False), predictSize)), axis = 0);
+    X_predict, Y_predict, Y_predict_hat = scaler.inverse(X_predict), scaler.inverse(Y_predict), scaler.inverse(Y_predict_hat);
+    print(f"test {predictSize}-step MAE: {meanAbsoluteError(Y_predict, Y_predict_hat)}");
+
+    idx = np.random.randint(0, len(X_predict), 40);
+    for i in idx.tolist():
+        x = np.concatenate((X_predict[i], Y_predict[i]), axis = None)[-100:];
+
+        plt.figure(1, (14, 8));
+        plt.plot(np.arange(len(x)), x, "D-b", label = "real data");
+        plt.plot(np.arange(len(x) - predictSize, len(x)), Y_predict_hat[i].flatten(), "s-r", label = "predict data");
+        plt.legend(loc = 'upper left');
+        plt.show(block = True);
+        plt.close();
+
+    # lossFunc = IdentityWithMeanSquareLoss();
+    # optimizer = GradientsClipping(5.0, Adam());
+    # testIterator = PartitionedDataIterator([testSet[: -1], testSet[1:]], 1, stepSize, randomOffset = False);
+    # evaluator = RegressionAccuracyEvaluator();
+    # params, accuracyData, lossValues, lossData = [], [], [], [];
+    # for epoch in range(maxEpoch):
+    #     lossValues.clear();
+    #
+    #     for X in trainSets:
+    #         X_train, Y_train = X[: -1], X[1:];
+    #         trainingIterator = PartitionedDataIterator([X_train, Y_train], len(X_train) // batchStepSize, stepSize);
+    #         lossValues.extend(model.fit(trainingIterator, lossFunc, optimizer, 1, plot = False)[0]);
+    #
+    #     params.append([np.copy(p) for p in model.params]);
+    #     lossData.append(sum(lossValues) / len(lossValues));
+    #     accuracyData.append(model.eval(lossFunc, evaluator, iterator = testIterator));
+    #     print(f"epoch {epoch}, total average loss: {lossData[-1]}, test {evaluator.name}: {accuracyData[-1]}\n\n");
+    #
+    # model.params = params[accuracyData[minEpoch:].index(min(accuracyData[minEpoch:])) + minEpoch];
+    # with open(filename, "wb") as file:
+    #     pickle.dump(model.params, file);
+    #
+    # fig = plt.figure(1);
+    #
+    # ax1 = fig.add_subplot(111);
+    # ax1.set_xlabel("epoch");
+    # ax1.set_ylabel('loss');
+    # ax1.plot(lossData, "o-k", label = "loss");
+    #
+    # ax2 = ax1.twinx();
+    # ax2.set_ylabel('accuracy');
+    # ax2.plot(accuracyData, "s-r", label = f"test {evaluator.name}");
+    #
+    # fig.legend(loc = "upper right", bbox_to_anchor = (1, 1), bbox_transform = ax1.transAxes)
+    # plt.show(block = True);
+    # plt.close();
+
+    print("exit.");
+
+
+def testAE_NASABearing():
+    # data_dir = '/media/WindowsE/Data/Kaggle/NASA Bearing Dataset/2nd_test';
+    # merged_data = pd.DataFrame()
+    #
+    # for filename in os.listdir(data_dir):
+    #     dataset = pd.read_csv(os.path.join(data_dir, filename), sep = '\t')
+    #     dataset_mean_abs = np.array(dataset.abs().mean())
+    #     dataset_mean_abs = pd.DataFrame(dataset_mean_abs.reshape(1, 4))
+    #     dataset_mean_abs.index = [filename]
+    #     merged_data = merged_data.append(dataset_mean_abs)
+    # merged_data.reset_index(inplace = True)  # reset index to get datetime as columns
+    # merged_data.columns = ['Datetime', 'Bearing 1', 'Bearing 2', 'Bearing 3', 'Bearing 4']  # rename columns
+    # merged_data.sort_values(by = 'Datetime', inplace = True)
+    # merged_data.to_csv('2nd_test_resmaple_10minutes.csv')
+
+    merged_data = pd.read_csv("2nd_test_resmaple_10minutes.csv", index_col='Datetime', usecols = ['Datetime','Bearing 1','Bearing 2','Bearing 3','Bearing 4']);
+    merged_data.index = pd.to_datetime(merged_data.index, format = "%Y.%m.%d.%H.%M.%S");
+    print(merged_data.head());
+
+    dataset_train = merged_data["2004-02-12 11:02:39" : "2004-02-13 23:52:39"];
+    dataset_test = merged_data["2004-02-13 23:52:39": ];
+    # dataset_train.plot(figsize = (12,6));
+    # dataset_test.plot(figsize = (12, 6));
+
+    trainSize = int(len(dataset_train) * 0.95);
+    X_train, X_validate, X_test = dataset_train[: trainSize].to_numpy(), dataset_train[trainSize: ].to_numpy(), dataset_test.to_numpy();
+    scaler = MinMaxScaler();
+    scaler.fit(X_train);
+    X_train, X_validate, X_test = scaler.transform(X_train), scaler.transform(X_validate), scaler.transform(X_test);
+
+    filename = "2nd_test_resmaple_10minutes.weights";
+    inputSize, hiddenSize1, hiddenSize2, batchSize, maxEpoch = X_train.shape[-1], 10, 2, 10, 100;
+    model = SequentialContainer(
+        AffineLayer(inputSize, hiddenSize1),
+        ReluLayer(),
+        AffineLayer(hiddenSize1, hiddenSize2),
+        ReluLayer(),
+        AffineLayer(hiddenSize2, hiddenSize1),
+        ReluLayer(),
+        AffineLayer(hiddenSize1, inputSize),
+        SigmoidLayer(),
+    );
+
+    if os.path.isfile(filename):
+        with open(filename, "br") as file:
+            params = pickle.load(file);
+        if isinstance(params[0], cp.ndarray):
+            params = [cp.asnumpy(p) for p in params];
+        model.params = params;
+
+    X_train_hat = np.concatenate(tuple([item[0] for item in model.predict(SequentialDataIterator([X_train, X_train], batchSize, shuffle = False))]), axis = 0);
+    X_train_score = np.mean(np.abs(X_train_hat - X_train), axis = -1);
+    plt.hist(X_train_score);
+    plt.show(block = True);
+
+    threshold = 0.3;
+    X_test_hat = np.concatenate(tuple([item[0] for item in model.predict(SequentialDataIterator([X_test, X_test], batchSize, shuffle = False))]), axis = 0);
+    X_test_score = np.mean(np.abs(X_test_hat - X_test), axis = -1);
+    plt.plot(np.log(X_test_score));
+    plt.axhline(y = math.log(threshold), color = "red");
+    plt.show(block = True);
+
+    # lossFunc = IdentityWithMeanSquareLoss();
+    # optimizer = Adam();
+    # trainingIterator = SequentialDataIterator([X_train, X_train], batchSize);
+    # testIterator = SequentialDataIterator([X_validate, X_validate], 1);
+    # evaluator = RegressionAccuracyEvaluator();
+    # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, testIterator = testIterator, evaluator = evaluator, plot = True);
+    #
+    # with open(filename, "wb") as file:
+    #     pickle.dump(model.params, file);
+
+    print("exit.");
+
+
+def testAE_TagData():
+    # tagNames = ["TE6658.PV", "PT6621.PV", "JI6601.PV", "TE6648A.PV", "ZE6603B.PV", "ZE6603A.PV", "VE6605X.PV", "VE6605Y.PV", "VE6606Y.PV", "VE6606X.PV", "TE6649A.PV"];
+    tagNames = ["TI6113A.PV", "TI6116A.PV", "TIC6115.PV", "AI6103.PV"];
+    data, marks = loadRawTSData(tagNames);
+    X = data[np.all(marks == 1, axis = -1)];
+    np.random.shuffle(X);
+
+    # Q1, Q3 = np.quantile(X, 0.25, axis = 0), np.quantile(X, 0.75, axis = 0);
+    # mask = np.logical_and(X >= Q1 - 1.5 * (Q3 - Q1), X <= Q3 + 1.5 * (Q3 - Q1));
+    # X_normal = X[np.all(mask, axis = -1)];
+    # trainSize, anomalySize = int(len(X_normal) * 0.8), np.sum(~np.all(mask, axis = -1));
+    # X_train, X_test = X_normal[: trainSize], np.concatenate((X_normal[trainSize: ], X[~np.all(mask, axis = -1)]), axis = 0);
+    X_train, X_test = X, None;
+
+    scaler = MinMaxScaler();
+    scaler.fit(X_train);
+    X_train, X_test = scaler.transform(X_train), (scaler.transform(X_test) if X_test is not None else None);
+
+    filename = "AE_tagData.weights";
+    D = X_train.shape[-1];
+    inputSize, hiddenSize1, hiddenSize2, batchSize, maxEpoch = D, 2 * D, math.ceil(0.3 * D), 32, 100;
+    model = SequentialContainer(
+        AffineLayer(inputSize, hiddenSize1),
+        ReluLayer(),
+        AffineLayer(hiddenSize1, hiddenSize2),
+        ReluLayer(),
+        AffineLayer(hiddenSize2, hiddenSize1),
+        ReluLayer(),
+        AffineLayer(hiddenSize1, inputSize),
+        SigmoidLayer(),
+    );
+
+    if os.path.isfile(filename):
+        with open(filename, "br") as file:
+            params = pickle.load(file);
+        if isinstance(params[0], cp.ndarray):
+            params = [cp.asnumpy(p) for p in params];
+        model.params = params;
+
+    X_train_hat = np.concatenate(tuple([item[0] for item in model.predict(SequentialDataIterator([X_train, X_train], batchSize, shuffle = False))]), axis = 0);
+    X_train_score = np.mean(np.abs(X_train_hat - X_train), axis = -1);
+    plt.hist(X_train_score, bins = 1000);
+    plt.show(block = True);
+    plt.plot(X_train_score);
+    plt.show(block = True);
+    #
+    # threshold = 0.2;
+    # X_test_hat = np.concatenate(tuple([item[0] for item in model.predict(SequentialDataIterator([X_test, X_test], batchSize, shuffle = False))]), axis = 0);
+    # X_test_score = np.mean(np.abs(X_test_hat - X_test), axis = -1);
+    # plt.plot(np.log(X_test_score));
+    # plt.axhline(y = math.log(threshold), color = "red");
+    # plt.show(block = True);
+
+    # lossFunc = IdentityWithMeanSquareLoss();
+    # optimizer = Adam();
+    # trainingIterator = SequentialDataIterator([X_train, X_train], batchSize);
+    # testIterator = SequentialDataIterator([X_test, X_test], batchSize) if X_test is not None else None;
+    # evaluator = RegressionAccuracyEvaluator();
+    # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, testIterator = testIterator, evaluator = evaluator, plot = True);
+    #
+    # with open(filename, "wb") as file:
+    #     pickle.dump(model.params, file);
+
+    print("exit.");
+
+
+def testIF_TagData():
+    # dataName = "主反原料带水";
+    # tagNames = ["FIC6421.PV", "FI6241.PV", "TIC6421.PV", "PI6410.PV", "FIC6419.PV", "TIC6201.PV", "TIC6414.PV"];
+    # dataName = "副反原料带水";
+    # tagNames = ["FIC6451.PV", "TIC6208.PV", "FIQ6243.PV", "FIC6201.PV", "PI6102B.PV", "TIC6101.PV"];
+    # dataName = "一再尾燃";
+    # tagNames = ["TI6113A.PV", "TI6116A.PV", "TIC6115.PV", "AI6103.PV"];
+    # dataName = "增压机停机";
+    # tagNames = ["TIC6102.PV", "LIC6101.PV", "FIC6121.PV", "FIC6104.PV", "TI6131A.PV", "PI6139.PV", "PI6133.PV", "TI6110.PV", "FT6702.PV", "TI6109.PV", "TI6192.PV", "TI6113A.PV", "PI6138.PV", "FIC6122.PV", "PT6707.PV", "LIC6102.PV", "TI6132.PV"];
+    # dataName = "二再碳堆积";
+    # tagNames = ["TIC6102.PV", "FIC6101D.PV", "FIC6418.PV", "FIQ6316.PV", "FI6241.PV", "LI6219.PV", "FIC6101C.PV", "FIC6328.PV", "FIC6211.PV", "LIC6270.PV", "TIC6201.PV", "FIQ6315.PV", "FIC6270.PV", "TI6105.PV", "TI6131A.PV", "FIQ6317.PV", "FIC6101B.PV", "FIC6309.PV", "FIC6101A.PV", "TIC6414.PV", "TI6414D.PV", "LIC6206.PV", "TIC6208.PV", "FI6313.PV", "TIC6101.PV", "FI6802.PV", "FIC6276.PV", "LI6212.PV", "FI6312.PV", "LIC6307.PV", "FIC6417.PV", "FIC6416.PV"];
+    # dataName = "主原料中断";
+    # tagNames = ["FI6180C.PV", "TI6417E.PV", "FI6180A.PV", "FIC6421.PV", "TIC6421.PV", "TI6410.PV", "TI6113A.PV", "FIC6419.PV", "TI6417F.PV", "TI6417C.PV", "TI6417B.PV", "FI6180D.PV", "FT6801.PV", "TI6255.PV", "TI6417A.PV", "TI6417D.PV", "PI6410.PV", "TI6426.PV", "TIC6414.PV", "TI6420.PV", "FI6180B.PV"];
+    # dataName = "副原料中断";
+    # tagNames = ["TI6103.PV", "FI6453D.PV", "FT6801.PV", "FI6453C.PV", "PI6102B.PV", "FIC6451.PV", "TI6113A.PV", "TI6454.PV", "TI6108.PV", "TIC6101.PV", "FI6453A.PV", "FI6453B.PV", "FIC6452.PV"];
+    # dataName = "烟机异常振动";
+    # tagNames = ["ZE6603B.PV", "TE6658.PV", "VE6606Y.PV", "ZE6603A.PV", "TE6648A.PV", "VE6606X.PV", "VE6605X.PV", "VE6605Y.PV", "TE6649A.PV", "PT6620.PV", "JI6601.PV", "PT6621.PV"];
+    dataName = "PK301停机";
+    tagNames = ["9PIC341.PV", "9PIC311.PV"];
+    data, marks = loadRawTSData(tagNames);
+    dataset = data[np.all(marks == 1, axis = -1)];
+
+    trainAllData = True;
+    filename = f"IF_tagData_{dataName}_{trainAllData}.result";
+    batchSize = 32;
+    model = IsolationForest(200, 512, ProportionThresholdFinder(1/365.0));
+
+    # Q = np.quantile(dataset, [0.25, 0.75], axis = 0);
+    # Q1, Q3 = Q[0], Q[1];
+    # IQR = Q3 - Q1;
+    # mask = np.all(np.logical_and(dataset >= Q1 - 5 * IQR, dataset <= Q3 + 5 * IQR), axis = -1);
+    # X = dataset[mask];
+    # np.random.shuffle(X);
+    # trainSize = int(len(X) * 0.8);
+    # X_train, X_test_normal, X_test_anomaly = X[: trainSize], X[trainSize:], dataset[~mask];
+    #
+    # if trainAllData:
+    #     X_train = np.concatenate((X_train, X_test_normal, X_test_anomaly), axis = 0);
+    #
+    # print(f"train IF: {dataName}");
+    # model.fill(np.mat(X_train));
+    # with multiprocessing.Pool(max(1, psutil.cpu_count(False) - 2)) as pool:
+    #     X_train_rp = -np.array(pool.map(model.getAnomalyScore, [item for item in np.mat(X_train)]));
+    # with multiprocessing.Pool(max(1, psutil.cpu_count(False) - 2)) as pool:
+    #     X_test_normal_rp = -np.array(pool.map(model.getAnomalyScore, [item for item in np.mat(X_test_normal)]));
+    # with multiprocessing.Pool(max(1, psutil.cpu_count(False) - 2)) as pool:
+    #     X_test_anomaly_rp = -np.array(pool.map(model.getAnomalyScore, [item for item in np.mat(X_test_anomaly)]));
+    # with open(filename, "wb") as file:
+    #     pickle.dump((model, X_train, X_test_normal, X_test_anomaly, X_train_rp, X_test_normal_rp, X_test_anomaly_rp), file);
+
+    if os.path.isfile(filename):
+        with open(filename, "br") as file:
+            model, X_train, X_test_normal, X_test_anomaly, X_train_rp, X_test_normal_rp, X_test_anomaly_rp = pickle.load(file);
+
+    ratio = 1 / 365.0;
+    X_all_rp = X_train_rp if trainAllData else np.concatenate((X_test_anomaly_rp, X_test_normal_rp, X_train_rp), axis = 0);
+    X_all = X_train if trainAllData else np.concatenate((X_test_anomaly, X_test_normal, X_train), axis = 0);
+    threshold = np.quantile(X_all_rp, ratio);
+    X_anomaly = X_all[np.argwhere(X_all_rp <= threshold)[:, 0]];
+
+    filename = f"IF_tagData_{dataName}_{trainAllData}.csv";
+    content = [",".join(tagNames)];
+    for item in X_anomaly:
+        content.append(",".join([str(v) for v in item]));
+    with open(filename, "wt", encoding = "utf-8") as file:
+        file.write("\n".join(content));
+    print(f"anomaly ratio is {ratio}, the anomaly data saved to file: {filename}");
+
+    plt.figure(figsize = (12, 14));
+    bins = plt.hist(X_train_rp, bins = 1000, color = "k");
+    plt.hist(X_test_normal_rp, bins = 1000, label = "normal", color = "b");
+    # plt.hist(X_test_anomaly_rp, bins = 1000, label = "normal", color = "r");
+    plt.show(block = True);
+
+    fprX, tprY = [0], [0];
+    for alpha in np.arange(0.001, 1, 0.001):
+        threshold = np.quantile(X_train_rp, alpha);
+        X_test_normal_class = X_test_normal_rp < threshold;
+        X_test_anomaly_class = X_test_anomaly_rp < threshold;
+
+        TP, FP = np.sum(X_test_anomaly_class == True), np.sum(X_test_normal_class == True);
+        FN, TN = np.sum(X_test_anomaly_class == False), np.sum(X_test_normal_class == False);
+        precision, recall = TP / (TP + FP), TP / (TP + FN);
+        fpr, tpr = FP / (FP + TN), recall;
+        fprX.append(fpr);
+        tprY.append(tpr);
+        print(f"alpha = {alpha}, precision = {precision}, recall = {recall}, fpr = {fpr}, tpr = {tpr}");
+    fprX.append(1);
+    tprY.append(1);
+
+    plt.figure(figsize = (12, 14));
+    plt.plot(fprX, tprY);
+    plt.xlabel("FPR");
+    plt.ylabel("TPR");
+    plt.title(f"P = {len(X_test_anomaly)}, AUC = {auc(-X_test_anomaly_rp, -X_test_normal_rp)}");
+    plt.show(block = True);
+
+    print("exit.");
+
+
+def testGMM_TagData():
+    dataName = "主反原料带水";
+    tagNames = ["FIC6421.PV", "FI6241.PV", "TIC6421.PV", "PI6410.PV", "FIC6419.PV", "TIC6201.PV", "TIC6414.PV"];
+    # dataName = "副反原料带水";
+    # tagNames = ["FIC6451.PV", "TIC6208.PV", "FIQ6243.PV", "FIC6201.PV", "PI6102B.PV", "TIC6101.PV"];
+    # dataName = "一再尾燃";
+    # tagNames = ["TI6113A.PV", "TI6116A.PV", "TIC6115.PV", "AI6103.PV"];
+    # dataName = "增压机停机";
+    # tagNames = ["TIC6102.PV", "LIC6101.PV", "FIC6121.PV", "FIC6104.PV", "TI6131A.PV", "PI6139.PV", "PI6133.PV", "TI6110.PV", "FT6702.PV", "TI6109.PV", "TI6192.PV", "TI6113A.PV", "PI6138.PV", "FIC6122.PV", "PT6707.PV", "LIC6102.PV", "TI6132.PV"];
+    # dataName = "二再碳堆积";
+    # tagNames = ["TIC6102.PV", "FIC6101D.PV", "FIC6418.PV", "FIQ6316.PV", "FI6241.PV", "LI6219.PV", "FIC6101C.PV", "FIC6328.PV", "FIC6211.PV", "LIC6270.PV", "TIC6201.PV", "FIQ6315.PV", "FIC6270.PV", "TI6105.PV", "TI6131A.PV", "FIQ6317.PV", "FIC6101B.PV", "FIC6309.PV", "FIC6101A.PV", "TIC6414.PV", "TI6414D.PV", "LIC6206.PV", "TIC6208.PV", "FI6313.PV", "TIC6101.PV", "FI6802.PV", "FIC6276.PV", "LI6212.PV", "FI6312.PV", "LIC6307.PV", "FIC6417.PV", "FIC6416.PV"];
+    # dataName = "主原料中断";
+    # tagNames = ["FI6180C.PV", "TI6417E.PV", "FI6180A.PV", "FIC6421.PV", "TIC6421.PV", "TI6410.PV", "TI6113A.PV", "FIC6419.PV", "TI6417F.PV", "TI6417C.PV", "TI6417B.PV", "FI6180D.PV", "FT6801.PV", "TI6255.PV", "TI6417A.PV", "TI6417D.PV", "PI6410.PV", "TI6426.PV", "TIC6414.PV", "TI6420.PV", "FI6180B.PV"];
+    # dataName = "副原料中断";
+    # tagNames = ["TI6103.PV", "FI6453D.PV", "FT6801.PV", "FI6453C.PV", "PI6102B.PV", "FIC6451.PV", "TI6113A.PV", "TI6454.PV", "TI6108.PV", "TIC6101.PV", "FI6453A.PV", "FI6453B.PV", "FIC6452.PV"];
+    # dataName = "烟机异常振动";
+    # tagNames = ["ZE6603B.PV", "TE6658.PV", "VE6606Y.PV", "ZE6603A.PV", "TE6648A.PV", "VE6606X.PV", "VE6605X.PV", "VE6605Y.PV", "TE6649A.PV", "PT6620.PV", "JI6601.PV", "PT6621.PV"];
+    # dataName = "PK301停机";
+    # tagNames = ["9PIC341.PV", "9PIC311.PV"];
+    data, marks = loadRawTSData(tagNames);
+    dataset = data[np.all(marks == 1, axis = -1)];
+
+    filename = f"GMM_tagData_{dataName}.result";
+    batchSize = 32;
+    scaler = StandardScaler();
+    model = GaussianMixture();
+
+    Q = np.quantile(dataset, [0.25, 0.75], axis = 0);
+    Q1, Q3 = Q[0], Q[1];
+    IQR = Q3 - Q1;
+    mask = np.all(np.logical_and(dataset >= Q1 - 5 * IQR, dataset <= Q3 + 5 * IQR), axis = -1);
+    X = dataset[mask];
+    np.random.shuffle(X);
+    trainSize = int(len(X) * 0.8);
+    X_train, X_test_normal, X_test_anomaly = X[: trainSize], X[trainSize:], dataset[~mask];
+
+    scaler.fit(X_train);
+    X_train, X_test_normal, X_test_anomaly = scaler.transform(X_train), scaler.transform(X_test_normal), scaler.transform(X_test_anomaly);
+
+    print(f"train GMM: {dataName}");
+    model = GaussianMixture.optimalK(X_train, 100, verbose = True);
+    with open(filename, "wb") as file:
+        pickle.dump((model.params, scaler.params, X_train, X_test_normal, X_test_anomaly), file);
+
+    # if os.path.isfile(filename):
+    #     with open(filename, "br") as file:
+    #         modelParams, scalerParams, X_train, X_test_normal, X_test_anomaly = pickle.load(file);
+    #     if isinstance(modelParams[0], cp.ndarray):
+    #         modelParams = [cp.asnumpy(p) for p in modelParams];
+    #     scaler.params = scalerParams;
+    #     model.params = modelParams;
+    #
+    # ratio = 1 / 365.0;
+    # X_test_normal_rp = model.logPdf(X_test_normal);
+    # X_test_anomaly_rp = model.logPdf(X_test_anomaly);
+    # X_train_rp = np.concatenate(tuple([model.logPdf(item[0]) for item in SequentialDataIterator([X_train], batchSize, False)]), axis = 0);
+    # X_all_rp = np.concatenate((X_test_anomaly_rp, X_test_normal_rp, X_train_rp), axis = 0);
+    # X_all = np.concatenate((X_test_anomaly, X_test_normal, X_train), axis = 0);
+    # threshold = np.quantile(X_all_rp, ratio);
+    # X_anomaly = X_all[np.argwhere(X_all_rp <= threshold)[:, 0]];
+    #
+    # filename = f"GMM_tagData_{dataName}.csv";
+    # X_anomaly = scaler.inverse(X_anomaly);
+    # content = [",".join(tagNames)];
+    # for item in X_anomaly:
+    #     content.append(",".join([str(v) for v in item]));
+    # with open(filename, "wt", encoding = "utf-8") as file:
+    #     file.write("\n".join(content));
+    # print(f"anomaly ratio is {ratio}, the anomaly data saved to file: {filename}");
+    #
+    # plt.figure(figsize = (12, 14));
+    # bins = plt.hist(X_train_rp, bins = 1000, color = "k");
+    # plt.hist(X_test_normal_rp, bins = 1000, label = "normal", color = "b");
+    # # plt.hist(X_test_anomaly_rp, bins = 1000, label = "normal", color = "r");
+    # plt.show(block = True);
+    #
+    # fprX, tprY = [0], [0];
+    # for alpha in np.arange(0.001, 1, 0.001):
+    #     threshold = np.quantile(X_train_rp, alpha);
+    #     X_test_normal_class = X_test_normal_rp < threshold;
+    #     X_test_anomaly_class = X_test_anomaly_rp < threshold;
+    #
+    #     TP, FP = np.sum(X_test_anomaly_class == True), np.sum(X_test_normal_class == True);
+    #     FN, TN = np.sum(X_test_anomaly_class == False), np.sum(X_test_normal_class == False);
+    #     precision, recall = TP / (TP + FP), TP / (TP + FN);
+    #     fpr, tpr = FP / (FP + TN), recall;
+    #     fprX.append(fpr);
+    #     tprY.append(tpr);
+    #     print(f"alpha = {alpha}, precision = {precision}, recall = {recall}, fpr = {fpr}, tpr = {tpr}");
+    # fprX.append(1);
+    # tprY.append(1);
+    #
+    # plt.figure(figsize = (12, 14));
+    # plt.plot(fprX, tprY);
+    # plt.xlabel("FPR");
+    # plt.ylabel("TPR");
+    # plt.title(f"P = {len(X_test_anomaly)}, AUC = {auc(-X_test_anomaly_rp, -X_test_normal_rp)}");
+    # plt.show(block = True);
+
+    print("exit.");
+
+
+def testGaussianVAE_TagData():
+    dataName = "主反原料带水";
+    tagNames = ["FIC6421.PV", "FI6241.PV", "TIC6421.PV", "PI6410.PV", "FIC6419.PV", "TIC6201.PV", "TIC6414.PV"];
+    # dataName = "副反原料带水";
+    # tagNames = ["FIC6451.PV", "TIC6208.PV", "FIQ6243.PV", "FIC6201.PV", "PI6102B.PV", "TIC6101.PV"];
+    # dataName = "一再尾燃";
+    # tagNames = ["TI6113A.PV", "TI6116A.PV", "TIC6115.PV", "AI6103.PV"];
+    # dataName = "增压机停机";
+    # tagNames = ["TIC6102.PV", "LIC6101.PV", "FIC6121.PV", "FIC6104.PV", "TI6131A.PV", "PI6139.PV", "PI6133.PV", "TI6110.PV", "FT6702.PV", "TI6109.PV", "TI6192.PV", "TI6113A.PV", "PI6138.PV", "FIC6122.PV", "PT6707.PV", "LIC6102.PV", "TI6132.PV"];
+    # dataName = "二再碳堆积";
+    # tagNames = ["TIC6102.PV", "FIC6101D.PV", "FIC6418.PV", "FIQ6316.PV", "FI6241.PV", "LI6219.PV", "FIC6101C.PV", "FIC6328.PV", "FIC6211.PV", "LIC6270.PV", "TIC6201.PV", "FIQ6315.PV", "FIC6270.PV", "TI6105.PV", "TI6131A.PV", "FIQ6317.PV", "FIC6101B.PV", "FIC6309.PV", "FIC6101A.PV", "TIC6414.PV", "TI6414D.PV", "LIC6206.PV", "TIC6208.PV", "FI6313.PV", "TIC6101.PV", "FI6802.PV", "FIC6276.PV", "LI6212.PV", "FI6312.PV", "LIC6307.PV", "FIC6417.PV", "FIC6416.PV"];
+    # dataName = "主原料中断";
+    # tagNames = ["FI6180C.PV", "TI6417E.PV", "FI6180A.PV", "FIC6421.PV", "TIC6421.PV", "TI6410.PV", "TI6113A.PV", "FIC6419.PV", "TI6417F.PV", "TI6417C.PV", "TI6417B.PV", "FI6180D.PV", "FT6801.PV", "TI6255.PV", "TI6417A.PV", "TI6417D.PV", "PI6410.PV", "TI6426.PV", "TIC6414.PV", "TI6420.PV", "FI6180B.PV"];
+    # dataName = "副原料中断";
+    # tagNames = ["TI6103.PV", "FI6453D.PV", "FT6801.PV", "FI6453C.PV", "PI6102B.PV", "FIC6451.PV", "TI6113A.PV", "TI6454.PV", "TI6108.PV", "TIC6101.PV", "FI6453A.PV", "FI6453B.PV", "FIC6452.PV"];
+    # dataName = "烟机异常振动";
+    # tagNames = ["ZE6603B.PV", "TE6658.PV", "VE6606Y.PV", "ZE6603A.PV", "TE6648A.PV", "VE6606X.PV", "VE6605X.PV", "VE6605Y.PV", "TE6649A.PV", "PT6620.PV", "JI6601.PV", "PT6621.PV"];
+    # dataName = "PK301停机";
+    # tagNames = ["9PIC341.PV", "9PIC311.PV"];
+    data, marks = loadRawTSData(tagNames);
+    dataset = data[np.all(marks == 1, axis = -1)];
+    print(dataName);
+
+    filename = f"GaussianVAE_tagData_{dataName}.result";
+    D = dataset.shape[-1];
+    inputSize, hiddenSize1, hiddenSize2, latentSize, batchSize, maxEpoch = D, 4 * D, 2 * D, D // 2, 32, 20;
+    scaler = StandardScaler();
+    model = GaussianVAE(AggregateNetModule(
+        AffineLayer(inputSize, hiddenSize1),
+        ReluLayer(),
+        AffineLayer(hiddenSize1, hiddenSize2),
+        ReluLayer(),
+        AffineLayer(hiddenSize2, 2 * latentSize),
+    ), AggregateNetModule(
+        AffineLayer(latentSize, hiddenSize2),
+        ReluLayer(),
+        AffineLayer(hiddenSize2, hiddenSize1),
+        ReluLayer(),
+        AffineLayer(hiddenSize1, 2 * inputSize),
+    ), latentSize);
+
+    Q = np.quantile(dataset, [0.25, 0.75], axis = 0);
+    Q1, Q3 = Q[0], Q[1];
+    IQR = Q3 - Q1;
+    mask = np.all(np.logical_and(dataset >= Q1 - 5 * IQR, dataset <= Q3 + 5 * IQR), axis = -1);
+    X = dataset[mask];
+    np.random.shuffle(X);
+    trainSize = int(len(X) * 0.8);
+    X_train, X_test_normal, X_test_anomaly = X[: trainSize], X[trainSize:], dataset[~mask];
+
+    scaler.fit(X_train);
+    X_train, X_test_normal, X_test_anomaly = scaler.transform(X_train), scaler.transform(X_test_normal), scaler.transform(X_test_anomaly);
+
+    lossFunc = GaussianVAELoss();
+    optimizer = Adam();
+    trainingIterator = SequentialDataIterator([X_train], batchSize);
+    model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, plot = True);
+
+    # with open(filename, "wb") as file:
+    #     pickle.dump((model.params, scaler.params, X_train, X_test_normal, X_test_anomaly), file);
+    # with open("adam.lr", "wb") as file:
+    #     pickle.dump(optimizer.learningRate, file);
+
+    # if os.path.isfile(filename):
+    #     with open(filename, "br") as file:
+    #         modelParams, scalerParams, X_train, X_test_normal, X_test_anomaly = pickle.load(file);
+    #     if isinstance(modelParams[0], cp.ndarray):
+    #         modelParams = [cp.asnumpy(p) for p in modelParams];
+    #     scaler.params = scalerParams;
+    #     model.params = modelParams;
+    #
+    # M, V = model.encode(X_train);
+    # plt.figure(figsize = (12, 14));
+    # plt.scatter(M[:, 0], M[:, 1], c = "b");
+    # plt.scatter(V[:, 0], V[:, 1], c = "r");
+    # plt.show(block = True);
+    #
+    # ratio = 1 / 365.0;
+    # X_test_normal_rp = model.reconstructionProbability(X_test_normal);
+    # X_test_anomaly_rp = model.reconstructionProbability(X_test_anomaly);
+    # X_train_rp = np.concatenate(tuple([model.reconstructionProbability(item[0]) for item in SequentialDataIterator([X_train], batchSize, False)]), axis = 0);
+    # X_all_rp = np.concatenate((X_test_anomaly_rp, X_test_normal_rp, X_train_rp), axis = 0);
+    # X_all = np.concatenate((X_test_anomaly, X_test_normal, X_train), axis = 0);
+    # threshold = np.quantile(X_all_rp, ratio);
+    # X_anomaly = X_all[np.argwhere(X_all_rp <= threshold)[:, 0]];
+    #
+    # # filename = f"GaussianVAE_tagData_{dataName}.csv";
+    # # X_anomaly = scaler.inverse(X_anomaly);
+    # # content = [",".join(tagNames)];
+    # # for item in X_anomaly:
+    # #     content.append(",".join([str(v) for v in item]));
+    # # with open(filename, "wt", encoding = "utf-8") as file:
+    # #     file.write("\n".join(content));
+    # # print(f"anomaly ratio is {ratio}, the anomaly data saved to file: {filename}");
+    #
+    # plt.figure(figsize = (12, 14));
+    # bins = plt.hist(X_train_rp, bins = 1000, color = "k");
+    # plt.hist(X_test_normal_rp, bins = 1000, label = "normal", color = "b");
+    # # plt.hist(X_test_anomaly_rp, bins = 1000, label = "normal", color = "r");
+    # plt.show(block = True);
+    #
+    # fprX, tprY = [0], [0];
+    # for alpha in np.arange(0.001, 1, 0.001):
+    #     threshold = np.quantile(X_train_rp, alpha);
+    #     X_test_normal_class = X_test_normal_rp < threshold;
+    #     X_test_anomaly_class = X_test_anomaly_rp < threshold;
+    #
+    #     TP, FP = np.sum(X_test_anomaly_class == True), np.sum(X_test_normal_class == True);
+    #     FN, TN = np.sum(X_test_anomaly_class == False), np.sum(X_test_normal_class == False);
+    #     precision, recall = TP / (TP + FP), TP / (TP + FN);
+    #     fpr, tpr = FP / (FP + TN), recall;
+    #     fprX.append(fpr);
+    #     tprY.append(tpr);
+    #     print(f"alpha = {alpha}, precision = {precision}, recall = {recall}, fpr = {fpr}, tpr = {tpr}");
+    # fprX.append(1);
+    # tprY.append(1);
+    #
+    # plt.figure(figsize = (12, 14));
+    # plt.plot(fprX, tprY);
+    # plt.xlabel("FPR");
+    # plt.ylabel("TPR");
+    # plt.title(f"P = {len(X_test_anomaly)}, AUC = {auc(-X_test_anomaly_rp, -X_test_normal_rp)}");
+    # plt.show(block = True);
+
+    print("exit.");
+
+
+def testBernoulliVAE_TagData():
+    # dataName = "主反原料带水";
+    # tagNames = ["FIC6421.PV", "FI6241.PV", "TIC6421.PV", "PI6410.PV", "FIC6419.PV", "TIC6201.PV", "TIC6414.PV"];
+    # dataName = "副反原料带水";
+    # tagNames = ["FIC6451.PV", "TIC6208.PV", "FIQ6243.PV", "FIC6201.PV", "PI6102B.PV", "TIC6101.PV"];
+    # dataName = "一再尾燃";
+    # tagNames = ["TI6113A.PV", "TI6116A.PV", "TIC6115.PV", "AI6103.PV"];
+    # dataName = "增压机停机";
+    # tagNames = ["TIC6102.PV", "LIC6101.PV", "FIC6121.PV", "FIC6104.PV", "TI6131A.PV", "PI6139.PV", "PI6133.PV", "TI6110.PV", "FT6702.PV", "TI6109.PV", "TI6192.PV", "TI6113A.PV", "PI6138.PV", "FIC6122.PV", "PT6707.PV", "LIC6102.PV", "TI6132.PV"];
+    # dataName = "二再碳堆积";
+    # tagNames = ["TIC6102.PV", "FIC6101D.PV", "FIC6418.PV", "FIQ6316.PV", "FI6241.PV", "LI6219.PV", "FIC6101C.PV", "FIC6328.PV", "FIC6211.PV", "LIC6270.PV", "TIC6201.PV", "FIQ6315.PV", "FIC6270.PV", "TI6105.PV", "TI6131A.PV", "FIQ6317.PV", "FIC6101B.PV", "FIC6309.PV", "FIC6101A.PV", "TIC6414.PV", "TI6414D.PV", "LIC6206.PV", "TIC6208.PV", "FI6313.PV", "TIC6101.PV", "FI6802.PV", "FIC6276.PV", "LI6212.PV", "FI6312.PV", "LIC6307.PV", "FIC6417.PV", "FIC6416.PV"];
+    # dataName = "主原料中断";
+    # tagNames = ["FI6180C.PV", "TI6417E.PV", "FI6180A.PV", "FIC6421.PV", "TIC6421.PV", "TI6410.PV", "TI6113A.PV", "FIC6419.PV", "TI6417F.PV", "TI6417C.PV", "TI6417B.PV", "FI6180D.PV", "FT6801.PV", "TI6255.PV", "TI6417A.PV", "TI6417D.PV", "PI6410.PV", "TI6426.PV", "TIC6414.PV", "TI6420.PV", "FI6180B.PV"];
+    # dataName = "副原料中断";
+    # tagNames = ["TI6103.PV", "FI6453D.PV", "FT6801.PV", "FI6453C.PV", "PI6102B.PV", "FIC6451.PV", "TI6113A.PV", "TI6454.PV", "TI6108.PV", "TIC6101.PV", "FI6453A.PV", "FI6453B.PV", "FIC6452.PV"];
+    # dataName = "烟机异常振动";
+    # tagNames = ["ZE6603B.PV", "TE6658.PV", "VE6606Y.PV", "ZE6603A.PV", "TE6648A.PV", "VE6606X.PV", "VE6605X.PV", "VE6605Y.PV", "TE6649A.PV", "PT6620.PV", "JI6601.PV", "PT6621.PV"];
+    dataName = "PK301停机";
+    tagNames = ["9PIC341.PV", "9PIC311.PV"];
+    data, marks = loadRawTSData(tagNames);
+    dataset = data[np.all(marks == 1, axis = -1)];
+
+    filename = f"BernoulliVAE_tagData_{dataName}.result";
+    D = dataset.shape[-1];
+    inputSize, hiddenSize1, hiddenSize2, latentSize, batchSize, maxEpoch = D, 4 * D, 2 * D, D // 2, 32, 20;
+    model = BernoulliVAE(AggregateNetModule(
+        AffineLayer(inputSize, hiddenSize1),
+        ReluLayer(),
+        AffineLayer(hiddenSize1, hiddenSize2),
+        ReluLayer(),
+        AffineLayer(hiddenSize2, 2 * latentSize),
+    ), AggregateNetModule(
+        AffineLayer(latentSize, hiddenSize2),
+        ReluLayer(),
+        AffineLayer(hiddenSize2, hiddenSize1),
+        ReluLayer(),
+        AffineLayer(hiddenSize1, inputSize),
+    ), latentSize);
+
+    # Q = np.quantile(dataset, [0.25, 0.75], axis = 0);
+    # Q1, Q3 = Q[0], Q[1];
+    # IQR = Q3 - Q1;
+    # mask = np.all(np.logical_and(dataset >= Q1 - 5 * IQR, dataset <= Q3 + 5 * IQR), axis = -1);
+    # X = dataset[mask];
+    # np.random.shuffle(X);
+    # trainSize = int(len(X) * 0.8);
+    # X_train, X_test_normal, X_test_anomaly = X[: trainSize], X[trainSize:], dataset[~mask];
+    #
+    # scaler = MinMaxScaler();
+    # scaler.fit(X_train);
+    # X_train, X_test_normal, X_test_anomaly = scaler.transform(X_train), scaler.transform(X_test_normal), scaler.transform(X_test_anomaly);
+    #
+    # lossFunc = BernoulliVAELoss();
+    # optimizer = Adam();
+    # trainingIterator = SequentialDataIterator([X_train], batchSize);
+    # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, plot = True);
+    #
+    # with open(filename, "wb") as file:
+    #     pickle.dump((model.params, X_train, X_test_normal, X_test_anomaly), file);
+
+    if os.path.isfile(filename):
+        with open(filename, "br") as file:
+            params, X_train, X_test_normal, X_test_anomaly = pickle.load(file);
+        if isinstance(params[0], cp.ndarray):
+            params = [cp.asnumpy(p) for p in params];
+        model.params = params;
+
+    M, V = model.encode(X_train);
+    plt.figure(figsize = (12, 14));
+    plt.scatter(M[:, 0], M[:, 1], c = "b");
+    plt.scatter(V[:, 0], V[:, 1], c = "r");
+    plt.show(block = True);
+
+    X_test_normal_rp = model.reconstructionProbability(X_test_normal);
+    X_test_anomaly_rp = model.reconstructionProbability(X_test_anomaly);
+    X_train_rp = np.concatenate(tuple([model.reconstructionProbability(item[0]) for item in SequentialDataIterator([X_train], batchSize, False)]), axis = 0);
+
+    plt.figure(figsize = (12, 14));
+    bins = plt.hist(X_train_rp, bins = 1000, color = "k");
+    plt.hist(X_test_normal_rp, bins = 1000, label = "normal", color = "b");
+    # plt.hist(X_test_anomaly_rp, bins = 1000, label = "normal", color = "r");
+    plt.show(block = True);
+
+    fprX, tprY = [0], [0];
+    for alpha in np.arange(0.001, 1, 0.001):
+        threshold = np.quantile(X_train_rp, alpha);
+        X_test_normal_class = X_test_normal_rp < threshold;
+        X_test_anomaly_class = X_test_anomaly_rp < threshold;
+
+        TP, FP = np.sum(X_test_anomaly_class == True), np.sum(X_test_normal_class == True);
+        FN, TN = np.sum(X_test_anomaly_class == False), np.sum(X_test_normal_class == False);
+        precision, recall = TP / (TP + FP), TP / (TP + FN);
+        fpr, tpr = FP / (FP + TN), recall;
+        fprX.append(fpr);
+        tprY.append(tpr);
+        print(f"alpha = {alpha}, precision = {precision}, recall = {recall}, fpr = {fpr}, tpr = {tpr}");
+    fprX.append(1);
+    tprY.append(1);
+
+    plt.figure(figsize = (12, 14));
+    plt.plot(fprX, tprY);
+    plt.xlabel("FPR");
+    plt.ylabel("TPR");
+    plt.title(f"AUC = {auc(-X_test_anomaly_rp, -X_test_normal_rp)}");
+    plt.show(block = True);
+
+    print("exit.");
+
+
+def loadSequence(path : str, index = 7) -> (Vocab, np.ndarray, np.ndarray):
+    with open(path, "rt", encoding = "utf-8") as file:
+        tokens = [list(line[:-1]) for line in file.readlines()];
+
+    vocab = Vocab(tokens);
+    X = np.array([vocab[line[:index]] for line in tokens]);
+    Y = np.array([vocab[line[index:]] for line in tokens]);
+
+    return vocab, X, Y;
+
+
+def testAddition():
+    filename = "seq2seq_addition.weights";
+    vocab, X, Y = loadSequence("/media/WindowsD/WorkSpace/深度学习进阶：自然语言处理/dataset/addition.txt");
+
+    trainSize = int(len(X) * 0.9);
+    X_train, Y_train = X[:trainSize], Y[:trainSize];
+    X_test, Y_test = X[trainSize:], Y[trainSize:];
+
+    X_train, X_test = X_train[:, ::-1], X_test[:, ::-1];
+
+    batchSize, vocabSize, vectorSize, hiddenSize, maxEpoch = 256, len(vocab), 16, 128, 25;
+    model = Seq2SeqModel(SeqEncoderLayer(vocabSize, vectorSize, hiddenSize),
+                         SeqPeekyDecoderLayer(vocabSize, vectorSize, hiddenSize));
+
+    # if os.path.isfile(filename):
+    #     with open(filename, "rb") as file:
+    #         params = pickle.load(file);
+    #     model.params = params;
+    #
+    # startIndex = vocab["_"];
+    # questions = ["6+9    ", "3+22   ", "7+681  ", "135+87", "794+809"];
+    # for i in range(len(questions)):
+    #     X = np.array(vocab[list(questions[i])][::-1]).reshape(1, -1);
+    #     Y = model.generate(X, startIndex, 4);
+    #     answer = "".join(vocab.getTokens(Y));
+    #     print(f"{questions[i]} = {answer}");
+
+    lossFunc = SoftmaxWithCrossEntropy1DLoss();
+    optimizer = GradientsClipping(5.0, Adam());
+    trainingIterator = SequentialDataIterator([X_train, Y_train], batchSize);
+    testIterator = SequentialDataIterator([X_test, Y_test], batchSize);
+    evaluator = IdentityAccuracyEvaluator();
+    model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, testIterator, evaluator, plot = True);
+
+    with open(filename, "wb") as file:
+        pickle.dump(model.params, file);
+
+    print("exit.");
+
+
+_idx = 0
+def visualize(attention_map, row_labels, column_labels):
+    fig, ax = plt.subplots()
+    ax.pcolor(attention_map, cmap=plt.cm.Greys_r, vmin=0.0, vmax=1.0)
+
+    ax.patch.set_facecolor('black')
+    ax.set_yticks(np.arange(attention_map.shape[0])+0.5, minor=False)
+    ax.set_xticks(np.arange(attention_map.shape[1])+0.5, minor=False)
+    ax.invert_yaxis()
+    ax.set_xticklabels(row_labels, minor=False)
+    ax.set_yticklabels(column_labels, minor=False)
+
+    global _idx
+    _idx += 1
+    plt.show(block = True);
+
+
+def testSeq2Seq():
+    filename = "seq2seq_date.weights";
+    vocab, X, Y = loadSequence("/media/WindowsD/WorkSpace/深度学习进阶：自然语言处理/dataset/date.txt", index = 29);
+
+    trainSize = int(len(X) * 0.9);
+    X_train, Y_train = X[:trainSize], Y[:trainSize];
+    X_test, Y_test = X[trainSize:], Y[trainSize:];
+
+    # X_train, X_test = X_train[:, ::-1], X_test[:, ::-1];
+
+    batchSize, vocabSize, vectorSize, hiddenSize, maxEpoch = 128, len(vocab), 16, 256, 10;
+    model = Seq2SeqModel(SeqAttentionEncoderLayer(vocabSize, vectorSize, hiddenSize),
+                         SeqBahdanauAttentionDecoderLayer(vocabSize, vectorSize, 2 * hiddenSize));
+
+    if os.path.isfile(filename):
+        with open(filename, "rb") as file:
+            params = pickle.load(file);
+        if isinstance(params[0], cp.ndarray):
+            params = [cp.asnumpy(p) for p in params];
+        model.params = params;
+
+    # np.random.seed(1984);
+    # for _ in range(5):
+    #     idx = [np.random.randint(0, len(X_test))]
+    #     x = X_test[idx]
+    #     t = Y_test[idx]
+    #
+    #     model.forward(x, t)
+    #     d = model.decoder.attentionWeight
+    #     attention_map = d.reshape(d.shape[1], d.shape[2])
+    #
+    #     # reverse for print
+    #     # attention_map = attention_map[:, ::-1]
+    #     # x = x[:, ::-1]
+    #
+    #     row_labels = vocab.getTokens(x[0].tolist())
+    #     column_labels = vocab.getTokens(t[0].tolist())
+    #     column_labels = column_labels[1:]
+    #
+    #     visualize(attention_map, row_labels, column_labels);
+
+
+    # startIndex = vocab["_"];
+    # # questions = ["6+9    ", "3+22   ", "7+681  ", "135+87", "794+809"];
+    # questions = ["THURSDAY, NOVEMBER 20, 1980  ", "thursday, july 9, 1970       ", "MARCH 16, 1985               ", "Oct 7, 2004                  ", "12/6/83                      "];
+    # for i in range(len(questions)):
+    #     # X = np.array(vocab[list(questions[i])][::-1]).reshape(1, -1);
+    #     X = np.array(vocab[list(questions[i])]).reshape(1, -1);
+    #     Y = model.generate(X, startIndex, Y_test.shape[-1] - 1);
+    #     answer = "".join(vocab.getTokens(Y));
+    #     print(f"{questions[i]} = {answer}");
+
+    lossFunc = SoftmaxWithCrossEntropy1DLoss();
+    optimizer = GradientsClipping(5.0, Adam());
+    trainingIterator = SequentialDataIterator([X_train, Y_train], batchSize);
+    testIterator = SequentialDataIterator([X_test, Y_test], batchSize);
+    evaluator = IdentityAccuracyEvaluator();
+    model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, testIterator, evaluator, plot = True);
+
+    with open(filename, "wb") as file:
+        pickle.dump(model.params, file);
+
+    print("exit.");
+
+
+def unitTest():
+    # testSigmoid();
+    # testMinMaxScaler();
+
+    # testIdentityWithMeanAbsoluteLossGradient();
+    # testSoftplusLayerGradient();
+    # testSwishLayerGradient1();
+    # testSwishLayerGradient2();
+    testIdentityWithHuberLossGradient();
+    # testAffineLayerGradient1();
+    # testAffineLayerGradient2();
+    # testAffineLayerGradient3();
+    # testRepeatedWrapperOfAffineLayerGradient();
+    # testLstmCellGradient1();
+    # testLstmCellGradient2();
+    # testLstmCellGradient_Dropout();
+    # testLstmLayerGradient(False);
+    # testLstmLayerGradient_State(False);
+    # testLstmLayerGradient_State_Dropout(False);
+    # testLstmLayerGradient_Stepwise(False);
+    # testLstmLayerGradient_Stepwise_State(False);
+    # testLstmLayerGradient_Stepwise_State_Dropout(False);
+    # testBahdanauAttentionLstmLayerGradient(True);
+    # testBahdanauAttentionLstmLayerGradient_Stepwise(True);
+    # testBahdanauAttentionLstmLayerGradient_Stepwise_State(True);
+    # testBahdanauAttentionLstmLayerGradient_Stepwise_State_Dropout(True);
+    # testStackLstmLayerGradient(False);
+    # testStackLstmLayerGradient_State(False);
+    # testStackLstmLayerGradient_State_Dropout(False);
+    # testBiRnnLayerGradient();
+
+    # testSelectByWeightModuleGradient();
+    # testAdditiveAttentionWeight1TModuleGradient();
+    # testAdditiveAttentionWeightNTModuleGradient();
+    # testDotProductAttentionWeightModuleGradient();
+    # testQKVAttentionLayerGradient();
+
+    # testGaussianVAELossGradient();
+    # testGaussianVAEGradient1();
+    # testGaussianVAEGradient2();
+    # testGaussianVAE_Anomaly_HTRU2();
+    # testBernoulliVAELossGradient();
+    # testBernoulliVAEGradient1();
+    # testBernoulliVAEGradient2();
+    # testBernoulliVAE_MNIST();
+    # testBernoulliVAE_Anomaly_MNIST();
+
+    # testSeqAttentionDecoderGradient();
+    # testSeqBahdanauAttentionDecoderGradient();
+    # testSeqTSEncoderLayerGradient();
+    # testSeqTSDecoderLayerGradient();
+    # testSeq2SeqTSModel1();
+    # testSeq2SeqTSModel2();
+    # testSeq2SeqTSModel_Dropout();
+
+
+def sumAll(*X : np.ndarray) -> float:
+    return sum([float(np.sum(x)) for x in X]);
+
+
+def testSigmoid():
+    X = np.array([-25.0, -21, 21, 25]);
+    Y = sigmoid(X);
+
+    X1, X2 = X[:2], X[2:];
+    Y1 = np.exp(X1);
+    Y1 = Y1 / (1 + Y1);
+    Y2 = 1 / (1 + np.exp(-X2));
+
+    print(Y - np.concatenate((Y1, Y2)));
+
+
+def testlabelSmoothing():
+    X = np.array([-25.0, -21, 21, 25]);
+    Y = sigmoid(X);
+
+    X1, X2 = X[:2], X[2:];
+    Y1 = np.exp(X1);
+    Y1 = Y1 / (1 + Y1);
+    Y2 = 1 / (1 + np.exp(-X2));
+
+    print(Y - np.concatenate((Y1, Y2)));
+
+
+def testModuleGradient(m : INetModule, label: str, *data : np.ndarray):
+    numGradients = [];
+
+    for p in m.params:
+        numGradients.append(numericGradient(lambda x : sumAll(*m.copy(True).forward(*data)), p));
+
+    print(f"{label}, {', '.join([f'param {i}({m.params[i].shape}) error: {np.sum(np.abs(m.grads[i] - numGradients[i]))}' for i in range(len(m.grads))])}")
+
+
+def testMinMaxScaler():
+    N, T, D = 32000, 40, 26;
+    X = np.random.randn(N, T, D);
+
+    trainSize, stepSize = int(N * 0.8), 30;
+    X_train_1, Y_train_1 = X[:trainSize, :stepSize], X[:trainSize, stepSize:];
+    X_test_1, Y_test_1 = X[trainSize:, :stepSize], X[trainSize:, stepSize:];
+
+    scaler = MinMaxScaler();
+    scaler.fit(X);
+    X_train_2 , Y_train_2 = scaler.inverse(scaler.transform(X_train_1)), scaler.inverse(scaler.transform(Y_train_1));
+    X_test_2, Y_test_2 = scaler.inverse(scaler.transform(X_test_1)), scaler.inverse(scaler.transform(Y_test_1));
+
+    print(f"MinMaxScaler, transform-inverse, {np.sum(np.abs(X_train_1 - X_train_2))}, {np.sum(np.abs(Y_train_1 - Y_train_2))}, {np.sum(np.abs(X_test_1 - X_test_2))}, {np.sum(np.abs(Y_test_1 - Y_test_2))}");
+    print("\n");
+
+
+def testIdentityWithMeanAbsoluteLossGradient():
+    N1, N2, D = 31, 32, 16;
+    Y, T = np.random.randn(N1, N2, D), np.random.randn(N1, N2, D);
+    m = IdentityWithMeanAbsoluteLoss();
+    loss = m.forward(Y, T);
+    dY1 = m.backward()[0];
+    dYN = numericGradient(lambda x: m.forward(x, T), Y);
+    print(f"IdentityWithMeanAbsoluteLoss, numericGradient, dY error: {np.sum(np.abs(dY1 - dYN))}");
+    print("\n");
+
+
+def testSoftplusLayerGradient():
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D);
+    m = SoftplusLayer();
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"SoftplusLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSwishLayerGradient1():
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D);
+    m = SwishLayer();
+    beta = m.beta;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dBeta1 = m.grads[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = beta).forward(X)[0]), beta);
+    print(f"SwishLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print("\n");
+
+
+def testSwishLayerGradient2():
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D);
+    m = SwishLayer(outputSize = D);
+    beta = m.beta;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dBeta1 = m.grads[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = beta).forward(X)[0]), beta);
+    print(f"SwishLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print("\n");
+
+
+def testIdentityWithHuberLossGradient():
+    N, C, D = 32, 16, 10;
+    X = np.random.randn(N, C, D);
+    T = np.random.randn(N, C, D);
+    m = IdentityWithHuberLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"IdentityWithHuberLoss, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testAffineLayerGradient1():
+    N, C, T, inputSize, outputSize = 32, 3, 24, 12, 16;
+    X, W, b = np.random.randn(N, C, T, inputSize), np.random.randn(inputSize, outputSize), np.random.randn(outputSize);
+    m = AffineLayer(inputSize, outputSize, W = W, b = b);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dW1, db1 = tuple(m.grads);
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dWN = numericGradient(lambda x: np.sum(AffineLayer(inputSize, outputSize, W = x, b = b).forward(X)[0]), W);
+    dbN = numericGradient(lambda x: np.sum(AffineLayer(inputSize, outputSize, W = W, b = x).forward(X)[0]), b);
+    print(f"AffineLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print("\n");
+
+
+def testAffineLayerGradient2():
+    N1, N2, T, inputSize, outputSize = 64, 32, 11, 16, 24;
+    X = np.random.randn(N1, N2, T, inputSize);
+    m1 = AffineLayer(inputSize, outputSize, includeBias = False);
+    W, = m1.params;
+    m2 = AffineLayer(inputSize, outputSize, includeBias = False, W = W);
+
+    Y1 = np.zeros(X.shape[:-1] + (outputSize, ));
+    dX1, dW1 = np.zeros_like(X), np.zeros_like(W);
+    for t in range(X.shape[-2]):
+        Y1[..., t, :] = m1.forward(X[..., t, :])[0];
+        dX = m1.backward(np.ones_like(Y1[..., t, :]))[0];
+        dX1[..., t, :] = dX;
+        dW1 += m1.grads[0];
+
+    Y2 = m2.forward(X)[0];
+    dX2 = m2.backward(np.ones_like(Y2))[0];
+    dW2, = m2.grads;
+    print(f"AffineLayer, numericGradient2, Y error: {np.sum(np.abs(Y1 - Y2))}, dX error: {np.sum(np.abs(dX1 - dX2))}, dW error: {np.sum(np.abs(dW1 - dW2))}");
+    print("\n");
+
+
+def testAffineLayerGradient3():
+    N, C, T, inputSize, hiddenSize1, hiddenSize2, outputSize = 32, 3, 24, 12, 16, 20, 24;
+    X = np.random.randn(N, C, T, inputSize);
+    m = AggregateNetModule(
+        AffineLayer(inputSize, hiddenSize1, W = np.random.randn(inputSize, hiddenSize1), b = np.random.randn(hiddenSize1)),
+        SoftplusLayer(),
+        AffineLayer(hiddenSize1, hiddenSize2, W = np.random.randn(hiddenSize1, hiddenSize2), b = np.random.randn(hiddenSize2)),
+        SoftplusLayer(),
+        AffineLayer(hiddenSize2, outputSize, W = np.random.randn(hiddenSize2, outputSize), b = np.random.randn(outputSize)),
+    );
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"AffineLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "AffineLayer, numericGradient3", X);
+    print("\n");
+
+
+def testRepeatedWrapperOfAffineLayerGradient():
+    def forward(model : INetModule, X2 : np.ndarray):
+        Y2 = np.zeros(X2.shape[:-1] + (outputSize, ));
+
+        model.reset();
+        for t2 in range(X.shape[-2]):
+            Y2[..., t2, :], = model.forward(X2[..., t2, :]);
+
+        return Y2;
+
+
+    N1, N2, T, inputSize, outputSize = 64, 32, 11, 16, 24;
+    X, W, b = np.random.randn(N1, N2, T, inputSize), np.random.randn(inputSize, outputSize), np.random.randn(outputSize);
+    m1 = AffineLayer(inputSize, outputSize, W = W, b = b);
+    m2 = RepeatedWrapper(AffineLayer(inputSize, outputSize, W = W, b = b));
+
+    Y1 = m1.forward(X)[0];
+    dX1 = m1.backward(np.ones_like(Y1))[0];
+    dW1, db1 = m1.grads;
+
+    Y2 = forward(m2, X);
+    dX2 = np.zeros_like(X);
+    for t in reversed(range(X.shape[-2])):
+        dX = m2.backward(np.ones_like(Y2[..., t, :]))[0];
+        dX2[..., t, :] = dX;
+    dW2, db2 = m2.grads;
+
+    dWN = numericGradient(lambda x: np.sum(forward(RepeatedWrapper(AffineLayer(inputSize, outputSize, W = x, b = b)), X)), W);
+    dbN = numericGradient(lambda x: np.sum(forward(RepeatedWrapper(AffineLayer(inputSize, outputSize, W = W, b = x)), X)), b);
+
+    print(f"RepeatedWrapper, batch process, Y error: {np.sum(np.abs(Y1 - Y2))}, dX error: {np.sum(np.abs(dX1 - dX2))}, dW error: {np.sum(np.abs(dW1 - dW2))}, db error: {np.sum(np.abs(db1 - db2))}, dWN error: {np.sum(np.abs(dW2 - dWN))}, dbN error: {np.sum(np.abs(db2 - dbN))}");
+    print("\n");
+
+
+def testLstmCellGradient1():
+    N, inputSize, outputSize = 32, 12, 16;
+    X, H, C = np.random.randn(N, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
+    Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
+    m = LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b);
+    YH, YC = m.forward(X, H, C);
+    dX1, dH1, dC1 = m.backward(np.ones_like(YH), np.ones_like(YC));
+    dWx1, dWh1, db1 = tuple(m.grads);
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
+    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
+    dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
+    dWxN = numericGradient(lambda x: sumAll(*LstmCell(inputSize, outputSize, Wx = x, Wh = Wh, b = b).forward(X, H, C)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*LstmCell(inputSize, outputSize, Wx = Wx, Wh = x, b = b).forward(X, H, C)), Wh);
+    dbN = numericGradient(lambda x: sumAll(*LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x).forward(X, H, C)), b);
+    print(f"LstmCell, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbN error: {np.sum(np.abs(db1 - dbN))}");
+    print("\n");
+
+
+def testLstmCellGradient2():
+    N, inputSize, outputSize = 32, 12, 16;
+    X, H, C = np.random.randn(N, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
+    Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
+    m = LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b);
+    YH, YC = m.forward(X, H, C);
+    dX1, dH1, dC1 = m.backward(np.ones_like(YH), np.zeros_like(YC));
+    dWx1, dWh1, db1 = tuple(m.grads);
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, H, C)[0]), X);
+    dHN = numericGradient(lambda x: np.sum(m.forward(X, x, C)[0]), H);
+    dCN = numericGradient(lambda x: np.sum(m.forward(X, H, x)[0]), C);
+    dWxN = numericGradient(lambda x: np.sum(LstmCell(inputSize, outputSize, Wx = x, Wh = Wh, b = b).forward(X, H, C)[0]), Wx);
+    dWhN = numericGradient(lambda x: np.sum(LstmCell(inputSize, outputSize, Wx = Wx, Wh = x, b = b).forward(X, H, C)[0]), Wh);
+    dbN = numericGradient(lambda x: np.sum(LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x).forward(X, H, C)[0]), b);
+    print(f"LstmCell, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbN error: {np.sum(np.abs(db1 - dbN))}");
+    print("\n");
+
+
+def testLstmCellGradient_Dropout():
+    def newCell(Wx2, Wh2, b2):
+        cell = LstmCell(inputSize, outputSize, Wx = Wx2, Wh = Wh2, b = b2, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
+        cell.isTrainingMode = True;
+        cell.setInputDropoutMask(inputMask);
+        cell.setRecurrentDropoutMask(recurrentMask);
+        return cell;
+
+
+    N, inputSize, outputSize = 32, 12, 16;
+    inputDropout, recurrentDropout = 0.5, 0.5;
+    X, H, C = np.random.randn(N, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
+    Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
+    inputMask = getDropoutMask(H, inputDropout);
+    recurrentMask = getDropoutMask(C, recurrentDropout);
+    m = LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
+    m.isTrainingMode = True;
+    m.setInputDropoutMask(inputMask);
+    m.setRecurrentDropoutMask(recurrentMask);
+    YH, YC = m.forward(X, H, C);
+    dX1, dH1, dC1 = m.backward(np.ones_like(YH), np.ones_like(YC));
+    dWx1, dWh1, db1 = tuple(m.grads);
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
+    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
+    dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
+    dWxN = numericGradient(lambda x: sumAll(*newCell(x, Wh, b).forward(X, H, C)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*newCell(Wx, x, b).forward(X, H, C)), Wh);
+    dbN = numericGradient(lambda x: sumAll(*newCell(Wx, Wh, x).forward(X, H, C)), b);
+    print(f"LstmCell, numericGradient dropout, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbN error: {np.sum(np.abs(db1 - dbN))}");
+    print("\n");
+
+
+def testLstmLayerGradient(returnSequences = False):
+    N, T, inputSize, outputSize = 32, 10, 12, 16;
+    X, H, C = np.random.randn(N, T, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
+    Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
+    m = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, stateful = True);
+    m.isTrainingMode = True;
+    Y, = m.forward(X, H, C);
+    dX1, dH1, dC1 = m.backward(np.ones_like(Y));
+    dWx1, dWh1, db1 = tuple(m.grads);
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
+    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
+    dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
+    dWxN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, outputSize, Wx = x, Wh = Wh, b = b, returnSequences = returnSequences, stateful = True).forward(X, H, C)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, outputSize, Wx = Wx, Wh = x, b = b, returnSequences = returnSequences, stateful = True).forward(X, H, C)), Wh);
+    dbN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x, returnSequences = returnSequences, stateful = True).forward(X, H, C)), b);
+    print(f"LstmLayer, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print("\n");
+
+
+def testLstmLayerGradient_State(returnSequences = False):
+    N, T, inputSize, outputSize = 32, 10, 12, 16;
+    X, H, C = np.random.randn(N, T, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
+    Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
+    m = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True);
+    m.isTrainingMode = True;
+    Y, OH, OC = m.forward(X, H, C);
+    dX1, dH1, dC1 = m.backward(np.ones_like(Y), np.ones_like(OH), np.ones_like(OC));
+    dWx1, dWh1, db1 = tuple(m.grads);
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
+    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
+    dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
+    dWxN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, outputSize, Wx = x, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True).forward(X, H, C)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, outputSize, Wx = Wx, Wh = x, b = b, returnSequences = returnSequences, returnState = True, stateful = True).forward(X, H, C)), Wh);
+    dbN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x, returnSequences = returnSequences, returnState = True, stateful = True).forward(X, H, C)), b);
+    print(f"LstmLayer, numericGradient state, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print("\n");
+
+
+def testLstmLayerGradient_State_Dropout(returnSequences = False):
+    def newLayer(Wx2 : np.ndarray, Wh2 : np.ndarray, b2 : np.ndarray):
+        layer = LstmLayer(inputSize, outputSize, Wx = Wx2, Wh = Wh2, b = b2, returnSequences = returnSequences, returnState = True, stateful = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
+        layer.isTrainingMode = True;
+        layer.setInputDropoutMask(inputMask);
+        layer.setRecurrentDropoutMask(recurrentMask);
+        return layer;
+
+
+    N, T, inputSize, outputSize = 32, 10, 12, 16;
+    X, H, C = np.random.randn(N, T, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
+    inputDropout, recurrentDropout = 0.5, 0.5;
+    inputMask = getDropoutMask(H, inputDropout);
+    recurrentMask = getDropoutMask(C, recurrentDropout);
+    Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
+
+    m = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
+    m.isTrainingMode = True;
+    m.setInputDropoutMask(inputMask);
+    m.setRecurrentDropoutMask(recurrentMask);
+    Y, OH, OC = m.forward(X, H, C);
+    dX1, dH1, dC1 = m.backward(np.ones_like(Y), np.ones_like(OH), np.ones_like(OC));
+    dWx1, dWh1, db1 = tuple(m.grads);
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
+    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
+    dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
+    dWxN = numericGradient(lambda x: sumAll(*newLayer(x, Wh, b).forward(X, H, C)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*newLayer(Wx, x, b).forward(X, H, C)), Wh);
+    dbN = numericGradient(lambda x: sumAll(*newLayer(Wx, Wh, x).forward(X, H, C)), b);
+    print(f"LstmLayer, numericGradient state dropout, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print("\n");
+
+
+def testLstmLayerGradient_Stepwise(returnSequences = False):
+    def forward(model : INetModule, X2 : np.ndarray, H2 : np.ndarray, C2 : np.ndarray):
+        Y2 = np.zeros((N, T, outputSize));
+
+        model.isTrainingMode = True;
+        model.resetStepState();
+        model.setState(H2, C2);
+        for t2 in range(T):
+            Y2[:, t2], = model.forward(X2[:, t2]);
+
+        return (Y2, ) if returnSequences else (Y2[:, -1], );
+
+
+    N, T, inputSize, outputSize = 32, 10, 12, 16;
+    X, H, C = np.random.randn(N, T, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
+    Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
+    m1 = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, stateful = True);
+    m1.isTrainingMode = True;
+    Y1, = m1.forward(X, H, C);
+    dX1, dH1, dC1 = m1.backward(np.ones_like(Y1));
+    m2 = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, stateful = True, stepwise = True);
+    m2.isTrainingMode = True;
+    Y2, = forward(m2, X, H, C);
+    dX2 = np.zeros_like(X);
+    for t in reversed(range(T)):
+        if returnSequences:
+            dX2[:, t], = m2.backward(np.ones_like(Y2[:, t]));
+        else:
+            dX2[:, t], = m2.backward(np.ones_like(Y2) if t == T - 1 else np.zeros_like(Y2));
+    dH2, dC2 = m2.dH, m2.dC;
+    dWx1, dWh1, db1 = tuple(m2.grads);
+    dXN = numericGradient(lambda x: sumAll(*forward(m2, x, H, C)), X);
+    dHN = numericGradient(lambda x: sumAll(*forward(m2, X, x, C)), H);
+    dCN = numericGradient(lambda x: sumAll(*forward(m2, X, H, x)), C);
+    dWxN = numericGradient(lambda x: sumAll(*forward(LstmLayer(inputSize, outputSize, Wx = x, Wh = Wh, b = b, returnSequences = returnSequences, stateful = True, stepwise = True), X, H, C)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*forward(LstmLayer(inputSize, outputSize, Wx = Wx, Wh = x, b = b, returnSequences = returnSequences, stateful = True, stepwise = True), X, H, C)), Wh);
+    dbN = numericGradient(lambda x: sumAll(*forward(LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x, returnSequences = returnSequences, stateful = True, stepwise = True), X, H, C)), b);
+    print(f"LstmLayer, stepwise, numericGradient, Y error: {np.sum(np.abs(Y1 - Y2))}, dX error: {np.sum(np.abs(dX1 - dX2))}, dH error: {np.sum(np.abs(dH1 - dH2))}, dC error: {np.sum(np.abs(dC1 - dC2))}, dXN error: {np.sum(np.abs(dX2 - dXN))}, dHN error: {np.sum(np.abs(dH2 - dHN))}, dCN error: {np.sum(np.abs(dC2 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print("\n");
+
+
+def testLstmLayerGradient_Stepwise_State(returnSequences = False):
+    def forward(model : INetModule, X2 : np.ndarray, H2 : np.ndarray, C2 : np.ndarray):
+        Y2 = np.zeros((N, T, outputSize));
+
+        model.isTrainingMode = True;
+        model.resetStepState();
+        for t2 in range(T):
+            Y2[:, t2], H2, C2 = model.forward(X2[:, t2], H2, C2);
+
+        return (Y2, H2, C2) if returnSequences else (Y2[:, -1], H2, C2);
+
+
+    N, T, inputSize, outputSize = 32, 10, 12, 16;
+    X, H, C = np.random.randn(N, T, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
+    Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
+    m1 = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True);
+    m1.isTrainingMode = True;
+    Y1, H1, C1 = m1.forward(X, H, C);
+    dX1, dH1, dC1 = m1.backward(np.ones_like(Y1), np.ones_like(H1), np.ones_like(C1));
+    m2 = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True);
+    m2.isTrainingMode = True;
+    Y2, H2, C2 = forward(m2, X, H, C);
+    dX2, dH2, dC2 = np.zeros_like(X), np.ones_like(H2), np.ones_like(C2);
+    for t in reversed(range(T)):
+        if returnSequences:
+            dX2[:, t], dH2, dC2 = m2.backward(np.ones_like(Y2[:, t]), dH2, dC2);
+        else:
+            dX2[:, t], dH2, dC2 = m2.backward(np.ones_like(Y2) if t == T - 1 else np.zeros_like(Y2), dH2, dC2);
+    dWx1, dWh1, db1 = tuple(m2.grads);
+    dXN = numericGradient(lambda x: sumAll(*forward(m2, x, H, C)), X);
+    dHN = numericGradient(lambda x: sumAll(*forward(m2, X, x, C)), H);
+    dCN = numericGradient(lambda x: sumAll(*forward(m2, X, H, x)), C);
+    dWxN = numericGradient(lambda x: sumAll(*forward(LstmLayer(inputSize, outputSize, Wx = x, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True), X, H, C)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*forward(LstmLayer(inputSize, outputSize, Wx = Wx, Wh = x, b = b, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True), X, H, C)), Wh);
+    dbN = numericGradient(lambda x: sumAll(*forward(LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True), X, H, C)), b);
+    print(f"LstmLayer, stepwise state, numericGradient, Y error: {np.sum(np.abs(Y1 - Y2))}, H error: {np.sum(np.abs(H1 - H2))}, C error: {np.sum(np.abs(C1 - C2))}, dX error: {np.sum(np.abs(dX1 - dX2))}, dH error: {np.sum(np.abs(dH1 - dH2))}, dC error: {np.sum(np.abs(dC1 - dC2))}, dXN error: {np.sum(np.abs(dX2 - dXN))}, dHN error: {np.sum(np.abs(dH2 - dHN))}, dCN error: {np.sum(np.abs(dC2 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print("\n");
+
+
+def testLstmLayerGradient_Stepwise_State_Dropout(returnSequences = False):
+    def forward(model : INetModule, X2 : np.ndarray, H2 : np.ndarray, C2 : np.ndarray):
+        model.isTrainingMode = True;
+        model.setInputDropoutMask(inputMask);
+        model.setRecurrentDropoutMask(recurrentMask);
+        model.resetStepState();
+
+        Y2 = np.zeros((N, T, outputSize));
+        for t2 in range(T):
+            Y2[:, t2], H2, C2 = model.forward(X2[:, t2], H2, C2);
+
+        return (Y2, H2, C2) if returnSequences else (Y2[:, -1], H2, C2);
+
+
+    N, T, inputSize, outputSize = 32, 10, 12, 16;
+    X, H, C = np.random.randn(N, T, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
+    Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
+    inputDropout, recurrentDropout = 0.5, 0.5;
+    inputMask = getDropoutMask(H, inputDropout);
+    recurrentMask = getDropoutMask(C, recurrentDropout);
+
+    m1 = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
+    m1.isTrainingMode = True;
+    m1.setInputDropoutMask(inputMask);
+    m1.setRecurrentDropoutMask(recurrentMask);
+    Y1, H1, C1 = m1.forward(X, H, C);
+    dX1, dH1, dC1 = m1.backward(np.ones_like(Y1), np.ones_like(H1), np.ones_like(C1));
+    m2 = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
+    m2.isTrainingMode = True;
+    m2.setInputDropoutMask(inputMask);
+    m2.setRecurrentDropoutMask(recurrentMask);
+    Y2, H2, C2 = forward(m2, X, H, C);
+    dX2, dH2, dC2 = np.zeros_like(X), np.ones_like(H2), np.ones_like(C2);
+    for t in reversed(range(T)):
+        if returnSequences:
+            dX2[:, t], dH2, dC2 = m2.backward(np.ones_like(Y2[:, t]), dH2, dC2);
+        else:
+            dX2[:, t], dH2, dC2 = m2.backward(np.ones_like(Y2) if t == T - 1 else np.zeros_like(Y2), dH2, dC2);
+    dWx1, dWh1, db1 = tuple(m2.grads);
+    dXN = numericGradient(lambda x: sumAll(*forward(m2, x, H, C)), X);
+    dHN = numericGradient(lambda x: sumAll(*forward(m2, X, x, C)), H);
+    dCN = numericGradient(lambda x: sumAll(*forward(m2, X, H, x)), C);
+    dWxN = numericGradient(lambda x: sumAll(*forward(LstmLayer(inputSize, outputSize, Wx = x, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout), X, H, C)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*forward(LstmLayer(inputSize, outputSize, Wx = Wx, Wh = x, b = b, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout), X, H, C)), Wh);
+    dbN = numericGradient(lambda x: sumAll(*forward(LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout), X, H, C)), b);
+    print(f"LstmLayer, stepwise state dropout, numericGradient, Y error: {np.sum(np.abs(Y1 - Y2))}, H error: {np.sum(np.abs(H1 - H2))}, C error: {np.sum(np.abs(C1 - C2))}, dX error: {np.sum(np.abs(dX1 - dX2))}, dH error: {np.sum(np.abs(dH1 - dH2))}, dC error: {np.sum(np.abs(dC1 - dC2))}, dXN error: {np.sum(np.abs(dX2 - dXN))}, dHN error: {np.sum(np.abs(dH2 - dHN))}, dCN error: {np.sum(np.abs(dC2 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print("\n");
+
+
+def testBahdanauAttentionLstmLayerGradient(returnSequences = False):
+    def forward(model : INetModule, X2 : np.ndarray, K2 : np.ndarray):
+        return model.forward(X2, K2, K2[:, -1], None);
+
+
+    N, T1, T2, inputSize, outputSize = 32, 11, 12, 22, 24;
+    X, K = np.random.randn(N, T2, inputSize), np.random.randn(N, T1, outputSize);
+    m = BahdanauAttentionLstmLayer(inputSize, outputSize, returnSequences = returnSequences, stateful = True);
+    Wx, Wh, b, Wq, Wk, wv = tuple(m.params);
+
+    Y, = forward(m, X, K);
+    dX1, dK1, dH, dC = m.backward(np.ones_like(Y));
+    dK1[:, -1] += dH;
+    dWx1, dWh1, db1, dWq1, dWk1, dwv1 = tuple(m.grads);
+    dXN = numericGradient(lambda x: sumAll(*forward(m, x, K)), X);
+    dKN = numericGradient(lambda x: sumAll(*forward(m, X, x)), K);
+    dWxN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = x, Wh = Wh, b = b, Wq = Wq, Wk = Wk, wv = wv, returnSequences = returnSequences, stateful = True), X, K)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = x, b = b, Wq = Wq, Wk = Wk, wv = wv, returnSequences = returnSequences, stateful = True), X, K)), Wh);
+    dbN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x, Wq = Wq, Wk = Wk, wv = wv, returnSequences = returnSequences, stateful = True), X, K)), b);
+    dWqN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, Wq = x, Wk = Wk, wv = wv, returnSequences = returnSequences, stateful = True), X, K)), Wq);
+    dWkN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, Wq = Wq, Wk = x, wv = wv, returnSequences = returnSequences, stateful = True), X, K)), Wk);
+    dwvN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, Wq = Wq, Wk = Wk, wv = x, returnSequences = returnSequences, stateful = True), X, K)), wv);
+    print(f"BahdanauAttentionLstmLayer, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, db error: {np.sum(np.abs(db1 - dbN))}, dWq error: {np.sum(np.abs(dWq1 - dWqN))}, dWk error: {np.sum(np.abs(dWk1 - dWkN))}, dwv error: {np.sum(np.abs(dwv1 - dwvN))}");
+    print("\n");
+
+
+def testBahdanauAttentionLstmLayerGradient_Stepwise(returnSequences = False):
+    def forward(model : INetModule, X2 : np.ndarray, K2 : np.ndarray):
+        Y2 = np.zeros((N, T2, outputSize));
+
+        model.resetStepState();
+        model.setState(K2[:, -1]);
+        for t2 in range(T2):
+            Y2[:, t2], = model.forward(X2[:, t2], K2);
+
+        return (Y2, ) if returnSequences else (Y2[:, -1], );
+
+
+    N, T1, T2, inputSize, outputSize = 32, 11, 12, 22, 24;
+    X, K = np.random.randn(N, T2, inputSize), np.random.randn(N, T1, outputSize);
+    m1 = BahdanauAttentionLstmLayer(inputSize, outputSize, returnSequences = returnSequences, stateful = True);
+    Y1, = m1.forward(X, K, K[:, -1], None);
+    dX1, dK1, dH, dC = m1.backward(np.ones_like(Y1));
+    dK1[:, -1] += dH;
+    Wx, Wh, b, Wq, Wk, wv = tuple(m1.params);
+    m2 = BahdanauAttentionLstmLayer(inputSize, outputSize, returnSequences = returnSequences, stateful = True, stepwise = True);
+    m2.params = m1.params;
+    Y2, = forward(m2, X, K);
+    dX2, dK2 = np.zeros_like(X), np.zeros_like(K);
+    for t in reversed(range(T2)):
+        if returnSequences:
+            dX2[:, t], dK = m2.backward(np.ones_like(Y2[:, t]));
+        else:
+            dX2[:, t], dK = m2.backward(np.ones_like(Y2) if t == T2 - 1 else np.zeros_like(Y2));
+        dK2 += dK;
+    dK2[:, -1] += m2.dH;
+    dWx1, dWh1, db1, dWq1, dWk1, dwv1 = tuple(m2.grads);
+    dXN = numericGradient(lambda x: sumAll(*forward(m2, x, K)), X);
+    dKN = numericGradient(lambda x: sumAll(*forward(m2, X, x)), K);
+    dWxN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = x, Wh = Wh, b = b, Wq = Wq, Wk = Wk, wv = wv, returnSequences = returnSequences, stateful = True, stepwise = True,), X, K)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = x, b = b, Wq = Wq, Wk = Wk, wv = wv, returnSequences = returnSequences, stateful = True, stepwise = True), X, K)), Wh);
+    dbN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x, Wq = Wq, Wk = Wk, wv = wv, returnSequences = returnSequences, stateful = True, stepwise = True), X, K)), b);
+    dWqN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, Wq = x, Wk = Wk, wv = wv, returnSequences = returnSequences, stateful = True, stepwise = True), X, K)), Wq);
+    dWkN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, Wq = Wq, Wk = x, wv = wv, returnSequences = returnSequences, stateful = True, stepwise = True), X, K)), Wk);
+    dwvN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, Wq = Wq, Wk = Wk, wv = x, returnSequences = returnSequences, stateful = True, stepwise = True), X, K)), wv);
+    print(f"BahdanauAttentionLstmLayer, stepwise, numericGradient, Y error: {np.sum(np.abs(Y1 - Y2))}, dX error: {np.sum(np.abs(dX1 - dX2))}, dK error: {np.sum(np.abs(dK1 - dK2))}, dXN error: {np.sum(np.abs(dX2 - dXN))}, dKN error: {np.sum(np.abs(dK2 - dKN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, db error: {np.sum(np.abs(db1 - dbN))}, dWq error: {np.sum(np.abs(dWq1 - dWqN))}, dWk error: {np.sum(np.abs(dWk1 - dWkN))}, dwv error: {np.sum(np.abs(dwv1 - dwvN))}");
+    print("\n");
+
+
+def testBahdanauAttentionLstmLayerGradient_Stepwise_State(returnSequences = False):
+    def forward(model : INetModule, X2 : np.ndarray, K2 : np.ndarray):
+        Y2 = np.zeros((N, T2, outputSize));
+        H2, C2 = K2[:, -1], None;
+
+        model.resetStepState();
+        for t2 in range(T2):
+            Y2[:, t2], H2, C2 = model.forward(X2[:, t2], K2, H2, C2);
+
+        return (Y2, H2, C2) if returnSequences else (Y2[:, -1], H2, C2);
+
+
+    N, T1, T2, inputSize, outputSize = 32, 11, 12, 22, 24;
+    X, K = np.random.randn(N, T2, inputSize), np.random.randn(N, T1, outputSize);
+    m1 = BahdanauAttentionLstmLayer(inputSize, outputSize, returnSequences = returnSequences, returnState = True, stateful = True);
+    Y1, H1, C1 = m1.forward(X, K, K[:, -1], None);
+    dX1, dK1, dH1, dC1 = m1.backward(np.ones_like(Y1), np.ones_like(H1), np.ones_like(C1));
+    dK1[:, -1] += dH1;
+    Wx, Wh, b, Wq, Wk, wv = tuple(m1.params);
+    m2 = BahdanauAttentionLstmLayer(inputSize, outputSize, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True);
+    m2.params = m1.params;
+    Y2, H2, C2 = forward(m2, X, K);
+    dX2, dK2, dH2, dC2 = np.zeros_like(X), np.zeros_like(K), np.ones_like(H2), np.ones_like(C2);
+    for t in reversed(range(T2)):
+        if returnSequences:
+            dX2[:, t], dK, dH2, dC2 = m2.backward(np.ones_like(Y2[:, t]), dH2, dC2);
+        else:
+            dX2[:, t], dK, dH2, dC2 = m2.backward(np.ones_like(Y2) if t == T2 - 1 else np.zeros_like(Y2), dH2, dC2);
+        dK2 += dK;
+    dK2[:, -1] += dH2;
+    dWx1, dWh1, db1, dWq1, dWk1, dwv1 = tuple(m2.grads);
+    dXN = numericGradient(lambda x: sumAll(*forward(m2, x, K)), X);
+    dKN = numericGradient(lambda x: sumAll(*forward(m2, X, x)), K);
+    dWxN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = x, Wh = Wh, b = b, Wq = Wq, Wk = Wk, wv = wv, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True,), X, K)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = x, b = b, Wq = Wq, Wk = Wk, wv = wv, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True), X, K)), Wh);
+    dbN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x, Wq = Wq, Wk = Wk, wv = wv, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True), X, K)), b);
+    dWqN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, Wq = x, Wk = Wk, wv = wv, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True), X, K)), Wq);
+    dWkN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, Wq = Wq, Wk = x, wv = wv, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True), X, K)), Wk);
+    dwvN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, Wq = Wq, Wk = Wk, wv = x, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True), X, K)), wv);
+    print(f"BahdanauAttentionLstmLayer, stepwise state, numericGradient, Y error: {np.sum(np.abs(Y1 - Y2))}, H error: {np.sum(np.abs(H1 - H2))}, C error: {np.sum(np.abs(C1 - C2))}, dX error: {np.sum(np.abs(dX1 - dX2))}, dK error: {np.sum(np.abs(dK1 - dK2))}, dH error: {np.sum(np.abs(dH1 - dH2))}, dC error: {np.sum(np.abs(dC1 - dC2))}, dXN error: {np.sum(np.abs(dX2 - dXN))}, dKN error: {np.sum(np.abs(dK2 - dKN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, db error: {np.sum(np.abs(db1 - dbN))}, dWq error: {np.sum(np.abs(dWq1 - dWqN))}, dWk error: {np.sum(np.abs(dWk1 - dWkN))}, dwv error: {np.sum(np.abs(dwv1 - dwvN))}");
+    print("\n");
+
+
+def testBahdanauAttentionLstmLayerGradient_Stepwise_State_Dropout(returnSequences = False):
+    def forward(model : INetModule, X2 : np.ndarray, K2 : np.ndarray):
+        model.isTrainingMode = True;
+        model.setInputDropoutMask(inputMask);
+        model.setRecurrentDropoutMask(recurrentMask);
+
+        Y2 = np.zeros((N, T2, outputSize));
+        H2, C2 = K2[:, -1], None;
+
+        model.resetStepState();
+        for t2 in range(T2):
+            Y2[:, t2], H2, C2 = model.forward(X2[:, t2], K2, H2, C2);
+
+        return (Y2, H2, C2) if returnSequences else (Y2[:, -1], H2, C2);
+
+
+    N, T1, T2, inputSize, outputSize = 32, 11, 12, 22, 24;
+    X, K = np.random.randn(N, T2, inputSize), np.random.randn(N, T1, outputSize);
+    inputDropout, recurrentDropout = 0.5, 0.5;
+    inputMask = getDropoutMask(np.ones_like(K[:, -1]), inputDropout);
+    recurrentMask = getDropoutMask(np.ones_like(K[:, -1]), recurrentDropout);
+    m1 = BahdanauAttentionLstmLayer(inputSize, outputSize, returnSequences = returnSequences, returnState = True, stateful = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
+    m1.isTrainingMode = True;
+    m1.setInputDropoutMask(inputMask);
+    m1.setRecurrentDropoutMask(recurrentMask);
+    Y1, H1, C1 = m1.forward(X, K, K[:, -1], None);
+    dX1, dK1, dH1, dC1 = m1.backward(np.ones_like(Y1), np.ones_like(H1), np.ones_like(C1));
+    dK1[:, -1] += dH1;
+    Wx, Wh, b, Wq, Wk, wv = tuple(m1.params);
+    m2 = BahdanauAttentionLstmLayer(inputSize, outputSize, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
+    m2.params = m1.params;
+    m2.isTrainingMode = True;
+    m2.setInputDropoutMask(inputMask);
+    m2.setRecurrentDropoutMask(recurrentMask);
+    Y2, H2, C2 = forward(m2, X, K);
+    dX2, dK2, dH2, dC2 = np.zeros_like(X), np.zeros_like(K), np.ones_like(H2), np.ones_like(C2);
+    for t in reversed(range(T2)):
+        if returnSequences:
+            dX2[:, t], dK, dH2, dC2 = m2.backward(np.ones_like(Y2[:, t]), dH2, dC2);
+        else:
+            dX2[:, t], dK, dH2, dC2 = m2.backward(np.ones_like(Y2) if t == T2 - 1 else np.zeros_like(Y2), dH2, dC2);
+        dK2 += dK;
+    dK2[:, -1] += dH2;
+    dWx1, dWh1, db1, dWq1, dWk1, dwv1 = tuple(m2.grads);
+    dXN = numericGradient(lambda x: sumAll(*forward(m2, x, K)), X);
+    dKN = numericGradient(lambda x: sumAll(*forward(m2, X, x)), K);
+    dWxN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = x, Wh = Wh, b = b, Wq = Wq, Wk = Wk, wv = wv, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout), X, K)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = x, b = b, Wq = Wq, Wk = Wk, wv = wv, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout), X, K)), Wh);
+    dbN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x, Wq = Wq, Wk = Wk, wv = wv, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout), X, K)), b);
+    dWqN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, Wq = x, Wk = Wk, wv = wv, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout), X, K)), Wq);
+    dWkN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, Wq = Wq, Wk = x, wv = wv, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout), X, K)), Wk);
+    dwvN = numericGradient(lambda x: sumAll(*forward(BahdanauAttentionLstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, Wq = Wq, Wk = Wk, wv = x, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout), X, K)), wv);
+    print(f"BahdanauAttentionLstmLayer, stepwise state dropout, numericGradient, Y error: {np.sum(np.abs(Y1 - Y2))}, H error: {np.sum(np.abs(H1 - H2))}, C error: {np.sum(np.abs(C1 - C2))}, dX error: {np.sum(np.abs(dX1 - dX2))}, dK error: {np.sum(np.abs(dK1 - dK2))}, dH error: {np.sum(np.abs(dH1 - dH2))}, dC error: {np.sum(np.abs(dC1 - dC2))}, dXN error: {np.sum(np.abs(dX2 - dXN))}, dKN error: {np.sum(np.abs(dK2 - dKN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, db error: {np.sum(np.abs(db1 - dbN))}, dWq error: {np.sum(np.abs(dWq1 - dWqN))}, dWk error: {np.sum(np.abs(dWk1 - dWkN))}, dwv error: {np.sum(np.abs(dwv1 - dwvN))}");
+    print("\n");
+
+
+def testStackLstmLayerGradient(returnSequences = False):
+    L, N, T, inputSize, outputSize = 1, 32, 10, 12, 16;
+    X, HS, CS = np.random.randn(N, T, inputSize), np.random.randn(L, N, outputSize), np.random.randn(L, N, outputSize);
+    m = StackLstmLayer(inputSize, outputSize, LstmLayer, layerNum = L, returnSequences = returnSequences, stateful = True);
+    Y1, = m.forward(X, HS, CS);
+    dX1, dHS1, dCS1 = m.backward(np.ones_like(Y1));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, HS, CS)), X);
+    dHSN = numericGradient(lambda x: sumAll(*m.forward(X, x, CS)), HS);
+    dCSN = numericGradient(lambda x: sumAll(*m.forward(X, HS, x)), CS);
+    print(f"StackLstmLayer, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dHS error: {np.sum(np.abs(dHS1 - dHSN))}, dCS error: {np.sum(np.abs(dCS1 - dCSN))}");
+    testModuleGradient(m, "StackLstmLayer, numericGradient", X, HS, CS);
+    print("\n");
+
+
+def testStackLstmLayerGradient_State(returnSequences = False):
+    L, N, T, inputSize, outputSize = 1, 32, 10, 12, 16;
+    X, HS, CS = np.random.randn(N, T, inputSize), np.random.randn(L, N, outputSize), np.random.randn(L, N, outputSize);
+    m = StackLstmLayer(inputSize, outputSize, LstmLayer, layerNum = L, returnSequences = returnSequences, returnState = True, stateful = True);
+    Y1, OHS1, OCS1 = m.forward(X, HS, CS);
+    dX1, dHS1, dCS1 = m.backward(np.ones_like(Y1), np.ones_like(OHS1), np.ones_like(OCS1));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, HS, CS)), X);
+    dHSN = numericGradient(lambda x: sumAll(*m.forward(X, x, CS)), HS);
+    dCSN = numericGradient(lambda x: sumAll(*m.forward(X, HS, x)), CS);
+    print(f"StackLstmLayer, state, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dHS error: {np.sum(np.abs(dHS1 - dHSN))}, dCS error: {np.sum(np.abs(dCS1 - dCSN))}");
+    testModuleGradient(m, "StackLstmLayer state, numericGradient", X, HS, CS);
+    print("\n");
+
+
+def testStackLstmLayerGradient_State_Dropout(returnSequences = False):
+    L, N, T, inputSize, outputSize = 1, 32, 10, 12, 16;
+    X, HS, CS = np.random.randn(N, T, inputSize), np.random.randn(L, N, outputSize), np.random.randn(L, N, outputSize);
+    m = StackLstmLayer(inputSize, outputSize, LstmLayer, layerNum = L, returnSequences = returnSequences, returnState = True, stateful = True, inputDropout = 0.5, recurrentDropout = 0.5);
+    m.isTrainingMode = True;
+    Y1, OHS1, OCS1 = m.forward(X, HS, CS);
+    dX1, dHS1, dCS1 = m.backward(np.ones_like(Y1), np.ones_like(OHS1), np.ones_like(OCS1));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, HS, CS)), X);
+    dHSN = numericGradient(lambda x: sumAll(*m.forward(X, x, CS)), HS);
+    dCSN = numericGradient(lambda x: sumAll(*m.forward(X, HS, x)), CS);
+    print(f"StackLstmLayer, state dropout, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dHS error: {np.sum(np.abs(dHS1 - dHSN))}, dCS error: {np.sum(np.abs(dCS1 - dCSN))}");
+    testModuleGradient(m, "StackLstmLayer state dropout, numericGradient", X, HS, CS);
+    print("\n");
+
+
+def testBiRnnLayerGradient():
+    N, T, D, H1, H2 = 32, 10, 12, 21, 22;
+    X = np.random.randn(N, T, D);
+    lstm1, lstm2 = LstmLayer(D, H1, returnSequences = True), LstmLayer(D, H2, returnSequences = True);
+    m = BiRnnLayer(lstm1, lstm2);
+    Y1, Y2 = m.forward(X);
+    dX1 = m.backward(np.ones_like(Y1), np.ones_like(Y2))[0];
+    dXN = numericGradient(lambda x: np.sum(np.concatenate(m.forward(x), axis = -1)), X);
+    print(f"BiRnnLayer, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSelectByWeightModuleGradient():
+    V, W = np.random.randn(2, 32, 11, 16), np.random.randn(2, 32, 12, 11);
+    m1 = SelectByWeight1TModule();
+    m2 = SelectByWeightNTModule();
+
+    Y1 = np.zeros(W.shape[:-1] + (V.shape[-1], ));
+    dV1, dW1 = np.zeros_like(V), np.zeros_like(W);
+    for t in range(W.shape[-2]):
+        Y1[..., t, :] = m1.forward(W[..., t, :], V)[0];
+        dW, dV = m1.backward(np.ones_like(Y1[..., t, :]));
+        dV1 += dV;
+        dW1[..., t, :] = dW;
+
+    Y2 = m2.forward(W, V)[0];
+    dW2, dV2 = m2.backward(np.ones_like(Y2));
+    print(f"SelectByWeightModule, batch process, Y error: {np.sum(np.abs(Y1 - Y2))}, dV error: {np.sum(np.abs(dV1 - dV2))}, dW error: {np.sum(np.abs(dW1 - dW2))}");
+
+    dVN = numericGradient(lambda x: np.sum(m2.forward(W, x)[0]), V);
+    dWN = numericGradient(lambda x: np.sum(m2.forward(x, V)[0]), W);
+    print(f"SelectByWeightModule, numericGradient, dV error: {np.sum(np.abs(dV2 - dVN))}, dW error: {np.sum(np.abs(dW2 - dWN))}");
+    print("\n");
+
+
+def testAdditiveAttentionWeight1TModuleGradient():
+    N, T1, querySize, keySize, hiddenSize = 32, 8, 12, 16, 24;
+    K, Q = np.random.randn(N, T1, keySize), np.random.randn(N, querySize);
+    m = AdditiveAttentionWeight1TModule(querySize, keySize, hiddenSize);
+    Wq, Wk, wv = tuple(m.params);
+
+    Y = m.forward(Q, K)[0];
+    dQ1, dK1 = m.backward(np.ones_like(Y));
+    dWq1, dWk1, dwv1 = tuple(m.grads);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x)[0]), K);
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K)[0]), Q);
+    dWqN = numericGradient(lambda x: np.sum(AdditiveAttentionWeight1TModule(querySize, keySize, hiddenSize, Wq = x, Wk = Wk, wv = wv).forward(Q, K)[0]), Wq);
+    dWkN = numericGradient(lambda x: np.sum(AdditiveAttentionWeight1TModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = x, wv = wv).forward(Q, K)[0]), Wk);
+    dwvN = numericGradient(lambda x: np.sum(AdditiveAttentionWeight1TModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = Wk, wv = x).forward(Q, K)[0]), wv);
+    print(f"AdditiveAttentionWeight1TModule, numericGradient, dK error: {np.sum(np.abs(dK1 - dKN))}, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dWq error: {np.sum(np.abs(dWq1 - dWqN))}, dWk error: {np.sum(np.abs(dWk1 - dWkN))}, dwv error: {np.sum(np.abs(dwv1 - dwvN))}");
+    print("\n");
+
+
+def testAdditiveAttentionWeightNTModuleGradient():
+    N, T1, T2, querySize, keySize, hiddenSize = 32, 11, 12, 22, 21, 24;
+    K, Q = np.random.randn(N, T1, keySize), np.random.randn(N, T2, querySize);
+    m1 = AdditiveAttentionWeight1TModule(querySize, keySize, hiddenSize);
+    Wq, Wk, wv = tuple(m1.params);
+    m2 = AdditiveAttentionWeightNTModule(querySize, keySize, hiddenSize, Wq, Wk, wv);
+
+    Y1 = np.zeros((N, T2, T1));
+    dK1, dQ1 = np.zeros_like(K), np.zeros_like(Q);
+    dWq1, dWk1, dwv1 = np.zeros_like(Wq), np.zeros_like(Wk), np.zeros_like(wv);
+    for t in range(Q.shape[-2]):
+        Y1[..., t, :] = m1.forward(Q[..., t, :], K)[0];
+        dQ, dK = m1.backward(np.ones_like(Y1[..., t, :]));
+        dK1 += dK;
+        dQ1[..., t, :] = dQ;
+        dWq1 += m1.grads[0];
+        dWk1 += m1.grads[1];
+        dwv1 += m1.grads[2];
+
+    Y2 = m2.forward(Q, K)[0];
+    dQ2, dK2 = m2.backward(np.ones_like(Y2));
+    dWq2, dWk2, dwv2 = tuple(m2.grads);
+    print(f"AdditiveAttentionWeightNTModule, batch process, Y error: {np.sum(np.abs(Y1 - Y2))}, dK error: {np.sum(np.abs(dK1 - dK2))}, dQ error: {np.sum(np.abs(dQ1 - dQ2))}, dWq error: {np.sum(np.abs(dWq1 - dWq2))}, dWk error: {np.sum(np.abs(dWk1 - dWk2))}, dwv error: {np.sum(np.abs(dwv1 - dwv2))}");
+
+    dKN = numericGradient(lambda x: np.sum(m2.forward(Q, x)[0]), K);
+    dQN = numericGradient(lambda x: np.sum(m2.forward(x, K)[0]), Q);
+    dWqN = numericGradient(lambda x: np.sum(AdditiveAttentionWeightNTModule(querySize, keySize, hiddenSize, Wq = x, Wk = Wk, wv = wv).forward(Q, K)[0]), Wq);
+    dWkN = numericGradient(lambda x: np.sum(AdditiveAttentionWeightNTModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = x, wv = wv).forward(Q, K)[0]), Wk);
+    dwvN = numericGradient(lambda x: np.sum(AdditiveAttentionWeightNTModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = Wk, wv = x).forward(Q, K)[0]), wv);
+    print(f"AdditiveAttentionWeightNTModule, numericGradient, dK error: {np.sum(np.abs(dK2 - dKN))}, dQ error: {np.sum(np.abs(dQ2 - dQN))}, dWq error: {np.sum(np.abs(dWq2 - dWqN))}, dWk error: {np.sum(np.abs(dWk2 - dWkN))}, dwv error: {np.sum(np.abs(dwv2 - dwvN))}");
+    print("\n");
+
+
+def testDotProductAttentionWeightModuleGradient():
+    N1, N2, T1, T2, querySize = 2, 32, 11, 12, 24;
+    K, Q = np.random.randn(N1, N2, T1, querySize), np.random.randn(N1, N2, T2, querySize);
+    m1 = DotProductAttentionWeight1TModule();
+    m2 = DotProductAttentionWeightNTModule();
+
+    Y1 = np.zeros(Q.shape[:-1] + (K.shape[-2], ));
+    dK1, dQ1 = np.zeros_like(K), np.zeros_like(Q);
+    for t in range(Q.shape[-2]):
+        Y1[..., t, :] = m1.forward(Q[..., t, :], K)[0];
+        dQ, dK = m1.backward(np.ones_like(Y1[..., t, :]));
+        dK1 += dK;
+        dQ1[..., t, :] = dQ;
+
+    Y2 = m2.forward(Q, K)[0];
+    dQ2, dK2 = m2.backward(np.ones_like(Y2));
+    print(f"DotProductAttentionWeight, batch process, Y error: {np.sum(np.abs(Y1 - Y2))}, dK error: {np.sum(np.abs(dK1 - dK2))}, dQ error: {np.sum(np.abs(dQ1 - dQ2))}");
+
+    dKN = numericGradient(lambda x: np.sum(m2.forward(Q, x)[0]), K);
+    dQN = numericGradient(lambda x: np.sum(m2.forward(x, K)[0]), Q);
+    print(f"DotProductAttentionWeight, numericGradient, dK error: {np.sum(np.abs(dK2 - dKN))}, dQ error: {np.sum(np.abs(dQ2 - dQN))}");
+    print("\n");
+
+
+def testQKVAttentionLayerGradient():
+    K, V, Q = np.random.randn(2, 32, 11, 16), np.random.randn(2, 32, 11, 16), np.random.randn(2, 32, 12, 16);
+    m1 = QKVAttentionLayer(DotProductAttentionWeight1TModule(), SelectByWeight1TModule());
+    m2 = QKVAttentionLayer(DotProductAttentionWeightNTModule(), SelectByWeightNTModule());
+
+    Y1 = np.zeros_like(Q);
+    dK1, dV1, dQ1 = np.zeros_like(K), np.zeros_like(V), np.zeros_like(Q);
+    for t in range(Q.shape[-2]):
+        Y1[..., t, :] = m1.forward(Q[..., t, :], K, V)[0];
+        dQ, dK, dV = m1.backward(np.ones_like(Y1[..., t, :]));
+        dK1 += dK;
+        dV1 += dV;
+        dQ1[..., t, :] = dQ;
+
+    Y2 = m2.forward(Q, K, V)[0];
+    dQ2, dK2, dV2 = m2.backward(np.ones_like(Y2));
+    print(f"QKVAttention, batch process, Y error: {np.sum(np.abs(Y1 - Y2))}, dQ error: {np.sum(np.abs(dQ1 - dQ2))}, dK error: {np.sum(np.abs(dK1 - dK2))}, dV error: {np.sum(np.abs(dV1 - dV2))}");
+
+    dQN = numericGradient(lambda x: np.sum(m2.forward(x, K, V)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m2.forward(Q, x, V)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m2.forward(Q, K, x)[0]), V);
+    print(f"QKVAttention, numericGradient, dQ error: {np.sum(np.abs(dQ2 - dQN))}, dK error: {np.sum(np.abs(dK2 - dKN))}, dV error: {np.sum(np.abs(dV2 - dVN))}");
+    print("\n");
+
+
+def testGaussianVAELossGradient():
+    N, D, H, L = 32, 8, 4, 16;
+    X, M, V, E, U = np.random.randn(N, D), np.random.randn(N, H), softplus(np.random.randn(N, H)), np.random.randn(N, L, D), softplus(np.random.randn(N, L, D));
+
+    m = GaussianVAELoss();
+    loss = m.forward(X, M, V, E, U);
+    dX1, dM1, dV1, dE1, dU1 = m.backward();
+    dXN = numericGradient(lambda x: m.forward(x, M, V, E, U), X);
+    dMN = numericGradient(lambda x: m.forward(X, x, V, E, U), M);
+    dVN = numericGradient(lambda x: m.forward(X, M, x, E, U), V);
+    dEN = numericGradient(lambda x: m.forward(X, M, V, x, U), E);
+    dUN = numericGradient(lambda x: m.forward(X, M, V, E, x), U);
+    print(f"GaussianVAELoss, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dM error: {np.sum(np.abs(dM1 - dMN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dE error: {np.sum(np.abs(dE1 - dEN))}, dU error: {np.sum(np.abs(dU1 - dUN))}");
+    print("\n");
+
+
+def testGaussianVAEGradient1():
+    N, D, H, L = 32, 8, 4, 16;
+    X, epsilon = np.random.randn(N, D), np.random.randn(N, L, H);
+
+    m = GaussianVAE(AggregateNetModule(
+        AffineLayer(D, 32, W = np.random.randn(D, 32), b = np.random.randn(32)),
+        SigmoidLayer(),
+        AffineLayer(32, 16, W = np.random.randn(32, 16), b = np.random.randn(16)),
+        SigmoidLayer(),
+        AffineLayer(16, 2 * H, W = np.random.randn(16, 2 * H), b = np.random.randn(2 * H)),
+    ), AggregateNetModule(
+        AffineLayer(H, 16, W = np.random.randn(H, 16), b = np.random.randn(16)),
+        SigmoidLayer(),
+        AffineLayer(16, 32, W = np.random.randn(16, 32), b = np.random.randn(32)),
+        SigmoidLayer(),
+        AffineLayer(32, 2 * D, W = np.random.randn(32, 2 * D), b = np.random.randn(2 * D)),
+    ), H, L);
+    X, M, V, E, U = m.forward(X, epsilon);
+    dX1 = m.backward(np.ones_like(X), np.ones_like(M), np.ones_like(V), np.ones_like(E), np.ones_like(U))[0];
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, epsilon)), X);
+    print(f"GaussianVAE, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "GaussianVAE, numericGradient1", X, epsilon);
+    print("\n");
+
+
+def testGaussianVAEGradient2():
+    N, D, H, L = 32, 8, 4, 16;
+    X, epsilon = np.random.randn(N, D), np.random.randn(N, L, H);
+
+    m = GaussianVAE(AggregateNetModule(
+        AffineLayer(D, 32),#, W = np.random.randn(D, 32), b = np.random.randn(32)),
+        SoftplusLayer(),
+        AffineLayer(32, 16),#, W = np.random.randn(32, 16), b = np.random.randn(16)),
+        SoftplusLayer(),
+        AffineLayer(16, 2 * H)#, W = np.random.randn(16, 2 * H), b = np.random.randn(2 * H)),
+    ), AggregateNetModule(
+        AffineLayer(H, 16),#, W = np.random.randn(H, 16), b = np.random.randn(16)),
+        SoftplusLayer(),
+        AffineLayer(16, 32),#, W = np.random.randn(16, 32), b = np.random.randn(32)),
+        SoftplusLayer(),
+        AffineLayer(32, 2 * D)#, W = np.random.randn(32, 2 * D), b = np.random.randn(2 * D)),
+    ), H, L);
+    loss = GaussianVAELoss();
+    loss.forward(*m.forward(X, epsilon));
+    dX1 = m.backward(*loss.backward())[0];
+    dXN = numericGradient(lambda x: loss.forward(*m.forward(x, epsilon)), X);
+    print(f"GaussianVAE, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testGaussianVAE_Anomaly_HTRU2():
+    dataset = np.loadtxt("/media/WindowsE/Data/UCI/HTRU2/HTRU_2.csv", delimiter = ",").astype(defaultDType);
+
+    D = dataset.shape[-1] - 1;
+    filename = f"GaussianVAE_Anomaly_HTRU2.result";
+    hiddenSize1, latentSize, batchSize, maxEpoch = 2 * D, D // 2, 32, 100;
+    model = GaussianVAE(AggregateNetModule(
+        AffineLayer(D, hiddenSize1),
+        ReluLayer(),
+        AffineLayer(hiddenSize1, 2 * latentSize),
+    ), AggregateNetModule(
+        AffineLayer(latentSize, hiddenSize1),
+        ReluLayer(),
+        AffineLayer(hiddenSize1, 2 * D),
+    ), latentSize);
+
+    X = dataset[dataset[:, -1] == 0, : -1];
+    np.random.shuffle(X);
+    trainSize = int(len(X) * 0.8);
+    X_train, X_test_normal, X_test_anomaly = X[: trainSize], X[trainSize:], dataset[dataset[:, -1] == 1, : -1];
+
+    scaler = StandardScaler();
+    scaler.fit(X_train);
+    X_train, X_test_normal, X_test_anomaly = scaler.transform(X_train), scaler.transform(X_test_normal), scaler.transform(X_test_anomaly);
+
+    lossFunc = GaussianVAELoss();
+    optimizer = Adam();
+    trainingIterator = SequentialDataIterator([X_train], batchSize);
+    model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, plot = True);
+
+    with open(filename, "wb") as file:
+        pickle.dump((model.params, X_train, X_test_normal, X_test_anomaly), file);
+
+    # if os.path.isfile(filename):
+    #     with open(filename, "br") as file:
+    #         params, X_train, X_test_normal, X_test_anomaly = pickle.load(file);
+    #     if isinstance(params[0], cp.ndarray):
+    #         params = [cp.asnumpy(p) for p in params];
+    #     for i in range(len(params)):
+    #         params[i] = params[i].astype(defaultDType);
+    #     model.params = params;
+    #
+    # M, V = model.encode(X_train);
+    #
+    # X_test_normal_rp = model.reconstructionProbability(X_test_normal);
+    # X_test_anomaly_rp = model.reconstructionProbability(X_test_anomaly);
+    # X_train_rp = np.concatenate(tuple([model.reconstructionProbability(item[0]) for item in SequentialDataIterator([X_train], batchSize, False)]), axis = 0);
+    #
+    # plt.figure(figsize = (12, 14));
+    # plt.hist(X_train_rp, bins = 1000, color = "k");
+    # plt.hist(X_test_normal_rp, bins = 1000, label = "normal", color = "b");
+    # plt.hist(X_test_anomaly_rp, bins = 1000, label = "anomaly", color = "r");
+    # plt.show(block = True);
+    #
+    # fprX, tprY = [], [];
+    # for alpha in np.arange(0, 1.001, 0.001):
+    #     threshold = np.quantile(X_train_rp, alpha);
+    #     X_test_normal_class = X_test_normal_rp < threshold;
+    #     X_test_anomaly_class = X_test_anomaly_rp < threshold;
+    #
+    #     TP, FP = np.sum(X_test_anomaly_class == True), np.sum(X_test_normal_class == True);
+    #     FN, TN = np.sum(X_test_anomaly_class == False), np.sum(X_test_normal_class == False);
+    #     precision, recall = TP / (TP + FP), TP / (TP + FN);
+    #     fpr, tpr = FP / (FP + TN), recall;
+    #     fprX.append(fpr);
+    #     tprY.append(tpr);
+    #     print(f"alpha = {alpha}, precision = {precision}, recall = {recall}, fpr = {fpr}, tpr = {tpr}");
+    #
+    # plt.figure(figsize = (12, 14));
+    # plt.plot(fprX, tprY);
+    # plt.xlabel("FPR");
+    # plt.ylabel("TPR");
+    # plt.title(f"AUC={auc(-X_test_anomaly_rp, -X_test_normal_rp)}");
+    # plt.show(block = True);
+
+    print("exit.");
+
+
+def testBernoulliVAELossGradient():
+    N, D, H, L = 32, 8, 4, 16;
+    X, M, V, Y = np.random.randn(N, D), np.random.randn(N, H), softplus(np.random.randn(N, H)), np.random.randn(N, L, D);
+
+    m = BernoulliVAELoss();
+    loss = m.forward(X, M, V, Y);
+    dX1, dM1, dV1, dY1 = m.backward();
+    dXN = numericGradient(lambda x: m.forward(x, M, V, Y), X);
+    dMN = numericGradient(lambda x: m.forward(X, x, V, Y), M);
+    dVN = numericGradient(lambda x: m.forward(X, M, x, Y), V);
+    dYN = numericGradient(lambda x: m.forward(X, M, V, x), Y);
+    print(f"BernoulliVAELoss, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dM error: {np.sum(np.abs(dM1 - dMN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dY error: {np.sum(np.abs(dY1 - dYN))}");
+    print("\n");
+
+
+def testBernoulliVAEGradient1():
+    N, D, H, L = 32, 8, 4, 16;
+    X, epsilon = np.random.randn(N, D), np.random.randn(N, L, H);
+
+    m = BernoulliVAE(AggregateNetModule(
+        AffineLayer(D, 32, W = np.random.randn(D, 32), b = np.random.randn(32)),
+        SigmoidLayer(),
+        AffineLayer(32, 16, W = np.random.randn(32, 16), b = np.random.randn(16)),
+        SigmoidLayer(),
+        AffineLayer(16, 2 * H, W = np.random.randn(16, 2 * H), b = np.random.randn(2 * H)),
+    ), AggregateNetModule(
+        AffineLayer(H, 16, W = np.random.randn(H, 16), b = np.random.randn(16)),
+        SigmoidLayer(),
+        AffineLayer(16, 32, W = np.random.randn(16, 32), b = np.random.randn(32)),
+        SigmoidLayer(),
+        AffineLayer(32, D, W = np.random.randn(32, D), b = np.random.randn(D)),
+    ), H, L);
+    X, M, V, Y = m.forward(X, epsilon);
+    dX1 = m.backward(np.ones_like(X), np.ones_like(M), np.ones_like(V), np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, epsilon)), X);
+    print(f"BernoulliVAE, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "BernoulliVAE, numericGradient1", X, epsilon);
+    print("\n");
+
+
+def testBernoulliVAEGradient2():
+    N, D, H, L = 32, 8, 4, 16;
+    X, epsilon = np.random.randn(N, D), np.random.randn(N, L, H);
+
+    m = BernoulliVAE(AggregateNetModule(
+        AffineLayer(D, 32),#, W = np.random.randn(D, 32), b = np.random.randn(32)),
+        SoftplusLayer(),
+        AffineLayer(32, 16),#, W = np.random.randn(32, 16), b = np.random.randn(16)),
+        SoftplusLayer(),
+        AffineLayer(16, 2 * H),#, W = np.random.randn(16, 2 * H), b = np.random.randn(2 * H)),
+    ), AggregateNetModule(
+        AffineLayer(H, 16),#, W = np.random.randn(H, 16), b = np.random.randn(16)),
+        SoftplusLayer(),
+        AffineLayer(16, 32),#, W = np.random.randn(16, 32), b = np.random.randn(32)),
+        SoftplusLayer(),
+        AffineLayer(32, D)#, W = np.random.randn(32, D), b = np.random.randn(D)),
+    ), H, L);
+    loss = BernoulliVAELoss();
+    loss.forward(*m.forward(X, epsilon));
+    dX1 = m.backward(*loss.backward())[0];
+    dXN = numericGradient(lambda x: loss.forward(*m.forward(x, epsilon)), X);
+    print(f"BernoulliVAE, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testBernoulliVAE_MNIST():
+    mnist = MNIST("/media/WindowsE/Data/MNIST", flatten = True, normalize = True);
+    X_train, X_test = mnist.trainX, mnist.testX;
+    Y_train, Y_test = mnist.trainY, mnist.testY;
+
+    D = X_train.shape[-1];
+    filename = "BernoulliVAE_MNIST.weights";
+    hiddenSize1, hiddenSize2, latentSize, batchSize, maxEpoch = 1000, 400, 200, 32, 10;
+    model = BernoulliVAE(AggregateNetModule(
+        AffineLayer(D, hiddenSize1),
+        ReluLayer(),
+        AffineLayer(hiddenSize1, hiddenSize2),
+        ReluLayer(),
+        AffineLayer(hiddenSize2, 2 * latentSize),
+    ), AggregateNetModule(
+        AffineLayer(latentSize, hiddenSize2),
+        ReluLayer(),
+        AffineLayer(hiddenSize2, hiddenSize1),
+        ReluLayer(),
+        AffineLayer(hiddenSize1, D),
+    ), latentSize);
+
+    # if os.path.isfile(filename):
+    #     with open(filename, "br") as file:
+    #         params = pickle.load(file);
+    #     if isinstance(params[0], cp.ndarray):
+    #         params = [cp.asnumpy(p) for p in params];
+    #     for i in range(len(params)):
+    #         params[i] = params[i].astype(defaultDType);
+    #     model.params = params;
+    #
+    # M, V = model.encode(X_train);
+    # plt.figure(figsize = (12, 14));
+    # plt.scatter(M[:, 0], M[:, 1], c = Y_train);
+    # # plt.scatter(V[:, 0], V[:, 1], c = Y_train);
+    # plt.colorbar();
+    # plt.xlabel("Z[0]");
+    # plt.ylabel("Z[1]");
+    # plt.show(block = True);
+    #
+    # digitSize, digitNumber, scale = 28, 30, 1;
+    #
+    # P = np.concatenate(tuple([model.reconstructionProbability(item[0]) for item in SequentialDataIterator([X_train], batchSize, False)]), axis = 0);
+    # plt.figure(figsize = (12, 14));
+    # plt.hist(P, bins = 1000);
+    # plt.show(block = True);
+    #
+    # gridX = np.linspace(-scale, scale, digitNumber);
+    # gridY = np.linspace(-scale, scale, digitNumber)[::-1];
+    # images = np.zeros((digitSize * digitNumber, digitSize * digitNumber));
+    # for i, x in enumerate(gridX):
+    #     for j, y in enumerate(gridY):
+    #         xHat = model.decode(np.array([[x, y]]), toProbability = True);
+    #         images[j * digitSize : (j + 1) * digitSize, i * digitSize : (i + 1) * digitSize] = xHat.reshape(digitSize, digitSize);
+    # plt.figure(figsize = (12, 14));
+    # plt.imshow(images, cmap = "Greys_r");
+    # plt.xlabel("M[0]");
+    # plt.ylabel("M[1]");
+    # plt.axis("off");
+    # plt.show(block = True);
+    #
+    # L, R = 8, 3;
+    # np.random.shuffle(X_test);
+    # generatedData = model.generate(X_test[:10], L);
+    # for k in range(len(generatedData)):
+    #     figures = np.concatenate((X_test[k].reshape(1, -1), generatedData[k]), axis = 0);
+    #     images = np.zeros((digitSize * R, digitSize * R));
+    #     for i in range(R):
+    #         for j in range(R):
+    #             images[i * digitSize: (i + 1) * digitSize, j * digitSize: (j + 1) * digitSize] = figures[i * R + j].reshape(digitSize, digitSize);
+    #     plt.figure(figsize = (12, 14));
+    #     plt.imshow(images, cmap = "Greys_r");
+    #     plt.axis("off");
+    #     plt.show(block = True);
+
+    lossFunc = BernoulliVAELoss();
+    optimizer = Adam();
+    trainingIterator = SequentialDataIterator([X_train], batchSize);
+    model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, plot = True);
+
+    with open(filename, "wb") as file:
+        pickle.dump(model.params, file);
+
+    print("exit.");
+
+
+def testBernoulliVAE_Anomaly_MNIST():
+    mnist = MNIST("/media/WindowsE/Data/MNIST", flatten = True, normalize = True);
+
+    anomalyIndex, D = 9, mnist.trainX.shape[-1];
+    filename = f"BernoulliVAE_Anomaly_MNIST_{anomalyIndex}.result";
+    hiddenSize1, latentSize, batchSize, maxEpoch = 400, 200, 32, 10;
+    model = BernoulliVAE(AggregateNetModule(
+        AffineLayer(D, hiddenSize1),
+        ReluLayer(),
+        AffineLayer(hiddenSize1, 2 * latentSize),
+    ), AggregateNetModule(
+        AffineLayer(latentSize, hiddenSize1),
+        ReluLayer(),
+        AffineLayer(hiddenSize1, D),
+    ), latentSize);
+
+    # X = mnist.trainX[mnist.trainY != anomalyIndex];
+    # np.random.shuffle(X);
+    # trainSize = int(len(X) * 0.8);
+    # X_train, X_test_normal, X_test_anomaly = X[: trainSize], X[trainSize:], mnist.trainX[mnist.trainY == anomalyIndex];
+    #
+    # lossFunc = BernoulliVAELoss();
+    # optimizer = Adam();
+    # trainingIterator = SequentialDataIterator([X_train], batchSize);
+    # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, plot = True);
+    #
+    # with open(filename, "wb") as file:
+    #     pickle.dump((model.params, X_train, X_test_normal, X_test_anomaly), file);
+
+    if os.path.isfile(filename):
+        with open(filename, "br") as file:
+            params, X_train, X_test_normal, X_test_anomaly = pickle.load(file);
+        if isinstance(params[0], cp.ndarray):
+            params = [cp.asnumpy(p) for p in params];
+        for i in range(len(params)):
+            params[i] = params[i].astype(defaultDType);
+        model.params = params;
+
+    M, V = model.encode(X_train);
+
+    X_test_normal_rp = model.reconstructionProbability(X_test_normal);
+    X_test_anomaly_rp = model.reconstructionProbability(X_test_anomaly);
+    X_train_rp = np.concatenate(tuple([model.reconstructionProbability(item[0]) for item in SequentialDataIterator([X_train], batchSize, False)]), axis = 0);
+
+    plt.figure(figsize = (12, 14));
+    plt.hist(X_train_rp, bins = 1000, color = "k");
+    plt.hist(X_test_normal_rp, bins = 1000, label = "normal", color = "b");
+    plt.hist(X_test_anomaly_rp, bins = 1000, label = "anomaly", color = "r");
+    plt.show(block = True);
+
+    fprX, tprY = [], [];
+    for alpha in np.arange(0, 1.001, 0.001):
+        threshold = np.quantile(X_train_rp, alpha);
+        X_test_normal_class = X_test_normal_rp < threshold;
+        X_test_anomaly_class = X_test_anomaly_rp < threshold;
+
+        TP, FP = np.sum(X_test_anomaly_class == True), np.sum(X_test_normal_class == True);
+        FN, TN = np.sum(X_test_anomaly_class == False), np.sum(X_test_normal_class == False);
+        precision, recall = TP / (TP + FP), TP / (TP + FN);
+        fpr, tpr = FP / (FP + TN), recall;
+        fprX.append(fpr);
+        tprY.append(tpr);
+        print(f"alpha = {alpha}, precision = {precision}, recall = {recall}, fpr = {fpr}, tpr = {tpr}");
+
+    plt.figure(figsize = (12, 14));
+    plt.plot(fprX, tprY);
+    plt.xlabel("FPR");
+    plt.ylabel("TPR");
+    plt.title(f"AUC={auc(-X_test_anomaly_rp, -X_test_normal_rp)}");
+    plt.show(block = True);
+
+    print("exit.");
+
+
+def testSeqAttentionDecoderGradient():
+    N, T1, T2, vocabSize, vectorSize, hiddenSize = 32, 11, 12, 12, 14, 16;
+    H, X = np.random.randn(N, T1, hiddenSize), np.random.randint(0, vocabSize, N * T2).reshape(N, T2);
+    m = SeqAttentionDecoderLayer(vocabSize , vectorSize, hiddenSize);
+    m.modules[0].params = [np.random.randn(vocabSize, vectorSize)];
+    Y = m.forward(H, X)[0];
+    dH1, dX1 = m.backward(np.ones_like(Y));
+    dHN = numericGradient(lambda x: np.sum(m.forward(x, X)[0]), H);
+    print(f"SeqAttentionDecoder, numericGradient, dH error: {np.sum(np.abs(dH1 - dHN))}");
+    print("\n");
+
+
+def testSeqBahdanauAttentionDecoderGradient():
+    N, T1, T2, vocabSize, vectorSize, hiddenSize = 32, 11, 12, 13, 14, 24;
+    H, X = np.random.randn(N, T1, hiddenSize), np.random.randint(0, vocabSize, N * T2).reshape(N, T2);
+    # H, X = np.random.randn(N, T1, hiddenSize), np.arange(0, vocabSize).reshape(N, T2);
+    m = SeqBahdanauAttentionDecoderLayer(vocabSize , vectorSize, hiddenSize);
+    m.modules[0].params = [np.random.randn(vocabSize, vectorSize)];
+    Y = m.forward(H, X)[0];
+    dH1, dX1 = m.backward(np.ones_like(Y));
+    dHN = numericGradient(lambda x: np.sum(m.forward(x, X)[0]), H);
+    print(f"SeqAttentionDecoder, numericGradient, dH error: {np.sum(np.abs(dH1 - dHN))}");
+    print("\n");
+
+
+def testSeqTSEncoderLayerGradient():
+    N, T, inputSize, hiddenSize = 32, 11, 16, 24;
+    X = np.random.randn(N, T, inputSize);
+    m = SeqTSEncoderLayer(inputSize, hiddenSize);
+    Y1, Y2, Y3 = m.forward(X);
+    dX1 = m.backward(np.ones_like(Y1), np.ones_like(Y2), np.ones_like(Y3))[0];
+    dXN = numericGradient(lambda x: np.sum(np.concatenate(m.forward(x), axis = -1)), X);
+    print(f"SeqTSEncoderLayer, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSeqTSDecoderLayerGradient():
+    N, T1, T2, inputSize, hiddenSize = 32, 11, 12, 16, 24;
+    H1, H2, H3, X = np.random.randn(N, T1, hiddenSize), np.random.randn(N, T1, hiddenSize), np.random.randn(N, T1, hiddenSize), np.random.randn(N, T2, inputSize);
+    m = SeqTSDecoderLayer(inputSize, hiddenSize);
+    Y = m.forward(H1, H2, H3, X)[0];
+    dH1, dH2, dH3, dX1 = m.backward(np.ones_like(Y));
+    dH1N = numericGradient(lambda x: np.sum(m.forward(x, H2, H3, X)[0]), H1);
+    dH2N = numericGradient(lambda x: np.sum(m.forward(H1, x, H3, X)[0]), H2);
+    dH3N = numericGradient(lambda x: np.sum(m.forward(H1, H2, x, X)[0]), H3);
+    dXN = numericGradient(lambda x: np.sum(m.forward(H1, H2, H3, x)[0]), X);
+    print(f"SeqTSDecoderLayer, numericGradient, dH1 error: {np.sum(np.abs(dH1 - dH1N))}, dH2 error: {np.sum(np.abs(dH2 - dH2N))}, dH3 error: {np.sum(np.abs(dH3 - dH3N))}, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+    # N, T1, T2, inputSize, hiddenSize = 32, 11, 12, 16, 24;
+    # H, X = np.random.randn(N, T1, hiddenSize), np.random.randn(N, T2, inputSize);
+    # m = SeqTSDecoderLayer(inputSize, hiddenSize);
+    # Y = m.forward(H, X)[0];
+    # dH1, dX1 = m.backward(np.ones_like(Y));
+    # dHN = numericGradient(lambda x: np.sum(m.forward(x, X)[0]), H);
+    # dXN = numericGradient(lambda x: np.sum(m.forward(H, x)[0]), X);
+    # print(f"SeqTSDecoderLayer, numericGradient, dH error: {np.sum(np.abs(dH1 - dHN))}, dX error: {np.sum(np.abs(dX1 - dXN))}");
+
+    # N, T1, T2, inputSize, hiddenSize = 32, 11, 12, 16, 24;
+    # H, X = np.random.randn(N, T1, hiddenSize), np.random.randn(N, T2, inputSize);
+    # m1 = SeqTSBahdanauAttentionDecoderLayer(inputSize, hiddenSize);
+    # Y1 = m1.forward(H, X)[0];
+    # dH1, dX1 = m1.backward(np.ones_like(Y1));
+    # m2 = SeqTSDecoderLayer(inputSize, hiddenSize);
+    # m2.params = m1.params;
+    # Y2 = m2.forward(H, X)[0];
+    # dH2, dX2 = m2.backward(np.ones_like(Y2));
+    #
+    # print(np.sum(np.abs(Y1 - Y2)));
+    # print(np.sum(np.abs(dH1 - dH2)));
+    # print(np.sum(np.abs(dX1 - dX2)));
+    # print("\n");
+    #
+    # for i in range(len(m1.grads)):
+    #     print(np.sum(np.abs(m1.grads[i] - m2.grads[i])));
+
+
+def testSeq2SeqTSModel1():
+    N, T1, T2, inputSize, hiddenSize, outputSize = 2, 11, 12, 10, 32, 5;
+    X, T = np.random.randn(N, T1, inputSize), np.random.randn(N, T2 + 1, outputSize);
+    m = Seq2SeqTSModel_Seq2Seq_OnlyStateInput(inputSize, hiddenSize, outputSize);
+    Y1, = m.forward(X, T);
+    dX1, dT1 = m.backward(np.ones_like(Y1));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, T)), X);
+    dTN = numericGradient(lambda x: sumAll(*m.forward(X, x)), T);
+    print(f"Seq2SeqTSModel, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dT error: {np.sum(np.abs(dT1 - dTN))}");
+    testModuleGradient(m, "Seq2SeqTSModel, numericGradient", X, T);
+    print("\n");
+
+
+def testSeq2SeqTSModel2():
+    N, T1, T2, inputSize, hiddenSize, outputSize = 32, 11, 12, 10, 32, 5;
+    X, T = np.random.randn(N, T1, inputSize), np.random.randn(N, T2, outputSize);
+    m = Seq2SeqTSModel_Seq2Seq_OnlyStateInput(inputSize, hiddenSize, outputSize);
+    Y1, = m.forward(X, T);
+    dX1 = m.backward(np.ones_like(Y1))[0];
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, T)), X);
+    print(f"Seq2SeqTSModel_Seq2Seq_OnlyStateInput, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "Seq2SeqTSModel_Seq2Seq_OnlyStateInput, numericGradient", X, T);
+    print("\n");
+
+
+def testSeq2SeqTSModel_Dropout():
+    N, T1, T2, inputSize, hiddenSize, outputSize = 32, 11, 12, 16, 24, 14;
+    X, T = np.random.randn(N, T1, inputSize), np.random.randn(N, T2, outputSize);
+    m = Seq2SeqTSModel(inputSize, hiddenSize, outputSize, inputDropout = 0.5, recurrentDropout = 0.5);
+    m.isTrainingMode = True;
+    Y1, = m.forward(X, T);
+    dX1 = m.backward(np.ones_like(Y1))[0];
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, T)), X);
+    print(f"Seq2SeqTSModel dropout, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "Seq2SeqTSModel dropout, numericGradient", X, T);
+    print("\n");
+
+
+if __name__ == "__main__":
+    test();
