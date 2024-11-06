@@ -1,3 +1,4 @@
+import math;
 from ImportNumpy import *;
 from typing import Callable, Union, Tuple, List;
 
@@ -145,6 +146,27 @@ def logitsCrossEntropyError(Y : np.ndarray, T : np.ndarray) -> float:
     return float(np.sum(Y * (1 - T) + np.log(1 + np.exp(-Y)))) / lengthExceptLastDimension(T);
 
 
+def huberError(Y : np.ndarray, T : np.ndarray, delta : float = 1) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
+    if Y.shape != T.shape:
+        raise ValueError("the shapes is not same.");
+
+    delta = math.fabs(delta);
+    if delta == 0.0:
+        raise ValueError("the delta of Huber loss can not be zero.");
+
+    TL, TH = T - delta, T + delta;
+    ML, MH = Y < TL, Y > TH;
+    MM = np.logical_and(~ML, ~MH);
+    b = delta * delta / 2;
+
+    E = np.zeros_like(Y, dtype = Y.dtype);
+    E[ML] = delta * (T[ML] - Y[ML]) - b;
+    E[MH] = delta * (Y[MH] - T[MH]) - b;
+    E[MM] = np.square(Y[MM] - T[MM]) / 2;
+
+    return float(np.sum(E)) / lengthExceptLastDimension(T), ML, MM, MH;
+
+
 def getDropoutMask(inputs : np.ndarray, dropoutRatio : float):
     if dropoutRatio == 0:
         return np.ones_like(inputs);
@@ -179,7 +201,7 @@ def labelSmoothing(T : np.ndarray, alpha : float = 0.1) -> np.ndarray:
             raise ValueError("invalid one-hot vector");
 
         Y = alpha / (D - 1) * np.ones_like(T, dtype = defaultDType);
-        Y[T == 1] = 1- alpha;
+        Y[T == 1] = 1 - alpha;
         return np.reshape(Y, T.shape);
 
 
