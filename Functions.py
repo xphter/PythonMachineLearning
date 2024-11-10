@@ -1,4 +1,5 @@
 import math;
+
 from ImportNumpy import *;
 from typing import Callable, Union, Tuple, List;
 
@@ -66,6 +67,24 @@ def reluGradient(X : np.ndarray) -> np.ndarray:
     Y[X > 0] = 1;
 
     return Y;
+
+
+def prelu(X : np.ndarray, alpha : Union[float, np.ndarray]) -> np.ndarray:
+    return np.maximum(0, X) + alpha * np.minimum(0, X);
+
+
+def preluGradient(X : np.ndarray, beta : Union[float, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+    dX = np.zeros_like(X, dtype = X.dtype);
+    dBeta = np.zeros_like(X, dtype = X.dtype);
+    B = np.ones_like(X, dtype = X.dtype) * beta;
+
+    maskH = X > 0;
+    maskL = ~maskH;
+    dX[maskH] = 1;
+    dX[maskL] = B[maskL];
+    dBeta[maskL] = X[maskL];
+
+    return dX, dBeta;
 
 
 # when x ≥ 20, log(1 + exp(x)) == x in numerical
