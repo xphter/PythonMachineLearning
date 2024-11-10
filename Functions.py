@@ -1,3 +1,14 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright (C) 2024 XphteR, Inc. All Rights Reserved
+#
+# @Time    : 2024-11-10
+# @Author  : Du Peng
+# @Email   : 278770518@qq.com
+# @File    : Functions.py
+######################################################
+
+
 import math;
 
 from ImportNumpy import *;
