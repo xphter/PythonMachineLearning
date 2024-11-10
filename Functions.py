@@ -103,26 +103,27 @@ def preluGradient(X : np.ndarray, beta : Union[float, np.ndarray]) -> Tuple[np.n
 
 
 # when x ≥ 20, log(1 + exp(x)) == x in numerical
-def softplus(X : np.ndarray, threshold : float = 20) -> np.ndarray:
-    mask = X >= threshold;
+def softplus(X : np.ndarray, threshold : float = 20) -> Tuple[np.ndarray, np.ndarray]:
+    ML = X < threshold;
 
-    if np.any(mask):
-        Y = np.log(1 + np.exp(~mask * X));
-        Y[mask] = X[mask];
+    if not np.all(ML):
+        Y = 1.0 * X;
+        Y[ML] = np.log(1 + np.exp(X[ML]));
     else:
         Y = np.log(1 + np.exp(X));
 
-    return Y;
+    return Y, ML;
 
 
-# Y = softplus(X)
-def softplusGradient(Y : np.ndarray = None, X : np.ndarray = None) -> np.ndarray:
-    if Y is not None:
-        return 1 - np.exp(-Y);
-    elif X is not None:
-        return sigmoid(X);
+# Y = softplus(X), dX = 1 - exp(-Y) or dX = sigmoid(X)
+def softplusGradient(X : np.ndarray, ML : np.ndarray) -> np.ndarray:
+    if not np.all(ML):
+        dX = np.ones_like(X, dtype = X.dtype);
+        dX[ML] = sigmoid(X[ML]);
     else:
-        raise ValueError("both X and Y are None");
+        dX = sigmoid(X);
+
+    return dX;
 
 
 # return (sigmoid(beta * X), swish(X))

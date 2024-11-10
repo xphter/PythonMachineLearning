@@ -656,20 +656,21 @@ class SoftplusLayer(NetModuleBase):
     def __init__(self):
         super().__init__();
 
-        self._Y = None;
+        self._X = None;
+        self._M = None;
         self._name = "Softplus";
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        X = data[0];
-        self._Y = softplus(X);
+        self._X = data[0];
+        Y, self._M = softplus(self._X);
 
-        return self._Y, ;
+        return Y, ;
 
 
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
         dY = dout[0];
-        dX = dY * softplusGradient(Y = self._Y);
+        dX = dY * softplusGradient(self._X, self._M);
 
         return dX, ;
 
