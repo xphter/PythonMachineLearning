@@ -120,7 +120,7 @@ def swish(X : np.ndarray, beta : Union[float, np.ndarray]) -> Tuple[np.ndarray, 
 # return dX, dBeta
 def swishGradient(Y : np.ndarray, S : np.ndarray, X : np.ndarray, beta : Union[float, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
     dX = S + beta * Y * (1 - S);
-    dBeta = Y * (X - Y);
+    dBeta = (X - Y) * Y;
 
     return dX, dBeta;
 

@@ -678,10 +678,10 @@ class SwishLayer(NetModuleBase):
             else:
                 self._beta = np.array([float(beta)]);
         else:
-            self._beta = np.exp(np.random.randn(outputSize if outputSize is not None else 1), dtype = defaultDType);
+            self._beta = sigmoid(np.random.randn(outputSize if outputSize is not None else 1).astype(defaultDType));
 
-            self._params.append(self._beta);
-            self._grads.append(np.zeros_like(self._beta));
+        self._params.append(self._beta);
+        self._grads.append(np.zeros_like(self._beta));
 
 
     @property
@@ -703,16 +703,15 @@ class SwishLayer(NetModuleBase):
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
         dY = dout[0];
         dX, dBeta = swishGradient(self._Y, self._S, self._X, self._beta);
+
         dX *= dY;
         dBeta *= dY;
+        if len(self._beta) == 1:
+            dBeta = np.sum(dBeta);
+        else:
+            dBeta = np.sum(dBeta, axis = tuple(range(len(dBeta.shape) - 1)));
 
-        if len(self._params) > 0:
-            if len(self._beta) == 1:
-                dBeta = np.sum(dBeta);
-            else:
-                dBeta = np.sum(dBeta, axis = tuple(range(len(dBeta.shape) - 1)));
-
-            self._grads[0][...] = dBeta;
+        self._grads[0][...] = dBeta;
 
         return dX, ;
 
