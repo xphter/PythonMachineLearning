@@ -16,15 +16,19 @@ from typing import Callable, Union, Tuple, List;
 
 
 def sigmoid(X : np.ndarray, threshold : float = -20) -> np.ndarray:
-    mask = X <= -20;
+    ML = X < -20;
 
-    if np.any(mask):
-        Y1 = np.exp(mask * X);
-        Y1 = Y1 / (1 + Y1);
+    if np.any(ML):
+        MH = ~ML;
+        XL, XH = X[ML], X[MH];
+        Y = np.zeros_like(X, dtype = X.dtype);
 
-        Y2 = 1 / (1 + np.exp(-(~mask * X)));
+        YL = np.exp(XL);
+        YL = YL / (1 + YL);
+        Y[ML] = YL;
 
-        Y = mask * Y1 + ~mask * Y2;
+        YH = 1 / (1 + np.exp(-XH));
+        Y[MH] = YH;
     else:
         Y = 1 / (1 + np.exp(-X));
 
