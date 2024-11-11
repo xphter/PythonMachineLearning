@@ -728,6 +728,48 @@ class SwishLayer(NetModuleBase):
         return dX, ;
 
 
+class MaxoutLayer(NetModuleBase):
+    def __init__(self, k : int = 2):
+        super().__init__();
+
+        self._M = None;
+        self._K = max(2, int(k));
+        self._name = f"Maxout {self._K}";
+
+
+    @property
+    def K(self) -> int:
+        return self._K;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+        X = data[0];
+        if X.shape[-1] % self._K != 0:
+            raise ValueError(f"{self._name}: the last dimension of input shape {X.shape} is not a multiple of group size {self._K}");
+
+        H = int(X.shape[-1] // self._K);
+        Z = np.reshape(X, X.shape[: -1] + (H, self._K));
+
+        if self._isTrainingMode:
+            E = np.zeros_like(Z, dtype = np.int32) + np.arange(self._K, dtype = np.int32);
+            M = E == np.argmax(Z, axis = -1, keepdims = True);
+            Y = np.reshape(Z[M], X.shape[: -1] + (H, ));
+            self._M = (M + 0).astype(defaultDType);
+        else:
+            Y = np.amax(Z, axis = -1);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+        dY = dout[0];
+
+        dY1 = np.reshape(dY, dY.shape + (1, )) * self._M;
+        dX = np.reshape(dY1, dY.shape[: -1] + (-1, ));
+
+        return dX, ;
+
+
 class SigmoidLayer(NetModuleBase):
     def __init__(self):
         super().__init__();
