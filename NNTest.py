@@ -19,6 +19,9 @@ import mpl_toolkits.mplot3d as p3d;
 
 from typing import List, Tuple, Dict, Callable, Any;
 
+import DeviceConfig;
+DeviceConfig.floatLength = 64;
+
 import DataHelper;
 from IsolationForest import *;
 from ImportNumpy import *;
@@ -2040,14 +2043,29 @@ def testSeq2Seq():
 
 
 def unitTest():
-    # testSigmoid();
+    # testSigmoid1();
+    # testSigmoid2();
+    # testSigmoidGradient1();
+    # testSigmoidGradient2();
     # testMinMaxScaler();
 
     # testIdentityWithMeanAbsoluteLossGradient();
-    # testSoftplusLayerGradient();
+    # testPReluLayerGradient1();
+    # testPReluLayerGradient2();
+    # testPReluLayerGradient3();
+    # testSoftplus1();
+    # testSoftplusLayerGradient1();
+    # testSoftplusLayerGradient2();
+    # testSoftplusLayerGradient3();
     # testSwishLayerGradient1();
     # testSwishLayerGradient2();
-    testIdentityWithHuberLossGradient();
+    # testSwishLayerGradient3();
+    # testMaxoutLayer1();
+    testMaxoutLayer2();
+    # testMaxoutLayerGradient1();
+    # testMaxoutLayerGradient2();
+    # testMaxoutLayerGradient3();
+    # testIdentityWithHuberLossGradient();
     # testAffineLayerGradient1();
     # testAffineLayerGradient2();
     # testAffineLayerGradient3();
@@ -2099,7 +2117,7 @@ def sumAll(*X : np.ndarray) -> float:
     return sum([float(np.sum(x)) for x in X]);
 
 
-def testSigmoid():
+def testSigmoid1():
     X = np.array([-25.0, -21, 21, 25]);
     Y = sigmoid(X);
 
@@ -2108,7 +2126,40 @@ def testSigmoid():
     Y1 = Y1 / (1 + Y1);
     Y2 = 1 / (1 + np.exp(-X2));
 
-    print(Y - np.concatenate((Y1, Y2)));
+    print(f"Sigmoid, value1, error: {np.sum(np.abs(Y - np.concatenate((Y1, Y2))))}");
+    print("\n");
+
+
+def testSigmoid2():
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D) * 10;
+    Y1 = sigmoid(X);
+    Y2 = 1 / (1 + np.exp(-X));
+
+    print(f"Sigmoid, value2, error: {np.sum(np.abs(Y1 - Y2))}");
+    print("\n");
+
+
+def testSigmoidGradient1():
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D) * 20;
+    m = SigmoidLayer();
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"SigmoidLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSigmoidGradient2():
+    N, D = 256, 256;
+    X = np.random.randn(N, D) * 20;
+    m = SigmoidLayer();
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"SigmoidLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
 
 
 def testlabelSmoothing():
@@ -2160,14 +2211,90 @@ def testIdentityWithMeanAbsoluteLossGradient():
     print("\n");
 
 
-def testSoftplusLayerGradient():
+def testPReluLayerGradient1():
     N, T, D = 32, 24, 16;
     X = np.random.randn(N, T, D);
+    m = PReluLayer();
+    beta = m.beta;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dBeta1 = m.grads[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dBetaN = numericGradient(lambda x: np.sum(PReluLayer(beta = x).forward(X)[0]), beta);
+    print(f"PReluLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print("\n");
+
+
+def testPReluLayerGradient2():
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D);
+    m = PReluLayer(outputSize = D);
+    beta = m.beta;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dBeta1 = m.grads[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dBetaN = numericGradient(lambda x: np.sum(PReluLayer(beta = x).forward(X)[0]), beta);
+    print(f"PReluLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print("\n");
+
+
+def testPReluLayerGradient3():
+    N, D = 256, 256;
+    X = np.random.randn(N, D);
+    m = PReluLayer(outputSize = D);
+    beta = m.beta;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dBeta1 = m.grads[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dBetaN = numericGradient(lambda x: np.sum(PReluLayer(beta = x).forward(X)[0]), beta);
+    print(f"PReluLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print("\n");
+
+
+def testSoftplus1():
+    X = np.array([-25.0, -21, 21, 25]);
+    Y, M = softplus(X);
+
+    X1, X2 = X[:2], X[2:];
+    Y1 = np.log(1 + np.exp(X1));
+    Y2 = X2;
+
+    print(f"Softplus, value1, error: {np.sum(np.abs(Y - np.concatenate((Y1, Y2))))}");
+    print("\n");
+
+
+def testSoftplusLayerGradient1():
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D) * 0.1;
     m = SoftplusLayer();
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"SoftplusLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSoftplusLayerGradient2():
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D) * 20;
+    m = SoftplusLayer();
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"SoftplusLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSoftplusLayerGradient3():
+    N, D = 256, 256;
+    X = np.random.randn(N, D) * 20;
+    m = SoftplusLayer();
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"SoftplusLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 
@@ -2180,7 +2307,7 @@ def testSwishLayerGradient1():
     dX1 = m.backward(np.ones_like(Y))[0];
     dBeta1 = m.grads[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = beta).forward(X)[0]), beta);
+    dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = x).forward(X)[0]), beta);
     print(f"SwishLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
     print("\n");
 
@@ -2194,8 +2321,102 @@ def testSwishLayerGradient2():
     dX1 = m.backward(np.ones_like(Y))[0];
     dBeta1 = m.grads[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = beta).forward(X)[0]), beta);
-    print(f"SwishLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = x).forward(X)[0]), beta);
+    print(f"SwishLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print("\n");
+
+
+def testSwishLayerGradient3():
+    N, D = 256, 256;
+    X = np.random.randn(N, D);
+    m = SwishLayer(outputSize = D);
+    beta = m.beta;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dBeta1 = m.grads[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = x).forward(X)[0]), beta);
+    print(f"SwishLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print("\n");
+
+
+def testMaxoutLayer1():
+    N, T, D = 2, 3, 6;
+    X = np.random.randn(N, T, D);
+    m = MaxoutLayer();
+    m.isTrainingMode = True;
+    Y = m.forward(X)[0];
+    dX = m.backward(np.ones_like(Y))[0];
+    assert(Y.shape == (N, T, D // m.K));
+    assert(dX.shape == X.shape);
+    print("\n");
+
+
+def testMaxoutLayer2():
+    x = np.linspace(0, 40, 100).reshape(-1, 1);
+    y = 2.2 * x + 3.3 + np.random.randn(*x.shape) * 5;
+
+    plt.figure();
+    plt.scatter(x.flatten(), y.flatten());
+    plt.show(block = True);
+
+    batchSize, maxEcho = 10, 100;
+    inputSize, outputSize = 1, 1;
+    trainIterator = NN.SequentialDataIterator([x, y], batchSize = batchSize, shuffle = True);
+    testIterator = NN.SequentialDataIterator([x, y], batchSize = batchSize, shuffle = False);
+    lossFunc = NN.IdentityWithMeanSquareLoss();
+    # optimizer = NN.SGD(0.001);
+    optimizer = NN.Adam(0.01);
+    evaluator = NN.RegressionAccuracyEvaluator();
+
+    model = NN.SequentialContainer(
+        NN.AffineLayer(inputSize, outputSize),
+        # NN.MaxoutLayer(2),
+        # NN.AffineLayer(outputSize, outputSize),
+    );
+    model.fit(trainIterator, lossFunc, optimizer, maxEcho, testIterator, evaluator, plot = True);
+
+    plt.figure();
+    plt.scatter(x.flatten(), y.flatten());
+    plt.plot()
+    plt.show(block = True);
+
+    print("\n");
+
+
+def testMaxoutLayerGradient1():
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D);
+    m = MaxoutLayer();
+    m.isTrainingMode = True;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"MaxoutLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testMaxoutLayerGradient2():
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D);
+    m = MaxoutLayer(4);
+    m.isTrainingMode = True;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"MaxoutLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testMaxoutLayerGradient3():
+    N, D = 256, 256;
+    X = np.random.randn(N, D);
+    m = MaxoutLayer(8);
+    m.isTrainingMode = True;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"MaxoutLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 
