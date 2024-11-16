@@ -2,7 +2,7 @@
 #
 # Copyright (C) 2024 XphteR, Inc. All Rights Reserved
 #
-# @Time    : 2024-11-10
+# @Time    : 2024-11-16
 # @Author  : Du Peng
 # @Email   : 278770518@qq.com
 # @File    : NN.py
@@ -35,7 +35,38 @@ class INetLoss(metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def backward(self) -> Tuple[np.ndarray]:
+    def backward(self) -> Tuple[np.ndarray, ...]:
+        pass;
+
+
+class INetParam(metaclass = abc.ABCMeta):
+    @property
+    @abc.abstractmethod
+    def value(self) -> np.ndarray:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
+    def grad(self) -> np.ndarray:
+        pass;
+
+
+class INetParamHandler(metaclass = abc.ABCMeta):
+    @abc.abstractmethod
+    def process(self, param : INetParam):
+        pass;
+
+
+class INetParamDefinition(INetParam):
+    @property
+    @abc.abstractmethod
+    def preUpdateHandler(self) -> Optional[INetParamHandler]:
+        pass;
+
+
+    @abc.abstractmethod
+    def copy(self, share : bool):
         pass;
 
 
@@ -53,7 +84,7 @@ class INetOptimizer(metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def update(self, params : List[np.ndarray], grads : List[np.ndarray]):
+    def update(self, params : List[INetParamDefinition]):
         pass;
 
 
@@ -68,6 +99,7 @@ class IDataScaler(metaclass = abc.ABCMeta):
     @abc.abstractmethod
     def params(self, value: List):
         pass;
+
 
     @abc.abstractmethod
     def fit(self, X : np.ndarray) -> np.ndarray:
@@ -152,18 +184,13 @@ class INetModule(metaclass = abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def params(self) -> List[np.ndarray]:
+    def params(self) -> List[INetParamDefinition]:
         pass;
+
 
     @params.setter
     @abc.abstractmethod
-    def params(self, value : List[np.ndarray]):
-        pass;
-
-
-    @property
-    @abc.abstractmethod
-    def grads(self) -> List[np.ndarray]:
+    def params(self, value : List[INetParamDefinition]):
         pass;
 
 
@@ -178,12 +205,12 @@ class INetModule(metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         pass;
 
 
     @abc.abstractmethod
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         pass;
 
 
@@ -220,11 +247,45 @@ class INetModel(INetModule, metaclass = abc.ABCMeta):
         pass;
 
 
+class NetParam(INetParam):
+    def __init__(self, value : np.ndarray):
+        self._value = value;
+        self._grad = np.zeros_like(value, dtype = value.dtype);
+
+
+    @property
+    def value(self) -> np.ndarray:
+        return self._value;
+
+
+    @property
+    def grad(self) -> np.ndarray:
+        return self._grad;
+
+
+class NetParamDefinition(NetParam, INetParamDefinition):
+    def __init__(self, value : np.ndarray, preUpdateHandler: Optional[INetParamHandler] = None):
+        super().__init__(value);
+
+        self._preUpdateHandler = preUpdateHandler;
+
+
+    @property
+    def preUpdateHandler(self) -> Optional[INetParamHandler]:
+        return self._preUpdateHandler;
+
+
+    def copy(self, share : bool) -> INetParamDefinition:
+        if share:
+            return NetParamDefinition(self._value, self._preUpdateHandler);
+        else:
+            return NetParamDefinition(np.copy(self._value), self._preUpdateHandler);
+
+
 class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
     def __init__(self):
         self._name = None;
-        self._params = [];
-        self._grads = [];
+        self._params : List[INetParamDefinition] = [];
         self._isTrainingMode = False;
         self._trainingEpoch = 0;
 
@@ -260,24 +321,14 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
 
 
     @property
-    def params(self) -> List[np.ndarray]:
+    def params(self) -> List[INetParamDefinition]:
         return self._params;
 
 
     @params.setter
-    def params(self, value: List[np.ndarray]):
+    def params(self, value: List[INetParamDefinition]):
         self._params = value;
         self._setParams(value);
-
-
-    @property
-    def grads(self) -> List[np.ndarray]:
-        return self._grads;
-
-
-    @grads.setter
-    def grads(self, value: List[np.ndarray]):
-        self._grads = value;
 
 
     def _setTrainingMode(self, value : bool):
@@ -288,7 +339,7 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
         pass;
 
 
-    def _setParams(self, value: List[np.ndarray]):
+    def _setParams(self, params: List[INetParamDefinition]):
         pass;
 
 
@@ -301,14 +352,7 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
 
 
     def _copyParams(self, module : INetModule, shareParams : bool):
-        if shareParams:
-            module.params = [p for p in self.params];
-        else:
-            module.params = [np.copy(p) for p in self.params];
-
-
-    def _copyGrads(self, module : INetModule, shareParams : bool):
-        module.grads = [np.zeros_like(g) for g in self.grads];
+        module.params = [p.copy(shareParams) for p in self.params];
 
 
     def reset(self):
@@ -322,14 +366,13 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
 
         self._copyMembers(module, shareParams);
         self._copyParams(module, shareParams);
-        self._copyGrads(module, shareParams);
 
         return module;
 
 
     def clearGrads(self):
-        for g in self.grads:
-            g[...] = 0;
+        for p in self.params:
+            p.grad[...] = 0;
 
 
 class AggregateNetModule(NetModuleBase):
@@ -339,7 +382,6 @@ class AggregateNetModule(NetModuleBase):
         self._modules = modules;
         for m in modules:
             self._params.extend(m.params);
-            self._grads.extend(m.grads);
         self._name = "  -->  ".join([str(m) for m in modules]);
 
 
@@ -358,14 +400,14 @@ class AggregateNetModule(NetModuleBase):
             m.trainingEpoch = value;
 
 
-    def _setParams(self, value: List[np.ndarray]):
+    def _setParams(self, params: List[INetParamDefinition]):
         i = 0;
 
         for m in self._modules:
             if (n := len(m.params)) == 0:
                 continue;
 
-            m.params = value[i: i + n];
+            m.params = params[i: i + n];
             i += n;
 
 
@@ -375,7 +417,7 @@ class AggregateNetModule(NetModuleBase):
 
 
     def _copyMembers(self, module : INetModule, shareParams : bool):
-        module._modules = [m.copy(shareParams) for m in self.modules];
+        module._modules = tuple([m.copy(shareParams) for m in self.modules]);
 
 
     def _copyParams(self, module : INetModule, shareParams : bool):
@@ -384,13 +426,7 @@ class AggregateNetModule(NetModuleBase):
             module.params.extend(m.params);
 
 
-    def _copyGrads(self, module : NetModuleBase, shareParams : bool):
-        module._grads = [];
-        for m in module.modules:
-            module.grads.extend(m.grads);
-
-
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         Y = data;
 
         for m in self._modules:
@@ -399,7 +435,7 @@ class AggregateNetModule(NetModuleBase):
         return Y;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dX = dout;
 
         for m in reversed(self._modules):
@@ -476,7 +512,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                     evaluator.update(*Y, T);
 
                 self.backward(*lossFunc.backward());
-                optimizer.update(self.params, self.grads);
+                optimizer.update(self.params);
                 self.clearGrads();
 
                 if evaluator is not None and evalIterations is not None and len(lossValues) % evalIterations == 0:
@@ -500,7 +536,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                     loss, accuracy = self.eval(lossFunc, evaluator, None, testIterator);
                     testLossData.append(loss);
                     testAccuracyData.append(accuracy);
-                    paramsData.append([np.copy(p) for p in self.params]);
+                    paramsData.append([p.copy(False) for p in self.params]);
 
             trainingMessage = f", training {evaluator.name}: {trainingAccuracyData[-1]}" if len(trainingAccuracyData) > 0 else "";
             testMessage = f", test loss: {testLossData[-1]}, test {evaluator.name}: {testAccuracyData[-1]}" if len(testAccuracyData) > 0 else "";
@@ -579,6 +615,16 @@ class NetOptimizerBase(INetOptimizer, metaclass = abc.ABCMeta):
         self._lr = value;
 
 
+    def update(self, params : List[INetParamDefinition]):
+        handler : Optinal[INetParamHandler] = None;
+
+        for p in params:
+            if (handler := p.preUpdateHandler) is None:
+                continue;
+
+            handler.process(p);
+
+
 class ReluLayer(NetModuleBase):
     def __init__(self):
         super().__init__();
@@ -587,14 +633,14 @@ class ReluLayer(NetModuleBase):
         self._name = "Relu";
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
         self._mask = (X > 0).astype(X.dtype);
 
         return relu(X), ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         dX = dY * self._mask;
 
@@ -616,8 +662,7 @@ class PReluLayer(NetModuleBase):
         else:
             self._beta = sigmoid(np.random.randn(outputSize if outputSize is not None else 1).astype(defaultDType));
 
-        self._params.append(self._beta);
-        self._grads.append(np.zeros_like(self._beta));
+        self._params.append(NetParamDefinition(self._beta));
 
 
     @property
@@ -625,18 +670,18 @@ class PReluLayer(NetModuleBase):
         return self._beta;
 
 
-    def _setParams(self, value: List[np.ndarray]):
-        self._beta = value[0];
+    def _setParams(self, params: List[INetParamDefinition]):
+        self._beta = params[0].value;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         self._X = data[0];
         Y = prelu(self._X, self._beta);
 
         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         dX, dBeta = preluGradient(self._X, self._beta);
 
@@ -647,7 +692,7 @@ class PReluLayer(NetModuleBase):
         else:
             dBeta = np.sum(dBeta, axis = tuple(range(len(dBeta.shape) - 1)));
 
-        self._grads[0][...] = dBeta;
+        self._params[0].grad[...] = dBeta;
 
         return dX, ;
 
@@ -661,14 +706,14 @@ class SoftplusLayer(NetModuleBase):
         self._name = "Softplus";
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         self._X = data[0];
         Y, self._M = softplus(self._X);
 
         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         dX = dY * softplusGradient(self._X, self._M);
 
@@ -692,8 +737,7 @@ class SwishLayer(NetModuleBase):
         else:
             self._beta = sigmoid(np.random.randn(outputSize if outputSize is not None else 1).astype(defaultDType));
 
-        self._params.append(self._beta);
-        self._grads.append(np.zeros_like(self._beta));
+        self._params.append(NetParamDefinition(self._beta));
 
 
     @property
@@ -701,18 +745,18 @@ class SwishLayer(NetModuleBase):
         return self._beta;
 
 
-    def _setParams(self, value: List[np.ndarray]):
-        self._beta = value[0];
+    def _setParams(self, params: List[NetParamDefinition]):
+        self._beta = params[0].value;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         self._X = data[0];
         self._S, self._Y = swish(self._X, self._beta);
 
         return self._Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         dX, dBeta = swishGradient(self._Y, self._S, self._X, self._beta);
 
@@ -723,7 +767,7 @@ class SwishLayer(NetModuleBase):
         else:
             dBeta = np.sum(dBeta, axis = tuple(range(len(dBeta.shape) - 1)));
 
-        self._grads[0][...] = dBeta;
+        self._params[0].grad[...] = dBeta;
 
         return dX, ;
 
@@ -742,7 +786,7 @@ class MaxoutLayer(NetModuleBase):
         return self._K;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
         if X.shape[-1] % self._K != 0:
             raise ValueError(f"{self._name}: the last dimension of input shape {X.shape} is not a multiple of group size {self._K}");
@@ -761,7 +805,7 @@ class MaxoutLayer(NetModuleBase):
         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
 
         dY1 = np.reshape(dY, dY.shape + (1, )) * self._M;
@@ -778,14 +822,14 @@ class SigmoidLayer(NetModuleBase):
         self._name = "Sigmoid";
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
         self._Y = sigmoid(X);
 
         return self._Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         dX = dY * sigmoidGradient(self._Y);
 
@@ -800,14 +844,14 @@ class TanhLayer(NetModuleBase):
         self._name = "Tanh";
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
         self._Y = tanh(X);
 
         return self._Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         dX = dY * tanhGradient(self._Y);
 
@@ -828,7 +872,7 @@ class DropoutLayer(NetModuleBase):
         return (np.random.rand(*shape) > self._dropoutRatio).astype(dtype) / (1.0 - self._dropoutRatio);
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
 
         if self._isTrainingMode:
@@ -844,7 +888,7 @@ class DropoutLayer(NetModuleBase):
         #     return X * (1.0 - self._dropoutRatio), ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         dX = dY * self._mask;
 
@@ -882,7 +926,7 @@ class ReshapeLayer(NetModuleBase):
         self._name = "Reshape";
 
 
-    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
         self._originalShapes.clear();
         output : List[np.ndarray] = [];
 
@@ -893,7 +937,7 @@ class ReshapeLayer(NetModuleBase):
         return tuple(output);
 
 
-    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
         dX : List[np.ndarray] = [];
 
         for dY, shape in zip(dout, self._originalShapes):
@@ -910,7 +954,7 @@ class FlattenLayer(NetModuleBase):
         self._name = "Flatten";
 
 
-    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
         self._shapes.clear();
         output : List[np.ndarray] = [];
 
@@ -925,7 +969,7 @@ class FlattenLayer(NetModuleBase):
         return tuple(output);
 
 
-    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
         dX : List[np.ndarray] = [];
 
         for dY, shape in zip(dout, self._shapes):
@@ -935,7 +979,7 @@ class FlattenLayer(NetModuleBase):
 
 
 class AffineLayer(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, includeBias : bool = True, W : np.ndarray = None, b : np.ndarray = None):
+    def __init__(self, inputSize : int, outputSize : int, includeBias : bool = True, W : np.ndarray = None, b : np.ndarray = None, weightPreUpdateHandler : INetParamHandler = None):
         super().__init__();
 
         self._X = None;
@@ -948,15 +992,13 @@ class AffineLayer(NetModuleBase):
         self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize).astype(defaultDType) if W is None else W;
         self._bias = (np.zeros(outputSize, dtype = defaultDType) if b is None else b) if includeBias else None;
 
-        self._params.append(self._weight);
-        self._grads.append(np.zeros_like(self._weight));
+        self._params.append(NetParamDefinition(self._weight, weightPreUpdateHandler));
         if self._bias is not None:
-            self._params.append(self._bias);
-            self._grads.append(np.zeros_like(self._bias));
+            self._params.append(NetParamDefinition(self._bias));
 
 
-    def _setParams(self, value: List[np.ndarray]):
-        self._weight, self._bias = value[0], value[1] if self._includeBias else None;
+    def _setParams(self, params: List[NetParamDefinition]):
+        self._weight, self._bias = params[0].value, params[1].value if self._includeBias else None;
 
 
     @property
@@ -969,7 +1011,7 @@ class AffineLayer(NetModuleBase):
         return self._bias;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
 
         if X.ndim > 2:
@@ -989,17 +1031,17 @@ class AffineLayer(NetModuleBase):
         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         if self._shape is not None:
             dY = np.reshape(dY, (-1, dY.shape[-1]));
 
         dW = self._X.T @ dY;
-        self._grads[0][...] = dW;
+        self._params[0].grad[...] = dW;
 
         if self._bias is not None:
             db = np.sum(dY, 0);
-            self._grads[1][...] = db;
+            self._params[1].grad[...] = db;
 
         dX = dY @ self._weight.T;
         if self._shape is not None:
@@ -2483,6 +2525,26 @@ class SumWithMeanSquareLossLayer(NetLossBase):
         return dX, ;
 
 
+class L1Regularization(INetParamHandler):
+    def __init__(self, decay : float = 0.01):
+        self._decay = max(0.0, decay);
+
+
+    def process(self, param: INetParam):
+        grad = param.grad;
+        grad += self._decay * np.sign(param.value).astype(grad.dtype);
+
+
+class L2Regularization(INetParamHandler):
+    def __init__(self, decay : float = 0.01):
+        self._decay = max(0.0, decay);
+
+
+    def process(self, param: INetParam):
+        grad = param.grad;
+        grad += self._decay * param.value;
+
+
 class _ParametersShareInfo:
     def __init__(self, index : int, target : int, isTranspose : bool = False):
         self.index = index;
@@ -2595,9 +2657,12 @@ class SGD(NetOptimizerBase):
         super().__init__(lr);
 
 
-    def update(self, params : List[np.ndarray], grads : List[np.ndarray]):
-        for i in range(len(params)):
-            params[i] -= self._lr * grads[i];
+    def update(self, params : List[INetParamDefinition]):
+        super().update(params);
+
+        for p in params:
+            paramValue = p.value;
+            paramValue -= self._lr * p.grad;
 
 
 class SGDM(NetOptimizerBase):

@@ -2061,14 +2061,14 @@ def unitTest():
     # testSwishLayerGradient2();
     # testSwishLayerGradient3();
     # testMaxoutLayer1();
-    testMaxoutLayer2();
+    # testMaxoutLayer2();
     # testMaxoutLayerGradient1();
     # testMaxoutLayerGradient2();
     # testMaxoutLayerGradient3();
     # testIdentityWithHuberLossGradient();
     # testAffineLayerGradient1();
     # testAffineLayerGradient2();
-    # testAffineLayerGradient3();
+    testAffineLayerGradient3();
     # testRepeatedWrapperOfAffineLayerGradient();
     # testLstmCellGradient1();
     # testLstmCellGradient2();
@@ -2218,7 +2218,7 @@ def testPReluLayerGradient1():
     beta = m.beta;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
-    dBeta1 = m.grads[0];
+    dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dBetaN = numericGradient(lambda x: np.sum(PReluLayer(beta = x).forward(X)[0]), beta);
     print(f"PReluLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
@@ -2232,7 +2232,7 @@ def testPReluLayerGradient2():
     beta = m.beta;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
-    dBeta1 = m.grads[0];
+    dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dBetaN = numericGradient(lambda x: np.sum(PReluLayer(beta = x).forward(X)[0]), beta);
     print(f"PReluLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
@@ -2246,7 +2246,7 @@ def testPReluLayerGradient3():
     beta = m.beta;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
-    dBeta1 = m.grads[0];
+    dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dBetaN = numericGradient(lambda x: np.sum(PReluLayer(beta = x).forward(X)[0]), beta);
     print(f"PReluLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
@@ -2305,7 +2305,7 @@ def testSwishLayerGradient1():
     beta = m.beta;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
-    dBeta1 = m.grads[0];
+    dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = x).forward(X)[0]), beta);
     print(f"SwishLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
@@ -2319,7 +2319,7 @@ def testSwishLayerGradient2():
     beta = m.beta;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
-    dBeta1 = m.grads[0];
+    dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = x).forward(X)[0]), beta);
     print(f"SwishLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
@@ -2333,7 +2333,7 @@ def testSwishLayerGradient3():
     beta = m.beta;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
-    dBeta1 = m.grads[0];
+    dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = x).forward(X)[0]), beta);
     print(f"SwishLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
@@ -2362,17 +2362,17 @@ def testMaxoutLayer2():
 
     batchSize, maxEcho = 10, 100;
     inputSize, outputSize = 1, 1;
-    trainIterator = NN.SequentialDataIterator([x, y], batchSize = batchSize, shuffle = True);
-    testIterator = NN.SequentialDataIterator([x, y], batchSize = batchSize, shuffle = False);
-    lossFunc = NN.IdentityWithMeanSquareLoss();
-    # optimizer = NN.SGD(0.001);
-    optimizer = NN.Adam(0.01);
-    evaluator = NN.RegressionAccuracyEvaluator();
+    trainIterator = SequentialDataIterator([x, y], batchSize = batchSize, shuffle = True);
+    testIterator = SequentialDataIterator([x, y], batchSize = batchSize, shuffle = False);
+    lossFunc = IdentityWithMeanSquareLoss();
+    optimizer = SGD(0.001);
+    # optimizer = NN.Adam(0.01);
+    evaluator = RegressionAccuracyEvaluator();
 
-    model = NN.SequentialContainer(
-        NN.AffineLayer(inputSize, outputSize),
-        # NN.MaxoutLayer(2),
-        # NN.AffineLayer(outputSize, outputSize),
+    model = SequentialContainer(
+        AffineLayer(inputSize, outputSize),
+        # MaxoutLayer(2),
+        # AffineLayer(outputSize, outputSize),
     );
     model.fit(trainIterator, lossFunc, optimizer, maxEcho, testIterator, evaluator, plot = True);
 
@@ -2438,7 +2438,7 @@ def testAffineLayerGradient1():
     m = AffineLayer(inputSize, outputSize, W = W, b = b);
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
-    dW1, db1 = tuple(m.grads);
+    dW1, db1 = tuple([p.grad for p in m.params]);
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(AffineLayer(inputSize, outputSize, W = x, b = b).forward(X)[0]), W);
     dbN = numericGradient(lambda x: np.sum(AffineLayer(inputSize, outputSize, W = W, b = x).forward(X)[0]), b);
@@ -2450,7 +2450,7 @@ def testAffineLayerGradient2():
     N1, N2, T, inputSize, outputSize = 64, 32, 11, 16, 24;
     X = np.random.randn(N1, N2, T, inputSize);
     m1 = AffineLayer(inputSize, outputSize, includeBias = False);
-    W, = m1.params;
+    W = m1.params[0].value;
     m2 = AffineLayer(inputSize, outputSize, includeBias = False, W = W);
 
     Y1 = np.zeros(X.shape[:-1] + (outputSize, ));
@@ -2459,17 +2459,33 @@ def testAffineLayerGradient2():
         Y1[..., t, :] = m1.forward(X[..., t, :])[0];
         dX = m1.backward(np.ones_like(Y1[..., t, :]))[0];
         dX1[..., t, :] = dX;
-        dW1 += m1.grads[0];
+        dW1 += m1.params[0].grad;
 
     Y2 = m2.forward(X)[0];
     dX2 = m2.backward(np.ones_like(Y2))[0];
-    dW2, = m2.grads;
+    dW2 = m2.params[0].grad;
     print(f"AffineLayer, numericGradient2, Y error: {np.sum(np.abs(Y1 - Y2))}, dX error: {np.sum(np.abs(dX1 - dX2))}, dW error: {np.sum(np.abs(dW1 - dW2))}");
     print("\n");
 
 
 def testAffineLayerGradient3():
-    N, C, T, inputSize, hiddenSize1, hiddenSize2, outputSize = 32, 3, 24, 12, 16, 20, 24;
+    N, D, outputSize = 1024, 200, 1;
+    X = np.random.randn(N, D);
+    X[:, 3:] = 0;
+    m = AffineLayer(D, outputSize);
+    W, b = m.params[0].value, m.params[1].value;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dW1, db1 = tuple([p.grad for p in m.params]);
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dWN = numericGradient(lambda x: np.sum(AffineLayer(D, outputSize, W = x, b = b).forward(X)[0]), W);
+    dbN = numericGradient(lambda x: np.sum(AffineLayer(D, outputSize, W = W, b = x).forward(X)[0]), b);
+    print(f"AffineLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print("\n");
+
+
+def testAffineLayerGradient4():
+    N, C, T, inputSize, hiddenSize1, hiddenSize2, outputSize = 2, 3, 24, 12, 16, 20, 24;
     X = np.random.randn(N, C, T, inputSize);
     m = AggregateNetModule(
         AffineLayer(inputSize, hiddenSize1, W = np.random.randn(inputSize, hiddenSize1), b = np.random.randn(hiddenSize1)),
@@ -2482,7 +2498,7 @@ def testAffineLayerGradient3():
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"AffineLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
-    testModuleGradient(m, "AffineLayer, numericGradient3", X);
+    testModuleGradient(m, "AffineLayer, numericGradient4", X);
     print("\n");
 
 
