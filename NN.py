@@ -864,7 +864,7 @@ class DropoutLayer(NetModuleBase):
 
         self._mask = None;
         self._reuseMask = reuseMask;
-        self._dropoutRatio = dropoutRatio;
+        self._dropoutRatio = max(0.0, min(1.0, dropoutRatio));
         self._name = f"Dropout {dropoutRatio}";
 
 
@@ -876,6 +876,11 @@ class DropoutLayer(NetModuleBase):
         X = data[0];
 
         if self._isTrainingMode:
+            if self._dropoutRatio == 0.0:
+                return X, ;
+            if self._dropoutRatio == 1.0:
+                return np.zeros_like(X, dtype = X.dtype), ;
+
             if self._mask is None or not self._reuseMask:
                 self._mask = self._getMask(X.shape, X.dtype);
             return X * self._mask, ;
@@ -890,8 +895,13 @@ class DropoutLayer(NetModuleBase):
 
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
-        dX = dY * self._mask;
 
+        if self._dropoutRatio == 0.0:
+            return dY, ;
+        if self._dropoutRatio == 1.0:
+            return np.zeros_like(dY, dtype = dY.dtype),;
+
+        dX = dY * self._mask;
         return dX, ;
 
 
