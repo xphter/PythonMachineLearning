@@ -702,20 +702,19 @@ class SoftplusLayer(NetModuleBase):
         super().__init__();
 
         self._X = None;
-        self._M = None;
         self._name = "Softplus";
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         self._X = data[0];
-        Y, self._M = softplus(self._X);
+        Y = softplus(self._X);
 
         return Y, ;
 
 
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
-        dX = dY * softplusGradient(self._X, self._M);
+        dX = dY * softplusGradient(self._X);
 
         return dX, ;
 
@@ -2324,7 +2323,7 @@ class SoftmaxLayer(NetModuleBase):
         self._name = "Softmax";
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
         self._Y = softmax(X);
 
@@ -2332,7 +2331,7 @@ class SoftmaxLayer(NetModuleBase):
 
 
     # dX = Y * (dY - ∑(dY * Y))
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         Z = dY * self._Y;
         dX = Z - self._Y * np.sum(Z, -1, keepdims = True);
@@ -2355,7 +2354,7 @@ class CrossEntropyLoss(NetLossBase):
         return self._loss;
 
 
-    def backward(self) -> Tuple[np.ndarray]:
+    def backward(self) -> Tuple[np.ndarray, ...]:
         dY = -(self._T / self._Y).astype(self._Y.dtype) / lengthExceptLastDimension(self.T);
 
         return dY, ;
@@ -2378,7 +2377,7 @@ class SoftmaxWithCrossEntropyLoss(NetLossBase):
         return self._loss;
 
 
-    def backward(self) -> Tuple[np.ndarray]:
+    def backward(self) -> Tuple[np.ndarray, ...]:
         dX = (self._Y - self._T).astype(self._Y.dtype) / lengthExceptLastDimension(self._T);
 
         return dX, ;
@@ -2401,7 +2400,7 @@ class SoftmaxWithCrossEntropy1DLoss(NetLossBase):
         return self._loss;
 
 
-    def backward(self) -> Tuple[np.ndarray]:
+    def backward(self) -> Tuple[np.ndarray, ...]:
         n = self._T.size;
 
         dX = self._Y.reshape((n, -1));
@@ -2432,7 +2431,7 @@ class SigmoidWithCrossEntropyLoss(NetLossBase):
         return self._loss;
 
 
-    def backward(self) -> Tuple[np.ndarray]:
+    def backward(self) -> Tuple[np.ndarray, ...]:
         dX = (self._Y - self._T).astype(self._Y.dtype) / self._T.size;
 
         return dX, ;
@@ -2453,60 +2452,56 @@ class IdentityWithMeanSquareLoss(NetLossBase):
         return self._loss;
 
 
-    def backward(self) -> Tuple[np.ndarray]:
-        dX = (self._Y - self._T) / lengthExceptLastDimension(self._T);
+    def backward(self) -> Tuple[np.ndarray, ...]:
+        dY = (self._Y - self._T) / lengthExceptLastDimension(self._T);
 
-        return dX, ;
+        return dY, ;
 
 
 class IdentityWithMeanAbsoluteLoss(NetLossBase):
     def __init__(self):
         super().__init__();
 
-        self._mask = None;
+        self._Y, self._T = None, None;
 
 
     def forward(self, *data: np.ndarray) -> float:
-        Y, T = data;
-        self._mask = Y < T;
-        self._loss = meanAbsoluteError(Y, T);
+        self._Y, self._T = data;
+        self._loss = meanAbsoluteError(self._Y, self._T);
 
         return self._loss;
 
 
-    def backward(self) -> Tuple[np.ndarray]:
-        dX = np.ones_like(self._mask, dtype = defaultDType);
-        dX[self._mask] = -1;
-        dX /= lengthExceptLastDimension(self._mask)
+    def backward(self) -> Tuple[np.ndarray, ...]:
+        ML = self._Y < self._T;
+        MH = self._Y > self._T;
+        dY = (MH * 1 - ML * 1).astype(self._Y.dtype) / lengthExceptLastDimension(self._T);
 
-        return dX, ;
+        return dY, ;
 
 
 class IdentityWithHuberLoss(NetLossBase):
     def __init__(self, delta : float = 1.0):
         super().__init__();
 
-        self._delta = max(0.0, float(delta));
+        self._delta = np.array(max(0.0, float(delta)), dtype = defaultDType);
         self._Y, self._T = None, None;
-        self._maskL, self._maskM, self._maskH = None, None, None;
 
 
     def forward(self, *data: np.ndarray) -> float:
         self._Y, self._T = data;
-        self._loss, self._maskL, self._maskM, self._maskH = huberError(self._Y, self._T, self._delta);
+        self._loss = huberError(self._Y, self._T, self._delta);
 
         return self._loss;
 
 
-    def backward(self) -> Tuple[np.ndarray]:
-        dX = np.ones_like(self._Y, dtype = defaultDType);
+    def backward(self) -> Tuple[np.ndarray, ...]:
+        ML, MH = self._Y < self._T - self._delta, self._Y > self._T + self._delta;
+        MM = np.logical_and(~ML, ~MH);
+        dY = ML * (-self._delta) + MM * (self._Y - self._T) + MH * self._delta;
+        dY /= lengthExceptLastDimension(self._T);
 
-        dX[self._maskL] *= -self._delta;
-        dX[self._maskM] = self._Y[self._maskM] - self._T[self._maskM];
-        dX[self._maskH] *= self._delta;
-        dX /= lengthExceptLastDimension(self._T);
-
-        return dX, ;
+        return dY, ;
 
 
 class SumWithMeanSquareLossLayer(NetLossBase):
@@ -2528,7 +2523,7 @@ class SumWithMeanSquareLossLayer(NetLossBase):
         return self._loss;
 
 
-    def backward(self) -> Tuple[np.ndarray]:
+    def backward(self) -> Tuple[np.ndarray, ...]:
         dY = (self._Y - self._T) / lengthExceptLastDimension(self._T);
         dX = dY * np.ones_like(self._shape);
 
@@ -3674,7 +3669,7 @@ class GaussianVAELoss(NetLossBase):
         return self._loss;
 
 
-    def backward(self) -> Tuple[np.ndarray]:
+    def backward(self) -> Tuple[np.ndarray, ...]:
         N, L = self._E.shape[: 2];
         U2 = self._U ** 2;
 
@@ -3811,7 +3806,7 @@ class BernoulliVAELoss(NetLossBase):
         return self._loss;
 
 
-    def backward(self) -> Tuple[np.ndarray]:
+    def backward(self) -> Tuple[np.ndarray, ...]:
         N, L = self._Y.shape[: 2];
 
         dX = np.sum(-self._Y, axis = 1) / (N * L);

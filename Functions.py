@@ -16,19 +16,15 @@ from typing import Callable, Union, Tuple, List;
 
 
 def sigmoid(X : np.ndarray, threshold : float = -20) -> np.ndarray:
-    ML = X < -20;
+    ML = X < threshold;
 
     if np.any(ML):
         MH = ~ML;
-        XL, XH = X[ML], X[MH];
-        Y = np.zeros_like(X, dtype = X.dtype);
+        EX = np.exp(ML * X);
 
-        YL = np.exp(XL);
-        YL = YL / (1 + YL);
-        Y[ML] = YL;
-
-        YH = 1 / (1 + np.exp(-XH));
-        Y[MH] = YH;
+        YL = EX / (1 + EX);
+        YH = 1 / (1 + np.exp(-X * MH));
+        Y = ML * YL + MH * YH;
     else:
         Y = 1 / (1 + np.exp(-X));
 
@@ -78,10 +74,7 @@ def relu(X : np.ndarray) -> np.ndarray:
 
 
 def reluGradient(X : np.ndarray) -> np.ndarray:
-    Y = np.zeros_like(X);
-    Y[X > 0] = 1;
-
-    return Y;
+    return (X > 0).astype(X.dtype);
 
 
 def prelu(X : np.ndarray, alpha : Union[float, np.ndarray]) -> np.ndarray:
@@ -89,37 +82,38 @@ def prelu(X : np.ndarray, alpha : Union[float, np.ndarray]) -> np.ndarray:
 
 
 def preluGradient(X : np.ndarray, beta : Union[float, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
-    dX = np.zeros_like(X, dtype = X.dtype);
-    dBeta = np.zeros_like(X, dtype = X.dtype);
-    B = np.ones_like(X, dtype = X.dtype) * beta;
+    MH = X > 0;
+    ML = ~MH;
 
-    maskH = X > 0;
-    maskL = ~maskH;
-    dX[maskH] = 1;
-    dX[maskL] = B[maskL];
-    dBeta[maskL] = X[maskL];
+    dX = ML * beta + MH;
+    dBeta = X * ML;
 
     return dX, dBeta;
 
 
 # when x ≥ 20, log(1 + exp(x)) == x in numerical
-def softplus(X : np.ndarray, threshold : float = 20) -> Tuple[np.ndarray, np.ndarray]:
-    ML = X < threshold;
+def softplus(X : np.ndarray, threshold : float = 20) -> np.ndarray:
+    MH = X > threshold;
 
-    if not np.all(ML):
-        Y = 1.0 * X;
-        Y[ML] = np.log(1 + np.exp(X[ML]));
+    if np.any(MH):
+        ML = ~MH;
+
+        YL = np.log(1 + np.exp(X * ML));
+        YH = X;
+        Y = ML * YL + MH * YH;
     else:
         Y = np.log(1 + np.exp(X));
 
-    return Y, ML;
+    return Y;
 
 
 # Y = softplus(X), dX = 1 - exp(-Y) or dX = sigmoid(X)
-def softplusGradient(X : np.ndarray, ML : np.ndarray) -> np.ndarray:
-    if not np.all(ML):
-        dX = np.ones_like(X, dtype = X.dtype);
-        dX[ML] = sigmoid(X[ML]);
+def softplusGradient(X : np.ndarray, threshold : float = 20) -> np.ndarray:
+    MH = X > threshold;
+
+    if np.any(MH):
+        ML = ~MH;
+        dX = ML * sigmoid(X * ML) + MH;
     else:
         dX = sigmoid(X);
 
@@ -181,25 +175,21 @@ def logitsCrossEntropyError(Y : np.ndarray, T : np.ndarray) -> float:
     return float(np.sum(Y * (1 - T) + np.log(1 + np.exp(-Y)))) / lengthExceptLastDimension(T);
 
 
-def huberError(Y : np.ndarray, T : np.ndarray, delta : float = 1) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
+def huberError(Y : np.ndarray, T : np.ndarray, delta : Union[float, np.ndarray] = 1.0) -> float:
     if Y.shape != T.shape:
         raise ValueError("the shapes is not same.");
 
-    delta = math.fabs(delta);
-    if delta == 0.0:
-        raise ValueError("the delta of Huber loss can not be zero.");
-
-    TL, TH = T - delta, T + delta;
-    ML, MH = Y < TL, Y > TH;
+    delta = np.abs(delta).astype(Y.dtype);
+    ML, MH = Y < T - delta, Y > T + delta;
     MM = np.logical_and(~ML, ~MH);
+
     b = delta * delta / 2;
+    EL = delta * (T - Y) - b;
+    EM = np.square(Y - T) / 2;
+    EH = delta * (Y - T) - b;
+    E = ML * EL + MM * EM + MH * EH;
 
-    E = np.zeros_like(Y, dtype = Y.dtype);
-    E[ML] = delta * (T[ML] - Y[ML]) - b;
-    E[MH] = delta * (Y[MH] - T[MH]) - b;
-    E[MM] = np.square(Y[MM] - T[MM]) / 2;
-
-    return float(np.sum(E)) / lengthExceptLastDimension(T), ML, MM, MH;
+    return float(np.sum(E)) / lengthExceptLastDimension(T);
 
 
 def getDropoutMask(inputs : np.ndarray, dropoutRatio : float):

@@ -2049,7 +2049,8 @@ def unitTest():
     # testSigmoidGradient2();
     # testMinMaxScaler();
 
-    # testIdentityWithMeanAbsoluteLossGradient();
+    # testIdentityWithMeanAbsoluteLossGradient1();
+    # testIdentityWithMeanAbsoluteLossGradient2();
     # testPReluLayerGradient1();
     # testPReluLayerGradient2();
     # testPReluLayerGradient3();
@@ -2061,14 +2062,15 @@ def unitTest():
     # testSwishLayerGradient2();
     # testSwishLayerGradient3();
     # testMaxoutLayer1();
-    # testMaxoutLayer2();
+    testMaxoutLayer2();
     # testMaxoutLayerGradient1();
     # testMaxoutLayerGradient2();
     # testMaxoutLayerGradient3();
-    # testIdentityWithHuberLossGradient();
+    # testIdentityWithHuberLossGradient1();
+    # testIdentityWithHuberLossGradient2();
     # testAffineLayerGradient1();
     # testAffineLayerGradient2();
-    testAffineLayerGradient3();
+    # testAffineLayerGradient3();
     # testRepeatedWrapperOfAffineLayerGradient();
     # testLstmCellGradient1();
     # testLstmCellGradient2();
@@ -2200,14 +2202,25 @@ def testMinMaxScaler():
     print("\n");
 
 
-def testIdentityWithMeanAbsoluteLossGradient():
+def testIdentityWithMeanAbsoluteLossGradient1():
     N1, N2, D = 31, 32, 16;
     Y, T = np.random.randn(N1, N2, D), np.random.randn(N1, N2, D);
     m = IdentityWithMeanAbsoluteLoss();
     loss = m.forward(Y, T);
     dY1 = m.backward()[0];
     dYN = numericGradient(lambda x: m.forward(x, T), Y);
-    print(f"IdentityWithMeanAbsoluteLoss, numericGradient, dY error: {np.sum(np.abs(dY1 - dYN))}");
+    print(f"IdentityWithMeanAbsoluteLoss, numericGradient1, dY error: {np.sum(np.abs(dY1 - dYN))}");
+    print("\n");
+
+
+def testIdentityWithMeanAbsoluteLossGradient2():
+    N, D = 256, 256;
+    Y, T = np.random.randn(N, D), np.random.randn(N, D);
+    m = IdentityWithMeanAbsoluteLoss();
+    loss = m.forward(Y, T);
+    dY1 = m.backward()[0];
+    dYN = numericGradient(lambda x: m.forward(x, T), Y);
+    print(f"IdentityWithMeanAbsoluteLoss, numericGradient2, dY error: {np.sum(np.abs(dY1 - dYN))}");
     print("\n");
 
 
@@ -2255,7 +2268,7 @@ def testPReluLayerGradient3():
 
 def testSoftplus1():
     X = np.array([-25.0, -21, 21, 25]);
-    Y, M = softplus(X);
+    Y = softplus(X);
 
     X1, X2 = X[:2], X[2:];
     Y1 = np.log(1 + np.exp(X1));
@@ -2420,7 +2433,7 @@ def testMaxoutLayerGradient3():
     print("\n");
 
 
-def testIdentityWithHuberLossGradient():
+def testIdentityWithHuberLossGradient1():
     N, C, D = 32, 16, 10;
     X = np.random.randn(N, C, D);
     T = np.random.randn(N, C, D);
@@ -2429,6 +2442,18 @@ def testIdentityWithHuberLossGradient():
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
     print(f"IdentityWithHuberLoss, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testIdentityWithHuberLossGradient2():
+    N, D = 256, 256;
+    X = np.random.randn(N, D);
+    T = np.random.randn(N, D);
+    m = IdentityWithHuberLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"IdentityWithHuberLoss, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 
