@@ -21,6 +21,7 @@ from typing import List, Tuple, Dict, Callable, Any;
 
 import DeviceConfig;
 DeviceConfig.floatLength = 64;
+# DeviceConfig.enableGPU = True;
 
 import DataHelper;
 from IsolationForest import *;
@@ -163,7 +164,7 @@ def filter_show(filters, nx=8, margin=3, scale=10):
     plt.close();
 
 
-def createMNIST_DNN() -> INetModel:
+def createMNIST_MLP() -> INetModel:
     D = 784;
     return SequentialContainer(
         AffineLayer(D, D * 2),
@@ -201,12 +202,15 @@ def createMNIST_CNN() -> INetModel:
 
 
 def testMNIST():
-    mnist = MNIST("/media/WindowsE/Data/MNIST", normalize = True, flatten = True);
+    # mnist = MNIST("/media/WindowsE/Data/MNIST", normalize = True, flatten = False);
+    mnist = MNIST("data/FashionMNIST/raw/", normalize = True, flatten = False);
     batchSize, maxEpoch = 32, 100;
 
-    model = createMNIST_DNN();
+    # model = createMNIST_MLP();
+    model = createMNIST_CNN();
     lossFunc = SoftmaxWithCrossEntropy1DLoss();
-    optimizer = Adam(0.1);
+    optimizer = SGD(0.01);
+    # optimizer = Adam(0.1);
     trainIterator = SequentialDataIterator([mnist.trainX, mnist.trainY], batchSize = batchSize);
     testIterator = SequentialDataIterator([mnist.testX, mnist.testY], batchSize = batchSize, shuffle = False);
     evaluator = ClassifierAccuracyEvaluator();
@@ -217,8 +221,8 @@ def testMNIST():
     # trainer.train(20, trainIterator, testIterator);
     # trainer.plot();
     model.fit(trainIterator, lossFunc, optimizer, maxEpoch, testIterator, evaluator, plot = True);
-    with open("adam.lr", "wb") as file:
-        pickle.dump(optimizer.learningRate, file);
+    # with open("adam.lr", "wb") as file:
+    #     pickle.dump(optimizer.learningRate, file);
 
     # filter_show(model.modules[0].weight.get());
 
@@ -2062,7 +2066,7 @@ def unitTest():
     # testSwishLayerGradient2();
     # testSwishLayerGradient3();
     # testMaxoutLayer1();
-    testMaxoutLayer2();
+    # testMaxoutLayer2();
     # testMaxoutLayerGradient1();
     # testMaxoutLayerGradient2();
     # testMaxoutLayerGradient3();
@@ -2071,6 +2075,11 @@ def unitTest():
     # testAffineLayerGradient1();
     # testAffineLayerGradient2();
     # testAffineLayerGradient3();
+    # testConvolutionLayerGradient1();
+    # testConvolutionLayerGradient2();
+    # testMaxPoolingLayerGradient1();
+    # testMaxPoolingLayerGradient2();
+    testMaxPoolingLayerGradient3();
     # testRepeatedWrapperOfAffineLayerGradient();
     # testLstmCellGradient1();
     # testLstmCellGradient2();
@@ -2524,6 +2533,84 @@ def testAffineLayerGradient4():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"AffineLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
     testModuleGradient(m, "AffineLayer, numericGradient4", X);
+    print("\n");
+
+
+def testConvolutionLayerGradient1():
+    N, C, H, W = 32, 3, 28, 28;
+    FN, FH, FW, S, P = 4, 3, 3, 1, 0;
+    X = np.random.randn(N, C, H, W);
+    W = np.random.randn(FN, C, FH, FW);
+    b = np.random.randn(FN);
+    m = ConvolutionLayer(FN, C, FH, FW, S, P, W = W, b = b);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dW1, db1 = m.params[0].grad, m.params[1].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dWN = numericGradient(lambda x: np.sum(ConvolutionLayer(FN, C,FH, FW, S, P, W = x, b = b).forward(X)[0]), W);
+    dbN = numericGradient(lambda x: np.sum(ConvolutionLayer(FN, C,FH, FW, S, P, W = W, b = x).forward(X)[0]), b);
+    print(f"ConvolutionLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print("\n");
+
+
+def testConvolutionLayerGradient2():
+    N, C, H, W = 32, 3, 28, 28;
+    FN, FH, FW, S, P = 6, 4, 4, 2, 2;
+    X = np.random.randn(N, C, H, W);
+    W = np.random.randn(FN, C, FH, FW);
+    b = np.random.randn(FN);
+    m = ConvolutionLayer(FN, C, FH, FW, S, P, W = W, b = b);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dW1, db1 = m.params[0].grad, m.params[1].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dWN = numericGradient(lambda x: np.sum(ConvolutionLayer(FN, C,FH, FW, S, P, W = x, b = b).forward(X)[0]), W);
+    dbN = numericGradient(lambda x: np.sum(ConvolutionLayer(FN, C,FH, FW, S, P, W = W, b = x).forward(X)[0]), b);
+    print(f"ConvolutionLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print("\n");
+
+
+def testMaxPoolingLayerGradient1():
+    N, C, H, W = 32, 3, 28, 28;
+    PH, PW, S, P = 3, 3, 1, 0;
+    X = np.random.randn(N, C, H, W);
+    m = MaxPoolingLayer(PH, PW, S, P);
+    m.isTrainingMode = True;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"MaxPoolingLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testMaxPoolingLayerGradient2():
+    N, C, H, W = 32, 3, 24, 24;
+    PH, PW, S, P = 4, 4, 4, 2;
+    X = np.random.randn(N, C, H, W);
+    m = MaxPoolingLayer(PH, PW, S, P);
+    m.isTrainingMode = True;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"MaxPoolingLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testMaxPoolingLayerGradient3():
+    N, C, H, W = 32, 3, 24, 24;
+    PH, PW, S, P = 4, 4, 4, 2;
+    OH = convOutputSize(H, PH, S, P);
+    OW = convOutputSize(W, PW, S, P);
+    X = np.random.randn(N, C, H, W);
+    m = SequentialContainer(
+        MaxPoolingLayer(PH, PW, S, P),
+        AffineLayer(OW, 2 * OW),
+    );
+    m.isTrainingMode = True;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"MaxPoolingLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 

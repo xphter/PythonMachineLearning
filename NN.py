@@ -898,7 +898,7 @@ class DropoutLayer(NetModuleBase):
         if self._dropoutRatio == 0.0:
             return dY, ;
         if self._dropoutRatio == 1.0:
-            return np.zeros_like(dY, dtype = dY.dtype),;
+            return np.zeros_like(dY, dtype = dY.dtype), ;
 
         dX = dY * self._mask;
         return dX, ;
@@ -1011,12 +1011,12 @@ class AffineLayer(NetModuleBase):
 
 
     @property
-    def weight(self):
+    def weight(self) -> np.ndarray:
         return self._weight;
 
 
     @property
-    def bias(self):
+    def bias(self) -> Optional[np.ndarray]:
         return self._bias;
 
 
@@ -1133,26 +1133,25 @@ class ConvolutionLayer(NetModuleBase):
         self._weight = math.sqrt(2.0 / (C * FH * FW)) * np.random.randn(FN, C, FH, FW).astype(defaultDType) if W is None else W;
         self._bias = np.zeros(FN, dtype = defaultDType) if b is None else b;
 
-        weights = [self._weight, self._bias];
-        self._params.extend(weights);
-        self._grads.extend([np.zeros_like(w) for w in weights]);
+        self._params.append(NetParamDefinition(self._weight));
+        self._params.append(NetParamDefinition(self._bias));
 
 
-    def _setParams(self, value: List[np.ndarray]):
-        self._weight, self._bias = value[0], value[1];
+    def _setParams(self, params: List[INetParamDefinition]):
+        self._weight, self._bias = params[0].value, params[1].value;
 
 
     @property
-    def weight(self):
+    def weight(self) -> np.ndarray:
         return self._weight;
 
 
     @property
-    def bias(self):
+    def bias(self) -> np.ndarray:
         return self._bias;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
         self._shape = X.shape;
 
@@ -1169,18 +1168,18 @@ class ConvolutionLayer(NetModuleBase):
         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         FN, C, FH, FW = self._weight.shape;
 
         colDY = dY.transpose(0, 2, 3, 1).reshape(-1, FN);
         dW = self._colX.T @ colDY;
-        db = np.sum(colDY, 0);
+        db = np.sum(colDY, axis = 0);
         dX = colDY @ self._colW.T;
         dX = col2im(dX, self._shape, FH, FW, self._stride, self._pad, True);
 
-        self._grads[0][...] = dW.T.reshape(FN, C, FH, FW);
-        self._grads[1][...] = db;
+        self._params[0].grad[...] = dW.T.reshape(FN, C, FH, FW);
+        self._params[1].grad[...] = db;
 
         return dX, ;
 
@@ -1194,11 +1193,11 @@ class MaxPoolingLayer(NetModuleBase):
         self._stride = stride;
         self._pad = pad;
         self._shape = None;
-        self._argMax = None;
+        self._M = None;
         self._name = "MaxPooling";
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
         self._shape = X.shape;
 
@@ -1207,22 +1206,24 @@ class MaxPoolingLayer(NetModuleBase):
         OW = convOutputSize(W, self._PW, self._stride, self._pad);
 
         col = im2col(X, self._PH, self._PW, self._stride, self._pad).reshape(-1, self._PH * self._PW);
-        Y = np.amax(col, 1).reshape(N, OH, OW, C).transpose(0, 3, 1, 2);
-        self._argMax = np.argmax(col, 1);
+        Y = np.amax(col, axis = -1).reshape(N, OH, OW, C).transpose(0, 3, 1, 2);
+
+        if self._isTrainingMode:
+            E = np.zeros_like(col, dtype = np.int32) + np.arange(col.shape[-1], dtype = np.int32);
+            M = E == np.argmax(col, axis = -1, keepdims = True);
+            self._M = (M + 0).astype(defaultDType);
 
         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         N, C, OH, OW = dY.shape;
-        poolingSize = self._PH * self._PW;
 
-        colDY = dY.transpose(0, 2, 3, 1);
-        dMax = np.zeros((colDY.size, poolingSize), dtype = dY.dtype);
-        dMax[np.arange(self._argMax.size), self._argMax.flatten()] = colDY.flatten();
-        dMax = dMax.reshape(-1, C * poolingSize);
-        dX = col2im(dMax, self._shape, self._PH, self._PW, self._stride, self._pad, True);
+        colDY = dY.transpose(0, 2, 3, 1).reshape(-1, 1);
+        colDY = colDY * self._M;
+        colDY = colDY.reshape(-1, C * self._PH * self._PW);
+        dX = col2im(colDY, self._shape, self._PH, self._PW, self._stride, self._pad, True);
 
         return dX, ;
 
