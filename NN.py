@@ -3428,7 +3428,7 @@ class PartitionedDataIterator(IDataIterator):
         return self._totalIterations;
 
 
-class RegressionAccuracyEvaluator(INetAccuracyEvaluator):
+class MaeAccuracyEvaluator(INetAccuracyEvaluator):
     def __init__(self):
         self._rss = 0.0;
         self._totalCount = 0.0;

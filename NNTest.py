@@ -727,7 +727,7 @@ def testTS_Many2One():
     # optimizer = GradientsClipping(5.0, Adam());
     # trainingIterator = SequentialDataIterator([X_train, Y_train], batchSize, shuffle = False);
     # testIterator = SequentialDataIterator([X_test, Y_test], batchSize, shuffle = False);
-    # evaluator = RegressionAccuracyEvaluator();
+    # evaluator = MaeAccuracyEvaluator();
     # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, minEpoch = 1, testIterator = testIterator, evaluator = evaluator, plot = True);
     #
     # with open(filename, "wb") as file:
@@ -804,7 +804,7 @@ def testTS_Many2Many():
     # optimizer = GradientsClipping(5.0, Adam());
     # trainingIterator = SequentialDataIterator([X_train, Y_train], batchSize, shuffle = False);
     # testIterator = SequentialDataIterator([X_test, Y_test], batchSize, shuffle = False);
-    # evaluator = RegressionAccuracyEvaluator();
+    # evaluator = MaeAccuracyEvaluator();
     # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, minEpoch = 1, testIterator = testIterator, evaluator = evaluator, plot = True);
     #
     # with open(filename, "wb") as file:
@@ -900,7 +900,7 @@ def testTS1_Seq2Seq():
     # optimizer = GradientsClipping(5.0, Adam());
     # trainingIterator = SequentialDataIterator([X_train, Y_train], batchSize);
     # testIterator = SequentialDataIterator([X_test, Y_test], batchSize);
-    # evaluator = RegressionAccuracyEvaluator();
+    # evaluator = MaeAccuracyEvaluator();
     # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, testIterator, evaluator, minEpoch = 5, plot = True);
     #
     # with open(filename, "wb") as file:
@@ -976,7 +976,7 @@ def testTS2_BoostingSeq2Seq():
     #     optimizer = GradientsClipping(5.0, Adam());
     #     trainingIterator = SequentialDataIterator([X_train, R_train], batchSize);
     #     testIterator = SequentialDataIterator([X_test, R_test], batchSize);
-    #     evaluator = RegressionAccuracyEvaluator();
+    #     evaluator = MaeAccuracyEvaluator();
     #     model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, testIterator, evaluator, minEpoch = 1, plot = False);
     #
     #     R_train_hat = np.concatenate(tuple([item[0] for item in list(model.predict(SequentialDataIterator([X_train, R_train], batchSize, shuffle = False)))]), axis = 0);
@@ -1080,7 +1080,7 @@ def testTS3_LM_11_1step():
     # optimizer = GradientsClipping(5.0, Adam());
     # trainingIterator = PartitionedDataIterator([X_train, Y_train], batchSize, stepSize);
     # testIterator = PartitionedDataIterator([X_test, Y_test], 1, stepSize, randomOffset = False);
-    # evaluator = RegressionAccuracyEvaluator();
+    # evaluator = MaeAccuracyEvaluator();
     # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, minEpoch = 5, testIterator = testIterator, evaluator = evaluator, plot = True);
     #
     # with open(filename, "wb") as file:
@@ -1172,7 +1172,7 @@ def testTS3_LM_N1_1step():
     # optimizer = GradientsClipping(5.0, Adam());
     # trainingIterator = PartitionedDataIterator([X_train, Y_train], batchSize, stepSize);
     # testIterator = PartitionedDataIterator([X_test, Y_test], 1, stepSize, randomOffset = False);
-    # evaluator = RegressionAccuracyEvaluator();
+    # evaluator = MaeAccuracyEvaluator();
     # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, minEpoch = 5, testIterator = testIterator, evaluator = evaluator, plot = True);
     #
     # with open(filename, "wb") as file:
@@ -1227,7 +1227,7 @@ def testTS4_LM_Nstep():
     #     optimizer = GradientsClipping(5.0, Adam());
     #     trainingIterator = PartitionedDataIterator([X_train, Y_train], batchSize, stepSize);
     #     testIterator = PartitionedDataIterator([X_test, Y_test], 1, stepSize, randomOffset = False);
-    #     evaluator = RegressionAccuracyEvaluator();
+    #     evaluator = MaeAccuracyEvaluator();
     #     model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, minEpoch = 5, testIterator = testIterator, evaluator = evaluator, plot = True);
     #     print(f"complete to train model {i}\n\n");
     #
@@ -1297,7 +1297,7 @@ def testTS5_LM_1step_All():
     # lossFunc = IdentityWithMeanSquareLoss();
     # optimizer = GradientsClipping(5.0, Adam());
     # testIterator = PartitionedDataIterator([testSet[: -1], testSet[1:]], 1, stepSize, randomOffset = False);
-    # evaluator = RegressionAccuracyEvaluator();
+    # evaluator = MaeAccuracyEvaluator();
     # params, accuracyData, lossValues, lossData = [], [], [], [];
     # for epoch in range(maxEpoch):
     #     lossValues.clear();
@@ -1400,7 +1400,7 @@ def testAE_NASABearing():
     # optimizer = Adam();
     # trainingIterator = SequentialDataIterator([X_train, X_train], batchSize);
     # testIterator = SequentialDataIterator([X_validate, X_validate], 1);
-    # evaluator = RegressionAccuracyEvaluator();
+    # evaluator = MaeAccuracyEvaluator();
     # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, testIterator = testIterator, evaluator = evaluator, plot = True);
     #
     # with open(filename, "wb") as file:
@@ -1466,7 +1466,7 @@ def testAE_TagData():
     # optimizer = Adam();
     # trainingIterator = SequentialDataIterator([X_train, X_train], batchSize);
     # testIterator = SequentialDataIterator([X_test, X_test], batchSize) if X_test is not None else None;
-    # evaluator = RegressionAccuracyEvaluator();
+    # evaluator = MaeAccuracyEvaluator();
     # model.fit(trainingIterator, lossFunc, optimizer, maxEpoch, testIterator = testIterator, evaluator = evaluator, plot = True);
     #
     # with open(filename, "wb") as file:
@@ -2389,7 +2389,7 @@ def testMaxoutLayer2():
     lossFunc = IdentityWithMeanSquareLoss();
     optimizer = SGD(0.001);
     # optimizer = NN.Adam(0.01);
-    evaluator = RegressionAccuracyEvaluator();
+    evaluator = MaeAccuracyEvaluator();
 
     model = SequentialContainer(
         AffineLayer(inputSize, outputSize),
