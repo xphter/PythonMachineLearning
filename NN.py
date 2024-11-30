@@ -1119,7 +1119,7 @@ class BatchNormalizationLayer(NetModuleBase):
         return dX, ;
 
 
-class ConvolutionLayer(NetModuleBase):
+class Convolution2DLayer(NetModuleBase):
     def __init__(self, FN : int, C : int, FH : int, FW : int, stride = 1, pad = 0, W : np.ndarray = None, b : np.ndarray = None):
         super().__init__();
 

@@ -177,19 +177,19 @@ def createMNIST_MLP() -> INetModel:
 
 def createMNIST_CNN() -> INetModel:
     return SequentialContainer(
-        ConvolutionLayer(16, 1, 3, 3, 1, 1),
+        Convolution2DLayer(16, 1, 3, 3, 1, 1),
         ReluLayer(),
-        ConvolutionLayer(16, 16, 3, 3, 1, 1),
-        ReluLayer(),
-        MaxPoolingLayer(2, 2, 2),
-        ConvolutionLayer(32, 16, 3, 3, 1, 1),
-        ReluLayer(),
-        ConvolutionLayer(32, 32, 3, 3, 1, 2),
+        Convolution2DLayer(16, 16, 3, 3, 1, 1),
         ReluLayer(),
         MaxPoolingLayer(2, 2, 2),
-        ConvolutionLayer(64, 32, 3, 3, 1, 1),
+        Convolution2DLayer(32, 16, 3, 3, 1, 1),
         ReluLayer(),
-        ConvolutionLayer(64, 64, 3, 3, 1, 1),
+        Convolution2DLayer(32, 32, 3, 3, 1, 2),
+        ReluLayer(),
+        MaxPoolingLayer(2, 2, 2),
+        Convolution2DLayer(64, 32, 3, 3, 1, 1),
+        ReluLayer(),
+        Convolution2DLayer(64, 64, 3, 3, 1, 1),
         ReluLayer(),
         MaxPoolingLayer(2, 2, 2),
         ReshapeLayer((-1, 64 * 4 * 4)),
@@ -209,8 +209,8 @@ def testMNIST():
     # model = createMNIST_MLP();
     model = createMNIST_CNN();
     lossFunc = SoftmaxWithCrossEntropy1DLoss();
-    optimizer = SGD(0.01);
-    # optimizer = Adam(0.1);
+    # optimizer = SGD(0.01);
+    optimizer = Adam(0.01);
     trainIterator = SequentialDataIterator([mnist.trainX, mnist.trainY], batchSize = batchSize);
     testIterator = SequentialDataIterator([mnist.testX, mnist.testY], batchSize = batchSize, shuffle = False);
     evaluator = ClassifierAccuracyEvaluator();
@@ -2075,11 +2075,11 @@ def unitTest():
     # testAffineLayerGradient1();
     # testAffineLayerGradient2();
     # testAffineLayerGradient3();
-    # testConvolutionLayerGradient1();
-    # testConvolutionLayerGradient2();
+    testConvolution2DLayerGradient1();
+    testConvolution2DLayerGradient2();
     # testMaxPoolingLayerGradient1();
     # testMaxPoolingLayerGradient2();
-    testMaxPoolingLayerGradient3();
+    # testMaxPoolingLayerGradient3();
     # testRepeatedWrapperOfAffineLayerGradient();
     # testLstmCellGradient1();
     # testLstmCellGradient2();
@@ -2536,37 +2536,37 @@ def testAffineLayerGradient4():
     print("\n");
 
 
-def testConvolutionLayerGradient1():
+def testConvolution2DLayerGradient1():
     N, C, H, W = 32, 3, 28, 28;
     FN, FH, FW, S, P = 4, 3, 3, 1, 0;
     X = np.random.randn(N, C, H, W);
     W = np.random.randn(FN, C, FH, FW);
     b = np.random.randn(FN);
-    m = ConvolutionLayer(FN, C, FH, FW, S, P, W = W, b = b);
+    m = Convolution2DLayer(FN, C, FH, FW, S, P, W = W, b = b);
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dW1, db1 = m.params[0].grad, m.params[1].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dWN = numericGradient(lambda x: np.sum(ConvolutionLayer(FN, C,FH, FW, S, P, W = x, b = b).forward(X)[0]), W);
-    dbN = numericGradient(lambda x: np.sum(ConvolutionLayer(FN, C,FH, FW, S, P, W = W, b = x).forward(X)[0]), b);
-    print(f"ConvolutionLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(FN, C, FH, FW, S, P, W = x, b = b).forward(X)[0]), W);
+    dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(FN, C, FH, FW, S, P, W = W, b = x).forward(X)[0]), b);
+    print(f"Convolution2DLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
     print("\n");
 
 
-def testConvolutionLayerGradient2():
+def testConvolution2DLayerGradient2():
     N, C, H, W = 32, 3, 28, 28;
     FN, FH, FW, S, P = 6, 4, 4, 2, 2;
     X = np.random.randn(N, C, H, W);
     W = np.random.randn(FN, C, FH, FW);
     b = np.random.randn(FN);
-    m = ConvolutionLayer(FN, C, FH, FW, S, P, W = W, b = b);
+    m = Convolution2DLayer(FN, C, FH, FW, S, P, W = W, b = b);
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dW1, db1 = m.params[0].grad, m.params[1].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dWN = numericGradient(lambda x: np.sum(ConvolutionLayer(FN, C,FH, FW, S, P, W = x, b = b).forward(X)[0]), W);
-    dbN = numericGradient(lambda x: np.sum(ConvolutionLayer(FN, C,FH, FW, S, P, W = W, b = x).forward(X)[0]), b);
-    print(f"ConvolutionLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(FN, C, FH, FW, S, P, W = x, b = b).forward(X)[0]), W);
+    dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(FN, C, FH, FW, S, P, W = W, b = x).forward(X)[0]), b);
+    print(f"Convolution2DLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
     print("\n");
 
 
