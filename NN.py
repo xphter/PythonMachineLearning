@@ -1128,7 +1128,7 @@ class Convolution2DLayer(NetModuleBase):
         self._shape = None;
         self._colX = None;
         self._colW = None;
-        self._name = f"Convolution {FN}*{C}*{FH}*{FW}";
+        self._name = f"Convolution2D {FN}*{C}*{FH}*{FW}";
 
         self._weight = math.sqrt(2.0 / (C * FH * FW)) * np.random.randn(FN, C, FH, FW).astype(defaultDType) if W is None else W;
         self._bias = np.zeros(FN, dtype = defaultDType) if b is None else b;
@@ -1157,8 +1157,8 @@ class Convolution2DLayer(NetModuleBase):
 
         N, C, H, W = X.shape;
         FN, C, FH, FW = self._weight.shape;
-        OH = convOutputSize(H, FH, self._stride, self._pad);
-        OW = convOutputSize(W, FW, self._stride, self._pad);
+        OH = convOutputSize(H, FH, self._stride, 2 * self._pad);
+        OW = convOutputSize(W, FW, self._stride, 2 * self._pad);
 
         self._colX = im2col(X, FH, FW, self._stride, self._pad);
         self._colW = self._weight.reshape(FN, -1).T;
@@ -1202,8 +1202,8 @@ class MaxPoolingLayer(NetModuleBase):
         self._shape = X.shape;
 
         N, C, H, W = X.shape;
-        OH = convOutputSize(H, self._PH, self._stride, self._pad);
-        OW = convOutputSize(W, self._PW, self._stride, self._pad);
+        OH = convOutputSize(H, self._PH, self._stride, 2 * self._pad);
+        OW = convOutputSize(W, self._PW, self._stride, 2 * self._pad);
 
         col = im2col(X, self._PH, self._PW, self._stride, self._pad).reshape(-1, self._PH * self._PW);
         Y = np.amax(col, axis = -1).reshape(N, OH, OW, C).transpose(0, 3, 1, 2);

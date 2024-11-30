@@ -2075,11 +2075,11 @@ def unitTest():
     # testAffineLayerGradient1();
     # testAffineLayerGradient2();
     # testAffineLayerGradient3();
-    testConvolution2DLayerGradient1();
-    testConvolution2DLayerGradient2();
+    # testConvolution2DLayerGradient1();
+    # testConvolution2DLayerGradient2();
     # testMaxPoolingLayerGradient1();
     # testMaxPoolingLayerGradient2();
-    # testMaxPoolingLayerGradient3();
+    testMaxPoolingLayerGradient3();
     # testRepeatedWrapperOfAffineLayerGradient();
     # testLstmCellGradient1();
     # testLstmCellGradient2();
@@ -2599,8 +2599,8 @@ def testMaxPoolingLayerGradient2():
 def testMaxPoolingLayerGradient3():
     N, C, H, W = 32, 3, 24, 24;
     PH, PW, S, P = 4, 4, 4, 2;
-    OH = convOutputSize(H, PH, S, P);
-    OW = convOutputSize(W, PW, S, P);
+    OH = convOutputSize(H, PH, S, 2 * P);
+    OW = convOutputSize(W, PW, S, 2 * P);
     X = np.random.randn(N, C, H, W);
     m = SequentialContainer(
         MaxPoolingLayer(PH, PW, S, P),

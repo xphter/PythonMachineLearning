@@ -353,7 +353,7 @@ def col2im(X : np.ndarray, imShape : tuple, FH : int, FW : int, stride : int = 1
 
 
 def convOutputSize(inputSize : int, filterSize : int, stride : int = 1, pad : int = 0) -> int:
-    return (inputSize + 2 * pad - filterSize) // stride + 1;
+    return (inputSize + pad - filterSize) // stride + 1;
 
 
 # expand elements of last axis to a one-hot vector
