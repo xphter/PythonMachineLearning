@@ -252,6 +252,57 @@ def numericGradient(f : Callable, X : np.ndarray):
     return grad;
 
 
+def seq2col(X : np.ndarray, FH : int, stride : int = 1, pad : Union[Tuple[int, ...], int] = 0) -> np.ndarray:
+    if isinstance(pad, int):
+        pad = (pad, ) * 2;
+    padNumber = sum(pad);
+
+    N, T, D = X.shape;
+
+    if (T + padNumber - FH) % stride != 0:
+        raise ValueError("the convolution core unable to cover all data");
+
+    OH = (T + padNumber - FH) // stride + 1;
+
+    seq = X if padNumber <= 0 else np.pad(X, [(0, 0), (pad[0], pad[1]), (0, 0)], "constant");
+    col = np.zeros((N, FH, D, OH), dtype = X.dtype);
+
+    for y in range(FH):
+        yMax = y + stride * OH;
+
+        for x in range(D):
+            col[:, y, x, :] = seq[:, y: yMax: stride, x];
+
+    return col.transpose(0, 3, 1, 2).reshape(N * OH, -1);
+
+
+def col2seq(X : np.ndarray, seqShape : tuple, FH : int, stride : int = 1, pad : Union[Tuple[int, ...], int] = 0, inDiff : bool = False) -> np.ndarray:
+    if isinstance(pad, int):
+        pad = (pad, ) * 2;
+    padNumber = sum(pad);
+
+    N, T, D = seqShape;
+
+    if (T + padNumber - FH) % stride != 0:
+        raise ValueError("the convolution core unable to cover all data");
+
+    OH = (T + padNumber - FH) // stride + 1;
+
+    col = X.reshape(N, OH, FH, D).transpose(0, 2, 3, 1);
+    seq = np.zeros((N, T + padNumber, D), dtype = X.dtype);
+
+    for y in range(FH):
+        yMax = y + stride * OH;
+
+        for x in range(D):
+            if inDiff:
+                seq[:, y: yMax: stride, x] += col[:, y, x, :];
+            else:
+                seq[:, y: yMax: stride, x] = col[:, y, x, :];
+
+    return seq[:, pad[0]: T + pad[0], :];
+
+
 def im2col(X : np.ndarray, FH : int, FW : int, stride : int = 1, pad : int = 0) -> np.ndarray:
     N, C, H, W = X.shape;
 
@@ -261,7 +312,7 @@ def im2col(X : np.ndarray, FH : int, FW : int, stride : int = 1, pad : int = 0) 
     OH = (H + 2 * pad - FH) // stride + 1;
     OW = (W + 2 * pad - FW) // stride + 1;
 
-    img = X if pad <= 0 else np.pad(X,[(0, 0), (0, 0), (pad, pad), (pad, pad)], "constant");
+    img = X if pad <= 0 else np.pad(X, [(0, 0), (0, 0), (pad, pad), (pad, pad)], "constant");
     col = np.zeros((N, C, FH, FW, OH, OW), dtype = X.dtype);
 
     for y in range(FH):
