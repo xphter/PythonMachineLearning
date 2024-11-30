@@ -2753,22 +2753,25 @@ class Adam(NetOptimizerBase):
         self._t = 0;
 
 
-    def update(self, params: List[np.ndarray], grads: List[np.ndarray]):
+    def update(self, params : List[INetParamDefinition]):
+        super().update(params);
+
         if self._m is None:
-            self._m = [np.zeros_like(item) for item in params];
+            self._m = [np.zeros_like(item.value) for item in params];
         if self._v is None:
-            self._v = [np.zeros_like(item) for item in params];
+            self._v = [np.zeros_like(item.value) for item in params];
 
         self._t += 1;
 
         for i in range(len(params)):
-            self._m[i] = self._beta1 * self._m[i] + (1 - self._beta1) * grads[i];
-            self._v[i] = self._beta2 * self._v[i] + (1 - self._beta2) * grads[i] ** 2;
+            self._m[i] = self._beta1 * self._m[i] + (1 - self._beta1) * params[i].grad;
+            self._v[i] = self._beta2 * self._v[i] + (1 - self._beta2) * params[i].grad ** 2;
 
             m = self._m[i] / (1 - self._beta1 ** self._t);
             v = self._v[i] / (1 - self._beta2 ** self._t);
 
-            params[i] -= self._lr * m / (np.sqrt(v) + self._epsilon);
+            paramValue = params[i].value;
+            paramValue -= self._lr * m / (np.sqrt(v) + self._epsilon);
 
 
 class AggregateScaler(IDataScaler):
