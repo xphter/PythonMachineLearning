@@ -2075,11 +2075,13 @@ def unitTest():
     # testAffineLayerGradient1();
     # testAffineLayerGradient2();
     # testAffineLayerGradient3();
+    testConvolution1DLayerGradient1();
+    testConvolution1DLayerGradient2();
     # testConvolution2DLayerGradient1();
     # testConvolution2DLayerGradient2();
     # testMaxPoolingLayerGradient1();
     # testMaxPoolingLayerGradient2();
-    testMaxPoolingLayerGradient3();
+    # testMaxPoolingLayerGradient3();
     # testRepeatedWrapperOfAffineLayerGradient();
     # testLstmCellGradient1();
     # testLstmCellGradient2();
@@ -2533,6 +2535,40 @@ def testAffineLayerGradient4():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"AffineLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
     testModuleGradient(m, "AffineLayer, numericGradient4", X);
+    print("\n");
+
+
+def testConvolution1DLayerGradient1():
+    N, T, D = 32, 24, 16;
+    FN, FH, S, P = 16, 3, 1, 0;
+    X = np.random.randn(N, T, D);
+    W = np.random.randn(FN, FH, D);
+    b = np.random.randn(FN);
+    m = Convolution1DLayer(FN, FH, D, S, P, W = W, b = b);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dW1, db1 = m.params[0].grad, m.params[1].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dWN = numericGradient(lambda x: np.sum(Convolution1DLayer(FN, FH, D, S, P, W = x, b = b).forward(X)[0]), W);
+    dbN = numericGradient(lambda x: np.sum(Convolution1DLayer(FN, FH, D, S, P, W = W, b = x).forward(X)[0]), b);
+    print(f"Convolution1DLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print("\n");
+
+
+def testConvolution1DLayerGradient2():
+    N, T, D = 32, 24, 16;
+    FN, FH, S, P = 16, 3, 2, (25, 0);
+    X = np.random.randn(N, T, D);
+    W = np.random.randn(FN, FH, D);
+    b = np.random.randn(FN);
+    m = Convolution1DLayer(FN, FH, D, S, P, W = W, b = b);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dW1, db1 = m.params[0].grad, m.params[1].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dWN = numericGradient(lambda x: np.sum(Convolution1DLayer(FN, FH, D, S, P, W = x, b = b).forward(X)[0]), W);
+    dbN = numericGradient(lambda x: np.sum(Convolution1DLayer(FN, FH, D, S, P, W = W, b = x).forward(X)[0]), b);
+    print(f"Convolution1DLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
     print("\n");
 
 
