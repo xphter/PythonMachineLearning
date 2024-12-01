@@ -2075,13 +2075,16 @@ def unitTest():
     # testAffineLayerGradient1();
     # testAffineLayerGradient2();
     # testAffineLayerGradient3();
-    testConvolution1DLayerGradient1();
-    testConvolution1DLayerGradient2();
+    # testConvolution1DLayerGradient1();
+    # testConvolution1DLayerGradient2();
     # testConvolution2DLayerGradient1();
     # testConvolution2DLayerGradient2();
     # testMaxPoolingLayerGradient1();
     # testMaxPoolingLayerGradient2();
     # testMaxPoolingLayerGradient3();
+    testAdditiveResidualBlockGradient1();
+    testAdditiveResidualBlockGradient2();
+    testAdditiveResidualBlockGradient3();
     # testRepeatedWrapperOfAffineLayerGradient();
     # testLstmCellGradient1();
     # testLstmCellGradient2();
@@ -2647,6 +2650,48 @@ def testMaxPoolingLayerGradient3():
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"MaxPoolingLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testAdditiveResidualBlockGradient1():
+    N, D = 64, 128;
+    X = np.random.randn(N, D);
+    m = AdditiveResidualBlock(
+        AffineLayer(D, D)
+    );
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"AdditiveResidualBlock, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testAdditiveResidualBlockGradient2():
+    N, D1, D2 = 64, 128, 256;
+    X = np.random.randn(N, D1);
+    m = AdditiveResidualBlock(
+        AffineLayer(D1, D2),
+        AffineLayer(D1, D2),
+    );
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"AdditiveResidualBlock, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testAdditiveResidualBlockGradient3():
+    N, D1, D2 = 64, 128, 256;
+    X = np.random.randn(N, D1);
+    m = AdditiveResidualBlock(
+        AffineLayer(D1, D2),
+        AffineLayer(D1, D2),
+        ReluLayer(),
+    );
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"AdditiveResidualBlock, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 

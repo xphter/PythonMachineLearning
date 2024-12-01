@@ -1292,6 +1292,43 @@ class MaxPoolingLayer(NetModuleBase):
         return dX, ;
 
 
+class AdditiveResidualBlock(NetModuleBase):
+    def __init__(self, mainModule : INetModule, adaptiveModule : INetModule = None, activationModule : INetModule = None):
+        super().__init__();
+
+        self._mainModule = mainModule;
+        self._adaptiveModule = adaptiveModule;
+        self._activationModule = activationModule;
+
+        self._name = f"AdditiveResidualBlock({self._mainModule})";
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X = data;
+
+        Y = self._mainModule.forward(*X);
+        if self._adaptiveModule is not None:
+            X = self._adaptiveModule.forward(*X);
+        Z = tuple([x + y for x, y in zip(X, Y)]);
+
+        if self._activationModule is not None:
+            return self._activationModule.forward(*Z);
+        else:
+            return Z;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dZ = self._activationModule.backward(*dout) if self._activationModule is not None else dout;
+
+        dX1 = self._mainModule.backward(*dZ);
+        if self._adaptiveModule is not None:
+            dX2 = self._adaptiveModule.backward(*dZ);
+        else:
+            dX2 = dZ;
+
+        return tuple([dx1 + dx2 for dx1, dx2 in zip(dX1, dX2)]);
+
+
 class EmbeddingLayer(NetModuleBase):
     def __init__(self, inputSize : int, outputSize : int, W : np.ndarray = None):
         super().__init__();
