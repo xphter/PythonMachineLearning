@@ -2075,6 +2075,7 @@ def unitTest():
     # testAffineLayerGradient1();
     # testAffineLayerGradient2();
     # testAffineLayerGradient3();
+    testConvolution1DLayer1();
     # testConvolution1DLayerGradient1();
     # testConvolution1DLayerGradient2();
     # testConvolution2DLayerGradient1();
@@ -2082,9 +2083,9 @@ def unitTest():
     # testMaxPoolingLayerGradient1();
     # testMaxPoolingLayerGradient2();
     # testMaxPoolingLayerGradient3();
-    testAdditiveResidualBlockGradient1();
-    testAdditiveResidualBlockGradient2();
-    testAdditiveResidualBlockGradient3();
+    # testAdditiveResidualBlockGradient1();
+    # testAdditiveResidualBlockGradient2();
+    # testAdditiveResidualBlockGradient3();
     # testRepeatedWrapperOfAffineLayerGradient();
     # testLstmCellGradient1();
     # testLstmCellGradient2();
@@ -2538,6 +2539,30 @@ def testAffineLayerGradient4():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"AffineLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
     testModuleGradient(m, "AffineLayer, numericGradient4", X);
+    print("\n");
+
+
+def testConvolution1DLayer1():
+    N, T, D = 32, 24, 16;
+    FN, FH, S, P = 16, 3, 1, 0;
+    X = np.random.randn(N, T, D);
+    W = np.random.randn(FN, FH, D);
+    b = np.random.randn(FN);
+
+    m = Convolution1DLayer(FN, FH, D, S, P, W = W, b = b);
+    Y1 = m.forward(X)[0];
+
+    OH = convOutputSize(T, FH, S, P);
+    Y2 = np.zeros((N, OH, FN));
+    for i in range(N):
+        for j in range(OH):
+            l = j * S;
+            x = X[i, l: l + FH, :];
+
+            for k in range(FN):
+                Y2[i, j, k] = np.sum(x * W[k, :, :]) + b[k];
+
+    print(f"Convolution1DLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
     print("\n");
 
 
