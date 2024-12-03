@@ -2075,7 +2075,7 @@ def unitTest():
     # testAffineLayerGradient1();
     # testAffineLayerGradient2();
     # testAffineLayerGradient3();
-    testConvolution1DLayer1();
+    # testConvolution1DLayer1();
     # testConvolution1DLayerGradient1();
     # testConvolution1DLayerGradient2();
     # testConvolution2DLayerGradient1();
@@ -2083,6 +2083,8 @@ def unitTest():
     # testMaxPoolingLayerGradient1();
     # testMaxPoolingLayerGradient2();
     # testMaxPoolingLayerGradient3();
+    testBatchNormalization1DLayerGradient1();
+    testBatchNormalizationLayer1DGradient2();
     # testAdditiveResidualBlockGradient1();
     # testAdditiveResidualBlockGradient2();
     # testAdditiveResidualBlockGradient3();
@@ -2675,6 +2677,38 @@ def testMaxPoolingLayerGradient3():
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"MaxPoolingLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testBatchNormalization1DLayerGradient1():
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D);
+    gamma = np.random.randn(D);
+    beta = np.random.randn(D);
+    m = BatchNormalization1DLayer(D, gamma = gamma, beta = beta);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dGamma1, dBeta1 = m.params[0].grad, m.params[1].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dGammaN = numericGradient(lambda x: np.sum(BatchNormalization1DLayer(D, gamma = x, beta = beta).forward(X)[0]), gamma);
+    dBetaN = numericGradient(lambda x: np.sum(BatchNormalization1DLayer(D, gamma = gamma, beta = x).forward(X)[0]), beta);
+    print(f"BatchNormalization1DLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dGamma error: {np.sum(np.abs(dGamma1 - dGammaN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print("\n");
+
+
+def testBatchNormalizationLayer1DGradient2():
+    N, D = 1024, 256;
+    X = np.random.randn(N, D);
+    gamma = np.random.randn(D);
+    beta = np.random.randn(D);
+    m = BatchNormalization1DLayer(D, gamma = gamma, beta = beta);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dGamma1, dBeta1 = m.params[0].grad, m.params[1].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dGammaN = numericGradient(lambda x: np.sum(BatchNormalization1DLayer(D, gamma = x, beta = beta).forward(X)[0]), gamma);
+    dBetaN = numericGradient(lambda x: np.sum(BatchNormalization1DLayer(D, gamma = gamma, beta = x).forward(X)[0]), beta);
+    print(f"BatchNormalization1DLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dGamma error: {np.sum(np.abs(dGamma1 - dGammaN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
     print("\n");
 
 

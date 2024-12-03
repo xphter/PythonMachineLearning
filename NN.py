@@ -1059,13 +1059,13 @@ class AffineLayer(NetModuleBase):
         return dX, ;
 
 
-class BatchNormalizationLayer(NetModuleBase):
+class BatchNormalization1DLayer(NetModuleBase):
     def __init__(self, inputSize : int, gamma : np.ndarray = None, beta : np.ndarray = None, epsilon = 1e-8):
         super().__init__();
 
         self._epsilon = epsilon;
         self._n = None;
-        self._Xmu = None;
+        self._XC = None;
         self._std = None;
         self._XHat = None;
         self._name = "BatchNormalization";
@@ -1073,13 +1073,12 @@ class BatchNormalizationLayer(NetModuleBase):
         self._gamma = np.ones(inputSize, dtype = defaultDType) if gamma is None else gamma;
         self._beta = np.zeros(inputSize, dtype = defaultDType) if beta is None else beta;
 
-        weights = [self._gamma, self._beta];
-        self._params.extend(weights);
-        self._grads.extend([np.zeros_like(w) for w in weights]);
+        self._params.append(NetParamDefinition(self._gamma));
+        self._params.append(NetParamDefinition(self._beta));
 
 
-    def _setParams(self, value: List[np.ndarray]):
-        self._gamma, self._beta = value[0], value[1];
+    def _setParams(self, params: List[NetParamDefinition]):
+        self._gamma, self._beta = params[0].value, params[1].value;
 
 
     @property
@@ -1092,29 +1091,47 @@ class BatchNormalizationLayer(NetModuleBase):
         return self._beta;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
-        mu = X.mean(0);
+
+        shape = None;
+        if X.ndim > 2:
+            shape = X.shape;
+            X = X.reshape(-1, shape[-1]);
+
+        mu = X.mean(axis = 0);
         self._n = len(X);
-        self._Xmu = X - mu;
-        self._std = np.sqrt(np.square(self._Xmu).mean(0) + self._epsilon);
-        self._XHat = self._Xmu / self._std;
+        self._XC = X - mu;
+        self._std = np.sqrt(np.square(self._XC).mean(axis = 0) + self._epsilon);
+        self._XHat = self._XC / self._std;
         Y = self._gamma * self._XHat + self._beta;
+
+        if shape is not None:
+            Y = Y.reshape(*shape);
 
         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
+
+        shape = None;
+        if dY.ndim > 2:
+            shape = dY.shape;
+            dY = dY.reshape(-1, shape[-1]);
+
         dXHat = dY * self._gamma;
-        dXmu = dXHat / self._std - np.sum(dXHat * self._Xmu, 0) / np.power(self._std, 3) * self._Xmu / self._n;
+        dXC = dXHat / self._std - np.sum(dXHat * self._XC, axis = 0) / np.power(self._std, 3) * self._XC / self._n;
 
-        dGamma = np.sum(dY * self._XHat, 0);
-        dBeta = np.sum(dY, 0);
-        dX = dXmu - np.sum(dXmu, 0) / self._n;
+        dGamma = np.sum(dY * self._XHat, axis = 0);
+        dBeta = np.sum(dY, axis = 0);
+        dX = dXC - np.sum(dXC, axis = 0) / self._n;
 
-        self._grads[0][...] = dGamma;
-        self._grads[1][...] = dBeta;
+        self._params[0].grad[...] = dGamma;
+        self._params[1].grad[...] = dBeta;
+
+        if shape is not None:
+            dX = dX.reshape(*shape);
 
         return dX, ;
 
