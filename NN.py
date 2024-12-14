@@ -22,6 +22,48 @@ from typing import Union, List, Tuple, Callable, Any, Optional, Iterable, Genera
 from Functions import *;
 
 
+class INetContext(metaclass = abc.ABCMeta):
+    @property
+    @abc.abstractmethod
+    def isTrainingMode(self) -> bool:
+        pass;
+
+
+    @isTrainingMode.setter
+    @abc.abstractmethod
+    def isTrainingMode(self, value: bool):
+        pass;
+
+
+    @property
+    @abc.abstractmethod
+    def trainingEpoch(self) -> int:
+        pass;
+
+
+    @trainingEpoch.setter
+    @abc.abstractmethod
+    def trainingEpoch(self, value: int):
+        pass;
+
+
+    @property
+    @abc.abstractmethod
+    def trainingIterations(self) -> int:
+        pass;
+
+
+    @trainingIterations.setter
+    @abc.abstractmethod
+    def trainingIterations(self, value: int):
+        pass;
+
+
+    @abc.abstractmethod
+    def clean(self):
+        pass;
+
+
 class INetLoss(metaclass = abc.ABCMeta):
     @property
     @abc.abstractmethod
@@ -172,31 +214,13 @@ class INetAccuracyEvaluator(metaclass = abc.ABCMeta):
 class INetModule(metaclass = abc.ABCMeta):
     @property
     @abc.abstractmethod
-    def isTrainingMode(self) -> bool:
+    def context(self) -> INetContext:
         pass;
 
 
-    @isTrainingMode.setter
+    @context.setter
     @abc.abstractmethod
-    def isTrainingMode(self, value: bool):
-        pass;
-
-
-    @property
-    @abc.abstractmethod
-    def trainingEpoch(self) -> int:
-        pass;
-
-
-    @trainingEpoch.setter
-    @abc.abstractmethod
-    def trainingEpoch(self, value: int):
-        pass;
-
-
-    @property
-    @abc.abstractmethod
-    def trainingIterations(self) -> int:
+    def context(self, value : INetContext):
         pass;
 
 
@@ -282,6 +306,48 @@ class INetModel(INetModule, metaclass = abc.ABCMeta):
         pass;
 
 
+class NetContext(INetContext):
+    def __init__(self):
+        self._isTrainingMode = False;
+        self._trainingEpoch = 0;
+        self._trainingIterations = 0;
+
+
+    @property
+    def isTrainingMode(self) -> bool:
+        return self._isTrainingMode;
+
+
+    @isTrainingMode.setter
+    def isTrainingMode(self, value: bool):
+        self._isTrainingMode = value;
+
+
+    @property
+    def trainingEpoch(self) -> int:
+        return self._trainingEpoch;
+
+
+    @trainingEpoch.setter
+    def trainingEpoch(self, value: int):
+        self._trainingEpoch = value;
+
+
+    @property
+    def trainingIterations(self) -> int:
+        return self._trainingIterations;
+
+
+    @trainingIterations.setter
+    def trainingIterations(self, value: int):
+        self._trainingIterations = value;
+
+
+    def clean(self):
+        self._trainingEpoch = 0;
+        self._trainingIterations = 0;
+
+
 class NetParam(INetParam):
     def __init__(self, value : np.ndarray):
         self._value = value;
@@ -341,11 +407,9 @@ class NetValueState(INetState):
 class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
     def __init__(self):
         self._name = None;
+        self._context = NetContext();
         self._params : List[INetParamDefinition] = [];
         self._states: List[INetState] = [];
-        self._isTrainingMode = False;
-        self._trainingEpoch = 0;
-        self._trainingIterations = 0;
 
 
     def __repr__(self):
@@ -357,30 +421,14 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
 
 
     @property
-    def isTrainingMode(self) -> bool:
-        return self._isTrainingMode;
+    def context(self) -> INetContext:
+        return self._context;
 
 
-    @isTrainingMode.setter
-    def isTrainingMode(self, value : bool):
-        self._isTrainingMode = value;
-        self._setTrainingMode(value);
-
-
-    @property
-    def trainingEpoch(self) -> int:
-        return self._trainingEpoch;
-
-
-    @trainingEpoch.setter
-    def trainingEpoch(self, value: int):
-        self._trainingEpoch = value;
-        self._setTrainingEpoch(value);
-
-
-    @property
-    def trainingIterations(self) -> int:
-        return self._trainingIterations;
+    @context.setter
+    def context(self, value: INetContext):
+        self._context = value;
+        self._setContext(value);
 
 
     @property
@@ -405,11 +453,7 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
         self._setStates(value);
 
 
-    def _setTrainingMode(self, value : bool):
-        pass;
-
-
-    def _setTrainingEpoch(self, value : int):
+    def _setContext(self, context : INetContext):
         pass;
 
 
@@ -442,19 +486,17 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
 
 
     def reset(self):
-        self.isTrainingMode = False;
-        self.trainingEpoch = 0;
         self._reset();
 
 
     def clean(self):
         self.reset();
 
-        self._trainingIterations = 0;
         self._clean();
 
 
     def copy(self, shareParams : bool = False) -> INetModule:
+        # has already copied the net context object
         module = copy.copy(self);
 
         self._copyMembers(module, shareParams);
@@ -475,6 +517,7 @@ class AggregateNetModule(NetModuleBase):
 
         self._modules = modules;
         for m in modules:
+            m.context = self._context;
             self._params.extend(m.params);
             self._states.extend(m.states);
         self._name = "  -->  ".join([str(m) for m in modules]);
@@ -485,14 +528,9 @@ class AggregateNetModule(NetModuleBase):
         return self._modules;
 
 
-    def _setTrainingMode(self, value: bool):
+    def _setContext(self, context : INetContext):
         for m in self._modules:
-            m.isTrainingMode = value;
-
-
-    def _setTrainingEpoch(self, value : int):
-        for m in self._modules:
-            m.trainingEpoch = value;
+            m.context = context;
 
 
     def _setParams(self, params: List[INetParamDefinition]):
@@ -571,7 +609,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
 
     def eval(self, lossFunc : INetLoss, evaluator : INetAccuracyEvaluator, lossValues : List[float] = None, iterator : Iterable = None) -> Tuple[float, float]:
-        self.isTrainingMode = False;
+        self.context.isTrainingMode = False;
 
         try:
             evaluator.reset();
@@ -590,7 +628,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                 evaluator.fromLoss(lossValues);
         finally:
             self.reset();
-            self.isTrainingMode = True;
+            self.context.isTrainingMode = True;
 
         return sum(lossValues) / len(lossValues), evaluator.accuracy;
 
@@ -609,16 +647,19 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         print(f"[{datetime.datetime.now()}] start to train model {self}");
 
         self.clean();
+        self.context.clean();
 
         for epoch in range(maxEpoch):
             lossValues.clear();
             if evaluator is not None:
                 evaluator.reset();
 
-            self.isTrainingMode = True;
-            self.trainingEpoch = epoch;
+            self.context.isTrainingMode = True;
+            self.context.trainingEpoch = epoch;
 
             for data in trainingIterator:
+                self.context.trainingIterations += 1;
+
                 Y = self.forward(*data);
                 T = self.getFinalTag(data[-1]);
                 loss = lossFunc.forward(*Y, T) if T is not None else lossFunc.forward(*Y);
@@ -675,7 +716,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                 print("evaluating final test data...");
                 print(f"the final test {evaluator.name} is {self.eval(lossFunc, evaluator, None, testIterator)[1]}");
 
-        self.isTrainingMode = False;
+        self.context.isTrainingMode = False;
         print(f"[{datetime.datetime.now()}] complete to train model, elapsed time: {int(time.time() - startTime)}s");
 
         if plot:
@@ -914,7 +955,7 @@ class MaxoutLayer(NetModuleBase):
         H = int(X.shape[-1] // self._K);
         Z = np.reshape(X, X.shape[: -1] + (H, self._K));
 
-        if self._isTrainingMode:
+        if self.context.isTrainingMode:
             E = np.zeros_like(Z, dtype = np.int32) + np.arange(self._K, dtype = np.int32);
             M = E == np.argmax(Z, axis = -1, keepdims = True);
             Y = np.reshape(Z[M], X.shape[: -1] + (H, ));
@@ -995,7 +1036,7 @@ class DropoutLayer(NetModuleBase):
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
 
-        if self._isTrainingMode:
+        if self.context.isTrainingMode:
             if self._dropoutRatio == 0.0:
                 return X, ;
             if self._dropoutRatio == 1.0:
@@ -1006,11 +1047,6 @@ class DropoutLayer(NetModuleBase):
             return X * self._mask, ;
         else:
             return X, ;
-        # if self._isTrainingMode:
-        #     self._mask = np.random.rand(*X.shape) > self._dropoutRatio;
-        #     return X * self._mask, ;
-        # else:
-        #     return X * (1.0 - self._dropoutRatio), ;
 
 
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
@@ -1217,12 +1253,11 @@ class BatchNormalization1DLayer(NetModuleBase):
         self._evalWeight, self._evalBias = None, None;
 
 
-    def _reset(self):
-        self._evalWeight, self._evalBias = None, None;
+    # def _reset(self):
+    #     self._evalWeight, self._evalBias = None, None;
 
 
     def _clean(self):
-        self._trainingIterations = 0;
         self._evalMean[...] = 0.0;
         self._evalVar[...] = 1.0;
         self._evalWeight, self._evalBias = None, None;
@@ -1249,8 +1284,6 @@ class BatchNormalization1DLayer(NetModuleBase):
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
-        self._trainingIterations += 1;
-
         X = data[0];
 
         shape = None;
@@ -1258,7 +1291,7 @@ class BatchNormalization1DLayer(NetModuleBase):
             shape = X.shape;
             X = X.reshape(-1, shape[-1]);
 
-        if self._isTrainingMode:
+        if self.context.isTrainingMode:
             mu = X.mean(axis = 0);
             self._n = len(X);
             self._XC = X - mu;
@@ -1269,8 +1302,9 @@ class BatchNormalization1DLayer(NetModuleBase):
                 self._evalMean[...] = (1.0 - self._momentum) * self._evalMean + self._momentum * mu;
                 self._evalVar[...] = (1.0 - self._momentum) * self._evalVar + self._momentum * s2;
             else:
-                self._evalMean[...] = (self._evalMean * (self._trainingIterations - 1) + mu) / self._trainingIterations;
-                self._evalVar[...] = (self._evalVar * (self._trainingIterations - 1) + s2) / self._trainingIterations;
+                self._evalMean[...] = (self._evalMean * (self.context.trainingIterations - 1) + mu) / self.context.trainingIterations;
+                self._evalVar[...] = (self._evalVar * (self.context.trainingIterations - 1) + s2) / self.context.trainingIterations;
+            self._evalWeight, self._evalBias = None, None;
 
             self._std = np.sqrt(var + self._epsilon);
             self._XHat = self._XC / self._std;
@@ -1466,7 +1500,7 @@ class MaxPoolingLayer(NetModuleBase):
         col = im2col(X, self._PH, self._PW, self._stride, self._pad).reshape(-1, self._PH * self._PW);
         Y = np.amax(col, axis = -1).reshape(N, OH, OW, C).transpose(0, 3, 1, 2);
 
-        if self._isTrainingMode:
+        if self.context.isTrainingMode:
             E = np.zeros_like(col, dtype = np.int32) + np.arange(col.shape[-1], dtype = np.int32);
             M = E == np.argmax(col, axis = -1, keepdims = True);
             self._M = (M + 0).astype(defaultDType);
@@ -1707,6 +1741,11 @@ class RnnLayer(NetModuleBase):
         self._grads.extend([np.zeros_like(w) for w in weights]);
 
 
+    def _setContext(self, context : INetContext):
+        for cell in self._rnnModules:
+            cell.context = value;
+
+
     def _setParams(self, value: List[np.ndarray]):
         self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
         for cell in self._rnnModules:
@@ -1722,7 +1761,9 @@ class RnnLayer(NetModuleBase):
 
 
     def _getCell(self, inputSize : int, outputSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> INetModule:
-        return RnnCell(inputSize, outputSize, Wx, Wh, b);
+        cell = RnnCell(inputSize, outputSize, Wx, Wh, b);
+        cell.context = self.context;
+        return cell;
 
 
     @property
@@ -1850,14 +1891,14 @@ class LstmCell(NetModuleBase):
         if self._recurrentDropoutMask is None:
             self._recurrentDropoutMask = getDropoutMask(self._C, self._recurrentDropout);
 
-        if self.isTrainingMode:
+        if self.context.isTrainingMode:
             A = self._X @ self._weightX + (self._inputDropoutMask * self._H) @ self._weightH + self._bias;
         else:
             A = self._X @ self._weightX + ((1 - self._inputDropout) * self._H) @ self._weightH + self._bias;
         self._F, self._G, self._I, self._O = tuple(np.hsplit(A, 4));
         self._F, self._G, self._I, self._O = sigmoid(self._F), tanh(self._G), sigmoid(self._I), sigmoid(self._O);
 
-        if self.isTrainingMode:
+        if self.context.isTrainingMode:
             self._YC = self._C * self._F + self._recurrentDropoutMask * self._G * self._I;
         else:
             self._YC = self._C * self._F + (1 - self._recurrentDropout) * self._G * self._I;
@@ -1933,14 +1974,9 @@ class LstmLayer(NetModuleBase):
         self._grads.extend([np.zeros_like(w) for w in weights]);
 
 
-    def _setTrainingMode(self, value: bool):
+    def _setContext(self, context : INetContext):
         for cell in self._lstmModules:
-            cell.isTrainingMode = value;
-
-
-    def _setTrainingEpoch(self, value : int):
-        for cell in self._lstmModules:
-            cell.trainingEpoch = value;
+            cell.context = value;
 
 
     def _setParams(self, value: List[np.ndarray]):
@@ -1950,6 +1986,9 @@ class LstmLayer(NetModuleBase):
 
 
     def _reset(self):
+        self._H, self._C = None, None;
+        self.resetStepState();
+
         for cell in self._lstmModules:
             cell.reset();
 
@@ -1963,8 +2002,7 @@ class LstmLayer(NetModuleBase):
 
     def _createCell(self) -> LstmCell:
         cell = LstmCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias, inputDropout = self._inputDropout, recurrentDropout = self._recurrentDropout);
-        cell.isTrainingMode = self.isTrainingMode;
-        cell.trainingEpoch = self.trainingEpoch;
+        cell.context = self.context;
         cell.setInputDropoutMask(self._inputDropoutMask);
         cell.setRecurrentDropoutMask(self._recurrentDropoutMask);
         return cell;
@@ -2034,9 +2072,9 @@ class LstmLayer(NetModuleBase):
         return self._dC;
 
 
-    def _reset(self):
-        self._H, self._C = None, None;
-        self.resetStepState();
+    # def _reset(self):
+    #     self._H, self._C = None, None;
+    #     self.resetStepState();
 
 
     # input: X, H, C
@@ -2171,18 +2209,11 @@ class BahdanauAttentionLstmLayer(LstmLayer):
         self._grads.extend([np.zeros_like(w) for w in weights]);
 
 
-    def _setTrainingMode(self, value: bool):
-        super()._setTrainingMode(value);
+    def _setContext(self, context : INetContext):
+        super()._setContext(context);
 
         for m in self._attentionModules:
-            m.isTrainingMode = value;
-
-
-    def _setTrainingEpoch(self, value : int):
-        super()._setTrainingEpoch(value);
-
-        for m in self._attentionModules:
-            m.trainingEpoch = value;
+            m.context = value;
 
 
     def _setParams(self, value: List[np.ndarray]):
@@ -2212,8 +2243,7 @@ class BahdanauAttentionLstmLayer(LstmLayer):
 
     def _createAttention(self):
         layer = QKVAttentionLayer(AdditiveAttentionWeight1TModule(self._outputSize, self._outputSize, self._outputSize, Wq = self._weightQ, Wk = self._weightK, wv = self._weightV), SelectByWeight1TModule());
-        layer.isTrainingMode = self.isTrainingMode;
-        layer.trainingEpoch = self.trainingEpoch;
+        layer.context = self.context;
         return layer;
 
 
@@ -2387,7 +2417,9 @@ class GruLayer(RnnLayer):
 
 
     def _getCell(self, inputSize : int, outputSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> INetModule:
-        return GruCell(inputSize, outputSize, Wx, Wh, b);
+        cell = GruCell(inputSize, outputSize, Wx, Wh, b);
+        cell.context = self.context;
+        return cell;
 
 
 class BiRnnLayer(AggregateNetModule):
@@ -3299,13 +3331,6 @@ class SequentialContainer(NetModelBase):
         super().__init__(*modules);
 
 
-    # def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-    #     if self.isTrainingMode:
-    #         return super().forward(*data[:-1]);
-    #     else:
-    #         return super().forward(*data);
-
-
     def apply(self, func : Callable):
         for m in self._modules:
             func(m);
@@ -3577,16 +3602,11 @@ class RepeatedWrapper(NetModuleBase):
         self._grads.extend(target.grads);
 
 
-    def _setTrainingMode(self, value : bool):
-        self._target.isTrainingMode = value;
-        for m in self._modules:
-            m.isTrainingMode = value;
+    def _setContext(self, context : INetContext):
+        self._target.context = context;
 
-
-    def _setTrainingEpoch(self, value : int):
-        self._target.trainingEpoch = value;
         for m in self._modules:
-            m.trainingEpoch = value;
+            m.context = value;
 
 
     def _setParams(self, value: List[np.ndarray]):
@@ -3860,6 +3880,11 @@ class GaussianVAE(NetModelBase):
         self._U = None;
 
 
+    def _setContext(self, context : INetContext):
+        self._encoder.context = context;
+        self._decoder.context = context;
+
+
     def getFinalTag(self, T: np.ndarray) -> Optional[np.ndarray]:
         return None;
 
@@ -3994,6 +4019,11 @@ class BernoulliVAE(NetModelBase):
         self._minStd = minStd;
         self._z0 = None;  # the standard normal distribution
         self._V = None;
+
+
+    def _setContext(self, context : INetContext):
+        self._encoder.context = context;
+        self._decoder.context = context;
 
 
     def getFinalTag(self, T: np.ndarray) -> Optional[np.ndarray]:

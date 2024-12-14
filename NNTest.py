@@ -30,6 +30,7 @@ from GMM import *;
 from NN import *;
 from MNIST import *;
 from PTB import *;
+import torch;
 
 
 def preprocess(text : str) -> (np.ndarray, dict, dict):
@@ -2072,7 +2073,7 @@ def unitTest():
     # testMaxoutLayerGradient3();
     # testIdentityWithHuberLossGradient1();
     # testIdentityWithHuberLossGradient2();
-    # testAffineLayerGradient1();
+    testAffineLayerGradient1();
     # testAffineLayerGradient2();
     # testAffineLayerGradient3();
     # testConvolution1DLayer1();
@@ -2083,10 +2084,10 @@ def unitTest():
     # testMaxPoolingLayerGradient1();
     # testMaxPoolingLayerGradient2();
     # testMaxPoolingLayerGradient3();
-    testBatchNormalization1DLayer1();
-    testBatchNormalization1DLayer2();
-    testBatchNormalization1DLayerGradient1();
-    testBatchNormalizationLayer1DGradient2();
+    # testBatchNormalization1DLayer1();
+    # testBatchNormalization1DLayer2();
+    # testBatchNormalization1DLayerGradient1();
+    # testBatchNormalizationLayer1DGradient2();
     # testAdditiveResidualBlockGradient1();
     # testAdditiveResidualBlockGradient2();
     # testAdditiveResidualBlockGradient3();
@@ -2376,7 +2377,7 @@ def testMaxoutLayer1():
     N, T, D = 2, 3, 6;
     X = np.random.randn(N, T, D);
     m = MaxoutLayer();
-    m.isTrainingMode = True;
+    m.context.isTrainingMode = True;
     Y = m.forward(X)[0];
     dX = m.backward(np.ones_like(Y))[0];
     assert(Y.shape == (N, T, D // m.K));
@@ -2420,7 +2421,7 @@ def testMaxoutLayerGradient1():
     N, T, D = 32, 24, 16;
     X = np.random.randn(N, T, D);
     m = MaxoutLayer();
-    m.isTrainingMode = True;
+    m.context.isTrainingMode = True;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
@@ -2432,7 +2433,7 @@ def testMaxoutLayerGradient2():
     N, T, D = 32, 24, 16;
     X = np.random.randn(N, T, D);
     m = MaxoutLayer(4);
-    m.isTrainingMode = True;
+    m.context.isTrainingMode = True;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
@@ -2444,7 +2445,7 @@ def testMaxoutLayerGradient3():
     N, D = 256, 256;
     X = np.random.randn(N, D);
     m = MaxoutLayer(8);
-    m.isTrainingMode = True;
+    m.context.isTrainingMode = True;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
@@ -2643,7 +2644,7 @@ def testMaxPoolingLayerGradient1():
     PH, PW, S, P = 3, 3, 1, 0;
     X = np.random.randn(N, C, H, W);
     m = MaxPoolingLayer(PH, PW, S, P);
-    m.isTrainingMode = True;
+    m.context.isTrainingMode = True;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
@@ -2656,7 +2657,7 @@ def testMaxPoolingLayerGradient2():
     PH, PW, S, P = 4, 4, 4, 2;
     X = np.random.randn(N, C, H, W);
     m = MaxPoolingLayer(PH, PW, S, P);
-    m.isTrainingMode = True;
+    m.context.isTrainingMode = True;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
@@ -2674,7 +2675,7 @@ def testMaxPoolingLayerGradient3():
         MaxPoolingLayer(PH, PW, S, P),
         AffineLayer(OW, 2 * OW),
     );
-    m.isTrainingMode = True;
+    m.context.isTrainingMode = True;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
@@ -2697,7 +2698,7 @@ def testBatchNormalization1DLayer1():
     m1.train();
 
     m2 = BatchNormalization1DLayer(D, momentum = 0.1);
-    m2.isTrainingMode = True;
+    m2.context.isTrainingMode = True;
 
     Y1 = m1.forward(X01).detach().numpy();
     Y2, = m2.forward(X02);
@@ -2721,7 +2722,7 @@ def testBatchNormalization1DLayer1():
     print(f"BatchNormalization1DLayer, value1, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
 
     m1.eval();
-    m2.isTrainingMode = False;
+    m2.context.isTrainingMode = False;
     Y1 = m1.forward(X31).detach().numpy();
     Y2, = m2.forward(X32);
 
@@ -2743,9 +2744,10 @@ def testBatchNormalization1DLayer2():
     m1.train();
 
     m2 = BatchNormalization1DLayer(D, momentum = None);
-    m2.isTrainingMode = True;
+    m2.context.isTrainingMode = True;
 
     Y1 = m1.forward(X01).detach().numpy();
+    m2.context.trainingIterations += 1;
     Y2, = m2.forward(X02);
 
     print(f"BatchNormalization1DLayer, value2, Y error: {np.sum(np.abs(Y1 - Y2))}");
@@ -2753,6 +2755,7 @@ def testBatchNormalization1DLayer2():
     print(f"BatchNormalization1DLayer, value2, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
 
     Y1 = m1.forward(X11).detach().numpy();
+    m2.context.trainingIterations += 1;
     Y2, = m2.forward(X12);
 
     print(f"BatchNormalization1DLayer, value2, Y error: {np.sum(np.abs(Y1 - Y2))}");
@@ -2760,6 +2763,7 @@ def testBatchNormalization1DLayer2():
     print(f"BatchNormalization1DLayer, value2, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
 
     Y1 = m1.forward(X21).detach().numpy();
+    m2.context.trainingIterations += 1;
     Y2, = m2.forward(X22);
 
     print(f"BatchNormalization1DLayer, value2, Y = {np.sum(np.abs(Y1 - Y2))}");
@@ -2767,7 +2771,7 @@ def testBatchNormalization1DLayer2():
     print(f"BatchNormalization1DLayer, value2, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
 
     m1.eval();
-    m2.isTrainingMode = False;
+    m2.context.isTrainingMode = False;
     Y1 = m1.forward(X31).detach().numpy();
     Y2, = m2.forward(X32);
 
@@ -2777,7 +2781,7 @@ def testBatchNormalization1DLayer2():
 def testBatchNormalization1DLayerGradient1():
     def createModel(inputSize, g, b) -> BatchNormalization1DLayer:
         layer = BatchNormalization1DLayer(inputSize, gamma = g, beta = b);
-        layer.isTrainingMode = True;
+        layer.context.isTrainingMode = True;
         return layer;
 
 
@@ -2799,7 +2803,7 @@ def testBatchNormalization1DLayerGradient1():
 def testBatchNormalizationLayer1DGradient2():
     def createModel(inputSize, g, b) -> BatchNormalization1DLayer:
         layer = BatchNormalization1DLayer(inputSize, gamma = g, beta = b);
-        layer.isTrainingMode = True;
+        layer.context.isTrainingMode = True;
         return layer;
 
     N, D = 256, 256;
@@ -2932,7 +2936,7 @@ def testLstmCellGradient2():
 def testLstmCellGradient_Dropout():
     def newCell(Wx2, Wh2, b2):
         cell = LstmCell(inputSize, outputSize, Wx = Wx2, Wh = Wh2, b = b2, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
-        cell.isTrainingMode = True;
+        cell.context.isTrainingMode = True;
         cell.setInputDropoutMask(inputMask);
         cell.setRecurrentDropoutMask(recurrentMask);
         return cell;
@@ -2945,7 +2949,7 @@ def testLstmCellGradient_Dropout():
     inputMask = getDropoutMask(H, inputDropout);
     recurrentMask = getDropoutMask(C, recurrentDropout);
     m = LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
-    m.isTrainingMode = True;
+    m.context.isTrainingMode = True;
     m.setInputDropoutMask(inputMask);
     m.setRecurrentDropoutMask(recurrentMask);
     YH, YC = m.forward(X, H, C);
@@ -2966,7 +2970,7 @@ def testLstmLayerGradient(returnSequences = False):
     X, H, C = np.random.randn(N, T, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
     Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
     m = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, stateful = True);
-    m.isTrainingMode = True;
+    m.context.isTrainingMode = True;
     Y, = m.forward(X, H, C);
     dX1, dH1, dC1 = m.backward(np.ones_like(Y));
     dWx1, dWh1, db1 = tuple(m.grads);
@@ -2985,7 +2989,7 @@ def testLstmLayerGradient_State(returnSequences = False):
     X, H, C = np.random.randn(N, T, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
     Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
     m = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True);
-    m.isTrainingMode = True;
+    m.context.isTrainingMode = True;
     Y, OH, OC = m.forward(X, H, C);
     dX1, dH1, dC1 = m.backward(np.ones_like(Y), np.ones_like(OH), np.ones_like(OC));
     dWx1, dWh1, db1 = tuple(m.grads);
@@ -3002,7 +3006,7 @@ def testLstmLayerGradient_State(returnSequences = False):
 def testLstmLayerGradient_State_Dropout(returnSequences = False):
     def newLayer(Wx2 : np.ndarray, Wh2 : np.ndarray, b2 : np.ndarray):
         layer = LstmLayer(inputSize, outputSize, Wx = Wx2, Wh = Wh2, b = b2, returnSequences = returnSequences, returnState = True, stateful = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
-        layer.isTrainingMode = True;
+        layer.context.isTrainingMode = True;
         layer.setInputDropoutMask(inputMask);
         layer.setRecurrentDropoutMask(recurrentMask);
         return layer;
@@ -3016,7 +3020,7 @@ def testLstmLayerGradient_State_Dropout(returnSequences = False):
     Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
 
     m = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
-    m.isTrainingMode = True;
+    m.context.isTrainingMode = True;
     m.setInputDropoutMask(inputMask);
     m.setRecurrentDropoutMask(recurrentMask);
     Y, OH, OC = m.forward(X, H, C);
@@ -3036,7 +3040,7 @@ def testLstmLayerGradient_Stepwise(returnSequences = False):
     def forward(model : INetModule, X2 : np.ndarray, H2 : np.ndarray, C2 : np.ndarray):
         Y2 = np.zeros((N, T, outputSize));
 
-        model.isTrainingMode = True;
+        model.context.isTrainingMode = True;
         model.resetStepState();
         model.setState(H2, C2);
         for t2 in range(T):
@@ -3049,11 +3053,11 @@ def testLstmLayerGradient_Stepwise(returnSequences = False):
     X, H, C = np.random.randn(N, T, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
     Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
     m1 = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, stateful = True);
-    m1.isTrainingMode = True;
+    m1.context.isTrainingMode = True;
     Y1, = m1.forward(X, H, C);
     dX1, dH1, dC1 = m1.backward(np.ones_like(Y1));
     m2 = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, stateful = True, stepwise = True);
-    m2.isTrainingMode = True;
+    m2.context.isTrainingMode = True;
     Y2, = forward(m2, X, H, C);
     dX2 = np.zeros_like(X);
     for t in reversed(range(T)):
@@ -3077,7 +3081,7 @@ def testLstmLayerGradient_Stepwise_State(returnSequences = False):
     def forward(model : INetModule, X2 : np.ndarray, H2 : np.ndarray, C2 : np.ndarray):
         Y2 = np.zeros((N, T, outputSize));
 
-        model.isTrainingMode = True;
+        model.context.isTrainingMode = True;
         model.resetStepState();
         for t2 in range(T):
             Y2[:, t2], H2, C2 = model.forward(X2[:, t2], H2, C2);
@@ -3089,11 +3093,11 @@ def testLstmLayerGradient_Stepwise_State(returnSequences = False):
     X, H, C = np.random.randn(N, T, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
     Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
     m1 = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True);
-    m1.isTrainingMode = True;
+    m1.context.isTrainingMode = True;
     Y1, H1, C1 = m1.forward(X, H, C);
     dX1, dH1, dC1 = m1.backward(np.ones_like(Y1), np.ones_like(H1), np.ones_like(C1));
     m2 = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True);
-    m2.isTrainingMode = True;
+    m2.context.isTrainingMode = True;
     Y2, H2, C2 = forward(m2, X, H, C);
     dX2, dH2, dC2 = np.zeros_like(X), np.ones_like(H2), np.ones_like(C2);
     for t in reversed(range(T)):
@@ -3114,7 +3118,7 @@ def testLstmLayerGradient_Stepwise_State(returnSequences = False):
 
 def testLstmLayerGradient_Stepwise_State_Dropout(returnSequences = False):
     def forward(model : INetModule, X2 : np.ndarray, H2 : np.ndarray, C2 : np.ndarray):
-        model.isTrainingMode = True;
+        model.context.isTrainingMode = True;
         model.setInputDropoutMask(inputMask);
         model.setRecurrentDropoutMask(recurrentMask);
         model.resetStepState();
@@ -3134,13 +3138,13 @@ def testLstmLayerGradient_Stepwise_State_Dropout(returnSequences = False):
     recurrentMask = getDropoutMask(C, recurrentDropout);
 
     m1 = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
-    m1.isTrainingMode = True;
+    m1.context.isTrainingMode = True;
     m1.setInputDropoutMask(inputMask);
     m1.setRecurrentDropoutMask(recurrentMask);
     Y1, H1, C1 = m1.forward(X, H, C);
     dX1, dH1, dC1 = m1.backward(np.ones_like(Y1), np.ones_like(H1), np.ones_like(C1));
     m2 = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
-    m2.isTrainingMode = True;
+    m2.context.isTrainingMode = True;
     m2.setInputDropoutMask(inputMask);
     m2.setRecurrentDropoutMask(recurrentMask);
     Y2, H2, C2 = forward(m2, X, H, C);
@@ -3275,7 +3279,7 @@ def testBahdanauAttentionLstmLayerGradient_Stepwise_State(returnSequences = Fals
 
 def testBahdanauAttentionLstmLayerGradient_Stepwise_State_Dropout(returnSequences = False):
     def forward(model : INetModule, X2 : np.ndarray, K2 : np.ndarray):
-        model.isTrainingMode = True;
+        model.context.isTrainingMode = True;
         model.setInputDropoutMask(inputMask);
         model.setRecurrentDropoutMask(recurrentMask);
 
@@ -3295,7 +3299,7 @@ def testBahdanauAttentionLstmLayerGradient_Stepwise_State_Dropout(returnSequence
     inputMask = getDropoutMask(np.ones_like(K[:, -1]), inputDropout);
     recurrentMask = getDropoutMask(np.ones_like(K[:, -1]), recurrentDropout);
     m1 = BahdanauAttentionLstmLayer(inputSize, outputSize, returnSequences = returnSequences, returnState = True, stateful = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
-    m1.isTrainingMode = True;
+    m1.context.isTrainingMode = True;
     m1.setInputDropoutMask(inputMask);
     m1.setRecurrentDropoutMask(recurrentMask);
     Y1, H1, C1 = m1.forward(X, K, K[:, -1], None);
@@ -3304,7 +3308,7 @@ def testBahdanauAttentionLstmLayerGradient_Stepwise_State_Dropout(returnSequence
     Wx, Wh, b, Wq, Wk, wv = tuple(m1.params);
     m2 = BahdanauAttentionLstmLayer(inputSize, outputSize, returnSequences = returnSequences, returnState = True, stateful = True, stepwise = True, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
     m2.params = m1.params;
-    m2.isTrainingMode = True;
+    m2.context.isTrainingMode = True;
     m2.setInputDropoutMask(inputMask);
     m2.setRecurrentDropoutMask(recurrentMask);
     Y2, H2, C2 = forward(m2, X, K);
@@ -3361,7 +3365,7 @@ def testStackLstmLayerGradient_State_Dropout(returnSequences = False):
     L, N, T, inputSize, outputSize = 1, 32, 10, 12, 16;
     X, HS, CS = np.random.randn(N, T, inputSize), np.random.randn(L, N, outputSize), np.random.randn(L, N, outputSize);
     m = StackLstmLayer(inputSize, outputSize, LstmLayer, layerNum = L, returnSequences = returnSequences, returnState = True, stateful = True, inputDropout = 0.5, recurrentDropout = 0.5);
-    m.isTrainingMode = True;
+    m.context.isTrainingMode = True;
     Y1, OHS1, OCS1 = m.forward(X, HS, CS);
     dX1, dHS1, dCS1 = m.backward(np.ones_like(Y1), np.ones_like(OHS1), np.ones_like(OCS1));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, HS, CS)), X);
@@ -3982,7 +3986,7 @@ def testSeq2SeqTSModel_Dropout():
     N, T1, T2, inputSize, hiddenSize, outputSize = 32, 11, 12, 16, 24, 14;
     X, T = np.random.randn(N, T1, inputSize), np.random.randn(N, T2, outputSize);
     m = Seq2SeqTSModel(inputSize, hiddenSize, outputSize, inputDropout = 0.5, recurrentDropout = 0.5);
-    m.isTrainingMode = True;
+    m.context.isTrainingMode = True;
     Y1, = m.forward(X, T);
     dX1 = m.backward(np.ones_like(Y1))[0];
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, T)), X);
