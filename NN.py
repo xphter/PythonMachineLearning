@@ -70,6 +70,18 @@ class INetParamDefinition(INetParam):
         pass;
 
 
+class INetState(metaclass = abc.ABCMeta):
+    @property
+    @abc.abstractmethod
+    def value(self):
+        pass;
+
+
+    @abc.abstractmethod
+    def copy(self):
+        pass;
+
+
 class INetOptimizer(metaclass = abc.ABCMeta):
     @property
     @abc.abstractmethod
@@ -184,6 +196,12 @@ class INetModule(metaclass = abc.ABCMeta):
 
     @property
     @abc.abstractmethod
+    def trainingIterations(self) -> int:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
     def params(self) -> List[INetParamDefinition]:
         pass;
 
@@ -194,8 +212,25 @@ class INetModule(metaclass = abc.ABCMeta):
         pass;
 
 
+    @property
+    @abc.abstractmethod
+    def states(self) -> List[INetState]:
+        pass;
+
+
+    @states.setter
+    @abc.abstractmethod
+    def states(self, value: List[INetState]):
+        pass;
+
+
     @abc.abstractmethod
     def reset(self):
+        pass;
+
+
+    @abc.abstractmethod
+    def clean(self):
         pass;
 
 
@@ -282,12 +317,35 @@ class NetParamDefinition(NetParam, INetParamDefinition):
             return NetParamDefinition(np.copy(self._value), self._preUpdateHandler);
 
 
+class NetValueState(INetState):
+    def __init__(self, value = None):
+        self._value = value;
+
+
+    @property
+    def value(self):
+        return self._value;
+
+
+    def copy(self) -> INetState:
+        value = self._value;
+        if value is not None:
+            if isinstance(value, np.ndarray):
+                value = np.copy(value);
+
+            value = copy.deepcopy(value);
+
+        return NetValueState(value);
+
+
 class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
     def __init__(self):
         self._name = None;
         self._params : List[INetParamDefinition] = [];
+        self._states: List[INetState] = [];
         self._isTrainingMode = False;
         self._trainingEpoch = 0;
+        self._trainingIterations = 0;
 
 
     def __repr__(self):
@@ -321,6 +379,11 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
 
 
     @property
+    def trainingIterations(self) -> int:
+        return self._trainingIterations;
+
+
+    @property
     def params(self) -> List[INetParamDefinition]:
         return self._params;
 
@@ -329,6 +392,17 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
     def params(self, value: List[INetParamDefinition]):
         self._params = value;
         self._setParams(value);
+
+
+    @property
+    def states(self) -> List[INetState]:
+        return self._states;
+
+
+    @states.setter
+    def states(self, value: List[INetState]):
+        self._states = value;
+        self._setStates(value);
 
 
     def _setTrainingMode(self, value : bool):
@@ -343,7 +417,15 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
         pass;
 
 
+    def _setStates(self, states: List[INetState]):
+        pass;
+
+
     def _reset(self):
+        pass;
+
+
+    def _clean(self):
         pass;
 
 
@@ -355,10 +437,21 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
         module.params = [p.copy(shareParams) for p in self.params];
 
 
+    def _copyStates(self, module : INetModule):
+        module.states = [s.copy() for s in self.states];
+
+
     def reset(self):
         self.isTrainingMode = False;
         self.trainingEpoch = 0;
         self._reset();
+
+
+    def clean(self):
+        self.reset();
+
+        self._trainingIterations = 0;
+        self._clean();
 
 
     def copy(self, shareParams : bool = False) -> INetModule:
@@ -366,6 +459,7 @@ class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
 
         self._copyMembers(module, shareParams);
         self._copyParams(module, shareParams);
+        self._copyStates(module);
 
         return module;
 
@@ -382,6 +476,7 @@ class AggregateNetModule(NetModuleBase):
         self._modules = modules;
         for m in modules:
             self._params.extend(m.params);
+            self._states.extend(m.states);
         self._name = "  -->  ".join([str(m) for m in modules]);
 
 
@@ -411,9 +506,25 @@ class AggregateNetModule(NetModuleBase):
             i += n;
 
 
+    def _setStates(self, states: List[INetState]):
+        i = 0;
+
+        for m in self._modules:
+            if (n := len(m.states)) == 0:
+                continue;
+
+            m.states = states[i: i + n];
+            i += n;
+
+
     def _reset(self):
         for m in self._modules:
             m.reset();
+
+
+    def _clean(self):
+        for m in self._modules:
+            m.clean();
 
 
     def _copyMembers(self, module : INetModule, shareParams : bool):
@@ -424,6 +535,12 @@ class AggregateNetModule(NetModuleBase):
         module._params = [];
         for m in module.modules:
             module.params.extend(m.params);
+
+
+    def _copyStates(self, module : INetModule):
+        module._states = [];
+        for m in module.modules:
+            module.states.extend(m.states);
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
@@ -486,10 +603,12 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         trainingAccuracyData = [];
         testLossData = [];
         testAccuracyData = [];
-        paramsData = [];
+        paramsData, statesData = [], [];
 
         startTime = time.time();
         print(f"[{datetime.datetime.now()}] start to train model {self}");
+
+        self.clean();
 
         for epoch in range(maxEpoch):
             lossValues.clear();
@@ -537,6 +656,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                     testLossData.append(loss);
                     testAccuracyData.append(accuracy);
                     paramsData.append([p.copy(False) for p in self.params]);
+                    statesData.append([s.copy() for s in self.states]);
 
             trainingMessage = f", training {evaluator.name}: {trainingAccuracyData[-1]}" if len(trainingAccuracyData) > 0 else "";
             testMessage = f", test loss: {testLossData[-1]}, test {evaluator.name}: {testAccuracyData[-1]}" if len(testAccuracyData) > 0 else "";
@@ -545,6 +665,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         if minEpoch is not None and len(paramsData) > 0:
             index = np.argmax(testAccuracyData[minEpoch:]) if evaluator.high else np.argmin(testAccuracyData[minEpoch:]);
             self.params = paramsData[minEpoch + int(index)];
+            self.states = statesData[minEpoch + int(index)];
 
         if evaluator is not None:
             print("evaluating final training data...");
@@ -1060,15 +1181,19 @@ class AffineLayer(NetModuleBase):
 
 
 class BatchNormalization1DLayer(NetModuleBase):
-    def __init__(self, inputSize : int, gamma : np.ndarray = None, beta : np.ndarray = None, epsilon = 1e-8):
+    def __init__(self, inputSize : int, gamma : np.ndarray = None, beta : np.ndarray = None, epsilon = 1e-8, momentum : Optional[float] = 0.1):
         super().__init__();
 
         self._epsilon = epsilon;
+        self._momentum = max(0.0, min(1.0, float(momentum))) if momentum is not None else None;
+        self._evalWeight = None;
+        self._evalBias = None;
+        self._name = "BatchNormalization1D";
+
         self._n = None;
         self._XC = None;
         self._std = None;
         self._XHat = None;
-        self._name = "BatchNormalization";
 
         self._gamma = np.ones(inputSize, dtype = defaultDType) if gamma is None else gamma;
         self._beta = np.zeros(inputSize, dtype = defaultDType) if beta is None else beta;
@@ -1076,9 +1201,31 @@ class BatchNormalization1DLayer(NetModuleBase):
         self._params.append(NetParamDefinition(self._gamma));
         self._params.append(NetParamDefinition(self._beta));
 
+        self._evalMean = np.zeros_like(self._gamma);
+        self._evalVar = np.ones_like(self._gamma);
+
+        self._states.append(NetValueState(self._evalMean));
+        self._states.append(NetValueState(self._evalVar));
+
 
     def _setParams(self, params: List[NetParamDefinition]):
         self._gamma, self._beta = params[0].value, params[1].value;
+
+
+    def _setStates(self, states: List[INetState]):
+        self._evalMean, self._evalVar = states[0].value, states[1].value;
+        self._evalWeight, self._evalBias = None, None;
+
+
+    def _reset(self):
+        self._evalWeight, self._evalBias = None, None;
+
+
+    def _clean(self):
+        self._trainingIterations = 0;
+        self._evalMean[...] = 0.0;
+        self._evalVar[...] = 1.0;
+        self._evalWeight, self._evalBias = None, None;
 
 
     @property
@@ -1091,7 +1238,19 @@ class BatchNormalization1DLayer(NetModuleBase):
         return self._beta;
 
 
+    @property
+    def evalMean(self) -> np.ndarray:
+        return self._evalMean;
+
+
+    @property
+    def evalVar(self) -> np.ndarray:
+        return self._evalVar;
+
+
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        self._trainingIterations += 1;
+
         X = data[0];
 
         shape = None;
@@ -1099,12 +1258,30 @@ class BatchNormalization1DLayer(NetModuleBase):
             shape = X.shape;
             X = X.reshape(-1, shape[-1]);
 
-        mu = X.mean(axis = 0);
-        self._n = len(X);
-        self._XC = X - mu;
-        self._std = np.sqrt(np.square(self._XC).mean(axis = 0) + self._epsilon);
-        self._XHat = self._XC / self._std;
-        Y = self._gamma * self._XHat + self._beta;
+        if self._isTrainingMode:
+            mu = X.mean(axis = 0);
+            self._n = len(X);
+            self._XC = X - mu;
+            var = np.square(self._XC).mean(axis = 0);
+            s2 = self._n / (self._n - 1) * var;
+
+            if self._momentum is not None:
+                self._evalMean[...] = (1.0 - self._momentum) * self._evalMean + self._momentum * mu;
+                self._evalVar[...] = (1.0 - self._momentum) * self._evalVar + self._momentum * s2;
+            else:
+                self._evalMean[...] = (self._evalMean * (self._trainingIterations - 1) + mu) / self._trainingIterations;
+                self._evalVar[...] = (self._evalVar * (self._trainingIterations - 1) + s2) / self._trainingIterations;
+
+            self._std = np.sqrt(var + self._epsilon);
+            self._XHat = self._XC / self._std;
+            Y = self._gamma * self._XHat + self._beta;
+        else:
+            if self._evalWeight is None:
+                self._evalWeight = self._gamma / np.sqrt(self._evalVar + self._epsilon);
+            if self._evalBias is None:
+                self._evalBias = self._beta  - self._gamma * self._evalMean / np.sqrt(self._evalVar + self._epsilon);
+
+            Y = self._evalWeight * X + self._evalBias;
 
         if shape is not None:
             Y = Y.reshape(*shape);

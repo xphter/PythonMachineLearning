@@ -2083,6 +2083,8 @@ def unitTest():
     # testMaxPoolingLayerGradient1();
     # testMaxPoolingLayerGradient2();
     # testMaxPoolingLayerGradient3();
+    testBatchNormalization1DLayer1();
+    testBatchNormalization1DLayer2();
     testBatchNormalization1DLayerGradient1();
     testBatchNormalizationLayer1DGradient2();
     # testAdditiveResidualBlockGradient1();
@@ -2680,34 +2682,137 @@ def testMaxPoolingLayerGradient3():
     print("\n");
 
 
+def testBatchNormalization1DLayer1():
+    N, D = 1024, 1024;
+    X01 = torch.randn(N, D);
+    X02 = X01.numpy();
+    X11 = torch.randn(N, D);
+    X12 = X11.numpy();
+    X21 = torch.randn(N, D);
+    X22 = X21.numpy();
+    X31 = torch.randn(N, D);
+    X32 = X31.numpy();
+
+    m1 = torch.nn.BatchNorm1d(D, eps = 1e-8, momentum = 0.1);
+    m1.train();
+
+    m2 = BatchNormalization1DLayer(D, momentum = 0.1);
+    m2.isTrainingMode = True;
+
+    Y1 = m1.forward(X01).detach().numpy();
+    Y2, = m2.forward(X02);
+
+    print(f"BatchNormalization1DLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"BatchNormalization1DLayer, value1, eval mean error: {np.sum(np.abs(m1.running_mean.detach().numpy() - m2.evalMean))}");
+    print(f"BatchNormalization1DLayer, value1, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
+
+    Y1 = m1.forward(X11).detach().numpy();
+    Y2, = m2.forward(X12);
+
+    print(f"BatchNormalization1DLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"BatchNormalization1DLayer, value1, eval mean error: {np.sum(np.abs(m1.running_mean.detach().numpy() - m2.evalMean))}");
+    print(f"BatchNormalization1DLayer, value1, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
+
+    Y1 = m1.forward(X21).detach().numpy();
+    Y2, = m2.forward(X22);
+
+    print(f"BatchNormalization1DLayer, value1, Y = {np.sum(np.abs(Y1 - Y2))}");
+    print(f"BatchNormalization1DLayer, value1, eval mean error: {np.sum(np.abs(m1.running_mean.detach().numpy() - m2.evalMean))}");
+    print(f"BatchNormalization1DLayer, value1, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
+
+    m1.eval();
+    m2.isTrainingMode = False;
+    Y1 = m1.forward(X31).detach().numpy();
+    Y2, = m2.forward(X32);
+
+    print(f"BatchNormalization1DLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+
+
+def testBatchNormalization1DLayer2():
+    N, D = 1024, 1024;
+    X01 = torch.randn(N, D);
+    X02 = X01.numpy();
+    X11 = torch.randn(N, D);
+    X12 = X11.numpy();
+    X21 = torch.randn(N, D);
+    X22 = X21.numpy();
+    X31 = torch.randn(N, D);
+    X32 = X31.numpy();
+
+    m1 = torch.nn.BatchNorm1d(D, eps = 1e-8, momentum = None);
+    m1.train();
+
+    m2 = BatchNormalization1DLayer(D, momentum = None);
+    m2.isTrainingMode = True;
+
+    Y1 = m1.forward(X01).detach().numpy();
+    Y2, = m2.forward(X02);
+
+    print(f"BatchNormalization1DLayer, value2, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"BatchNormalization1DLayer, value2, eval mean error: {np.sum(np.abs(m1.running_mean.detach().numpy() - m2.evalMean))}");
+    print(f"BatchNormalization1DLayer, value2, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
+
+    Y1 = m1.forward(X11).detach().numpy();
+    Y2, = m2.forward(X12);
+
+    print(f"BatchNormalization1DLayer, value2, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"BatchNormalization1DLayer, value2, eval mean error: {np.sum(np.abs(m1.running_mean.detach().numpy() - m2.evalMean))}");
+    print(f"BatchNormalization1DLayer, value2, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
+
+    Y1 = m1.forward(X21).detach().numpy();
+    Y2, = m2.forward(X22);
+
+    print(f"BatchNormalization1DLayer, value2, Y = {np.sum(np.abs(Y1 - Y2))}");
+    print(f"BatchNormalization1DLayer, value2, eval mean error: {np.sum(np.abs(m1.running_mean.detach().numpy() - m2.evalMean))}");
+    print(f"BatchNormalization1DLayer, value2, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
+
+    m1.eval();
+    m2.isTrainingMode = False;
+    Y1 = m1.forward(X31).detach().numpy();
+    Y2, = m2.forward(X32);
+
+    print(f"BatchNormalization1DLayer, value2, Y error: {np.sum(np.abs(Y1 - Y2))}");
+
+
 def testBatchNormalization1DLayerGradient1():
+    def createModel(inputSize, g, b) -> BatchNormalization1DLayer:
+        layer = BatchNormalization1DLayer(inputSize, gamma = g, beta = b);
+        layer.isTrainingMode = True;
+        return layer;
+
+
     N, T, D = 32, 24, 16;
     X = np.random.randn(N, T, D);
     gamma = np.random.randn(D);
     beta = np.random.randn(D);
-    m = BatchNormalization1DLayer(D, gamma = gamma, beta = beta);
+    m = createModel(D, gamma, beta);
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dGamma1, dBeta1 = m.params[0].grad, m.params[1].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dGammaN = numericGradient(lambda x: np.sum(BatchNormalization1DLayer(D, gamma = x, beta = beta).forward(X)[0]), gamma);
-    dBetaN = numericGradient(lambda x: np.sum(BatchNormalization1DLayer(D, gamma = gamma, beta = x).forward(X)[0]), beta);
+    dGammaN = numericGradient(lambda x: np.sum(createModel(D, x, beta).forward(X)[0]), gamma);
+    dBetaN = numericGradient(lambda x: np.sum(createModel(D, gamma, x).forward(X)[0]), beta);
     print(f"BatchNormalization1DLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dGamma error: {np.sum(np.abs(dGamma1 - dGammaN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
     print("\n");
 
 
 def testBatchNormalizationLayer1DGradient2():
-    N, D = 1024, 256;
+    def createModel(inputSize, g, b) -> BatchNormalization1DLayer:
+        layer = BatchNormalization1DLayer(inputSize, gamma = g, beta = b);
+        layer.isTrainingMode = True;
+        return layer;
+
+    N, D = 256, 256;
     X = np.random.randn(N, D);
     gamma = np.random.randn(D);
     beta = np.random.randn(D);
-    m = BatchNormalization1DLayer(D, gamma = gamma, beta = beta);
+    m = createModel(D, gamma, beta);
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dGamma1, dBeta1 = m.params[0].grad, m.params[1].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dGammaN = numericGradient(lambda x: np.sum(BatchNormalization1DLayer(D, gamma = x, beta = beta).forward(X)[0]), gamma);
-    dBetaN = numericGradient(lambda x: np.sum(BatchNormalization1DLayer(D, gamma = gamma, beta = x).forward(X)[0]), beta);
+    dGammaN = numericGradient(lambda x: np.sum(createModel(D, x, beta).forward(X)[0]), gamma);
+    dBetaN = numericGradient(lambda x: np.sum(createModel(D, gamma, x).forward(X)[0]), beta);
     print(f"BatchNormalization1DLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dGamma error: {np.sum(np.abs(dGamma1 - dGammaN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
     print("\n");
 
