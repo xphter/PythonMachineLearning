@@ -278,6 +278,55 @@ class INetModule(metaclass = abc.ABCMeta):
         pass;
 
 
+class INetFitResult(metaclass = abc.ABCMeta):
+    @property
+    @abc.abstractmethod
+    def trainingLossData(self) -> List[float]:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
+    def trainingAccuracyData(self) -> List[float]:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
+    def testLossData(self) -> List[float]:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
+    def testAccuracyData(self) -> List[float]:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
+    def finalTrainingLoss(self) -> Optional[float]:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
+    def finalTrainingAccuracy(self) -> Optional[float]:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
+    def finalTestLoss(self) -> Optional[float]:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
+    def finalTestAccuracy(self) -> Optional[float]:
+        pass;
+
+
 class INetModel(INetModule, metaclass = abc.ABCMeta):
     @abc.abstractmethod
     def getFinalTag(self, T : np.ndarray) -> Optional[np.ndarray]:
@@ -292,7 +341,7 @@ class INetModel(INetModule, metaclass = abc.ABCMeta):
     @abc.abstractmethod
     def fit(self, trainingIterator : IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch : int, testIterator : IDataIterator = None,
             evaluator: INetAccuracyEvaluator = None, evalEpoch : bool = True, evalIterations : int = None, evalTrainingData : bool = False, evalTestData : bool = True,
-            minEpoch : int = None, plot = False) -> Tuple[List[float], List[float], List[float], List[float]]:
+            minEpoch : int = None, plot = False) -> INetFitResult:
         pass;
 
 
@@ -599,6 +648,60 @@ class AggregateNetModule(NetModuleBase):
         return dX;
 
 
+class NetFitResult(INetFitResult):
+    def __init__(self, trainingLossData : List[float], trainingAccuracyData : List[float],
+                 testLossData : List[float], testAccuracyData : List[float],
+                 finalTrainingLoss : Optional[float] = None, finalTrainingAccuracy :Optional[float] = None,
+                 finalTestLoss : Optional[float] = None, finalTestAccuracy : Optional[float] = None):
+        self._trainingLossData = trainingLossData;
+        self._trainingAccuracyData = trainingAccuracyData;
+        self._testLossData = testLossData;
+        self._testAccuracyData = testAccuracyData;
+        self._finalTrainingLoss = finalTrainingLoss;
+        self._finalTrainingAccuracy = finalTrainingAccuracy;
+        self._finalTestLoss = finalTestLoss;
+        self._finalTestAccuracy = finalTestAccuracy;
+
+    @property
+    def trainingLossData(self) -> List[float]:
+        return self._trainingLossData;
+
+
+    @property
+    def trainingAccuracyData(self) -> List[float]:
+        return self._trainingAccuracyData;
+
+
+    @property
+    def testLossData(self) -> List[float]:
+        return self._testLossData;
+
+
+    @property
+    def testAccuracyData(self) -> List[float]:
+        return self._testAccuracyData;
+
+
+    @property
+    def finalTrainingLoss(self) -> Optional[float]:
+        return self._finalTrainingLoss;
+
+
+    @property
+    def finalTrainingAccuracy(self) -> Optional[float]:
+        return self._finalTrainingAccuracy;
+
+
+    @property
+    def finalTestLoss(self) -> Optional[float]:
+        return self._finalTestLoss;
+
+
+    @property
+    def finalTestAccuracy(self) -> Optional[float]:
+        return self._finalTestAccuracy;
+
+
 class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
     def __init__(self, *modules : INetModule):
         super().__init__(*modules);
@@ -635,12 +738,14 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
     def fit(self, trainingIterator: IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch: int, testIterator: IDataIterator = None,
             evaluator: INetAccuracyEvaluator = None, evalEpoch: bool = True, evalIterations: int = None, evalTrainingData: bool = False, evalTestData: bool = True,
-            minEpoch : int = None, plot = False) -> Tuple[List[float], List[float], List[float], List[float]]:
+            minEpoch : int = None, plot = False) -> INetFitResult:
         lossValues = [];
         trainingLossData = [];
         trainingAccuracyData = [];
         testLossData = [];
         testAccuracyData = [];
+        finalTrainingLoss, finalTrainingAccuracy = None, None;
+        finalTestLoss, finalTestAccuracy = None, None;
         paramsData, statesData = [], [];
 
         startTime = time.time();
@@ -710,11 +815,13 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
         if evaluator is not None:
             print("evaluating final training data...");
-            print(f"the final training {evaluator.name} is {self.eval(lossFunc, evaluator, None, trainingIterator)[1]}");
+            finalTrainingLoss, finalTrainingAccuracy = self.eval(lossFunc, evaluator, None, trainingIterator);
+            print(f"the final training {evaluator.name}, loss: {finalTrainingLoss}, accuracy: {finalTrainingAccuracy}");
 
             if testIterator is not None:
                 print("evaluating final test data...");
-                print(f"the final test {evaluator.name} is {self.eval(lossFunc, evaluator, None, testIterator)[1]}");
+                finalTestLoss, finalTestAccuracy = self.eval(lossFunc, evaluator, None, testIterator);
+                print(f"the final test {evaluator.name}, loss: {finalTestLoss}, accuracy: {finalTestAccuracy}");
 
         self.context.isTrainingMode = False;
         print(f"[{datetime.datetime.now()}] complete to train model, elapsed time: {int(time.time() - startTime)}s");
@@ -740,7 +847,8 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
             plt.show(block = True);
             plt.close();
 
-        return trainingLossData, trainingAccuracyData, testLossData, testAccuracyData;
+        return NetFitResult(trainingLossData, trainingAccuracyData, testLossData, testAccuracyData,
+                            finalTrainingLoss, finalTrainingAccuracy, finalTestLoss, finalTestAccuracy);
 
 
     def predict(self, iterator : IDataIterator) -> Iterable:
@@ -785,6 +893,29 @@ class NetOptimizerBase(INetOptimizer, metaclass = abc.ABCMeta):
                 continue;
 
             handler.process(p);
+
+
+class FunctionalNetModule(NetModuleBase):
+    def __init__(self, name : str, forwardFunc : Callable, backwardFunc : Callable):
+        super().__init__();
+
+        self._name = name;
+        self._forwardFunc = forwardFunc;
+        self._backwardFunc = backwardFunc;
+        self._X, self._Y = None, None;
+
+
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
+        self._X = data;
+        self._Y = tuple([self._forwardFunc(X) for X in data]);
+
+        return self._Y;
+
+
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
+        dX = tuple([dL * self._backwardFunc(X, Y) for X, Y, dL in zip(self._X, self._Y, dout)]);
+
+        return dX;
 
 
 class ReluLayer(NetModuleBase):
@@ -1345,6 +1476,41 @@ class BatchNormalization1DLayer(NetModuleBase):
             dX = dX.reshape(*shape);
 
         return dX, ;
+
+
+class MinMaxLayer(NetModuleBase):
+    def __init__(self, minValue : float = None, maxValue : float = None):
+        super().__init__();
+
+        self._minValue = minValue;
+        self._maxValue = maxValue;
+        self._M = None;
+        self._name = f"MinMax({minValue if minValue is not None else '-∞'} ≤ x ≤ {maxValue if maxValue is not None else '+∞'})";
+
+
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
+        if self._minValue is None and self._maxValue is None:
+            return data;
+
+        self._M, Y = [], [];
+        for X in data:
+            L = X < self._minValue if self._minValue is not None else np.array(False);
+            H = X > self._maxValue if self._maxValue is not None else np.array(False);
+            M = ~L * ~H;
+
+            self._M.append(M);
+            Y.append(((L * self._minValue).astype(X.dtype) if self._minValue is not None else 0) +
+                     M * X +
+                     ((H * self._maxValue).astype(X.dtype) if self._maxValue is not None else 0));
+
+        return tuple(Y);
+
+
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
+        if self._minValue is None and self._maxValue is None:
+            return dout;
+
+        return tuple([M * dL for M, dL in zip(self._M, dout)]);
 
 
 class Convolution1DLayer(NetModuleBase):
@@ -3773,6 +3939,66 @@ class MaeAccuracyEvaluator(INetAccuracyEvaluator):
         Y, T = data;
         # self._rss += float(np.sum(np.square(Y - T)));
         self._rss += float(np.sum(np.abs(Y - T)));
+        self._totalCount += lengthExceptLastDimension(Y);
+
+
+    def reset(self):
+        self._rss = 0.0;
+        self._totalCount = 0.0;
+
+
+class MseAccuracyEvaluator(INetAccuracyEvaluator):
+    def __init__(self, takeRoot : bool = False, takeLog : bool = False, logMinValue : float = None):
+        self._takeRoot = takeRoot;
+        self._takeLog = takeLog;
+        self._logMinValue = logMinValue;
+
+        self._rss = 0.0;
+        self._totalCount = 0.0;
+
+
+    @property
+    def name(self) -> str:
+        if self._takeRoot and self._takeLog:
+            return "LOG_RMSE";
+        elif self._takeRoot and not self._takeLog:
+            return "RMSE";
+        elif not self._takeRoot and self._takeLog:
+            return "LOG_MSE";
+        else:
+            return "MSE";
+
+
+    @property
+    def high(self) -> bool:
+        return False;
+
+
+    @property
+    def accuracy(self) -> Optional[float]:
+        result = (self._rss / self._totalCount) if self._totalCount > 0 else None;
+
+        if result is not None and self._takeRoot:
+            result = math.sqrt(result);
+
+        return result;
+
+
+    def fromLoss(self, lossValues : List[float] = None) -> bool:
+        return False;
+
+
+    def update(self, *data: np.ndarray):
+        Y, T = data;
+
+        if self._takeLog:
+            if self._logMinValue is not None:
+                Y = np.maximum(Y, self._logMinValue);
+
+            Y = np.log(Y);
+            T = np.log(T);
+
+        self._rss += float(np.sum(np.square(Y - T)));
         self._totalCount += lengthExceptLastDimension(Y);
 
 

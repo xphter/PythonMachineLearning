@@ -2048,6 +2048,8 @@ def testSeq2Seq():
 
 
 def unitTest():
+    # testFunctionalNetModuleGradient1();
+    # testFunctionalNetModuleGradient2();
     # testSigmoid1();
     # testSigmoid2();
     # testSigmoidGradient1();
@@ -2073,7 +2075,7 @@ def unitTest():
     # testMaxoutLayerGradient3();
     # testIdentityWithHuberLossGradient1();
     # testIdentityWithHuberLossGradient2();
-    testAffineLayerGradient1();
+    # testAffineLayerGradient1();
     # testAffineLayerGradient2();
     # testAffineLayerGradient3();
     # testConvolution1DLayer1();
@@ -2088,6 +2090,12 @@ def unitTest():
     # testBatchNormalization1DLayer2();
     # testBatchNormalization1DLayerGradient1();
     # testBatchNormalizationLayer1DGradient2();
+    testMinMaxLayerGradient1();
+    testMinMaxLayerGradient2();
+    testMinMaxLayerGradient3();
+    testMinMaxLayerGradient4();
+    testMinMaxLayerGradient5();
+    testMinMaxLayerGradient6();
     # testAdditiveResidualBlockGradient1();
     # testAdditiveResidualBlockGradient2();
     # testAdditiveResidualBlockGradient3();
@@ -2137,6 +2145,31 @@ def unitTest():
 
 def sumAll(*X : np.ndarray) -> float:
     return sum([float(np.sum(x)) for x in X]);
+
+
+def testFunctionalNetModuleGradient1():
+    N, T, D = 32, 24, 16;
+    X = np.fabs(np.random.randn(N, T, D)) + 1.0;
+    m = FunctionalNetModule("Log", lambda x: np.log(x), lambda x, y: 1 / x);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"FunctionalNetModule, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testFunctionalNetModuleGradient2():
+    N, T, D = 32, 24, 16;
+    X1 = np.fabs(np.random.randn(N, T, D)) + 1.0;
+    X2 = np.fabs(np.random.randn(N, T, D)) + 2.0;
+    m = FunctionalNetModule("Log", lambda x: np.log(x), lambda x, y: 1 / x);
+    Y1, Y2 = m.forward(X1, X2);
+    dX1, dX2 = m.backward(np.ones_like(Y1), np.ones_like(Y1));
+    dX1N = numericGradient(lambda x: np.sum(np.add(*m.forward(x, X2))), X1);
+    dX2N = numericGradient(lambda x: np.sum(np.add(*m.forward(X1, x))), X2);
+    print(f"FunctionalNetModule, numericGradient2, dX1 error: {np.sum(np.abs(dX1 - dX1N))}, dX2 error: {np.sum(np.abs(dX2 - dX2N))}");
+    print("\n");
+
 
 
 def testSigmoid1():
@@ -2818,6 +2851,84 @@ def testBatchNormalizationLayer1DGradient2():
     dGammaN = numericGradient(lambda x: np.sum(createModel(D, x, beta).forward(X)[0]), gamma);
     dBetaN = numericGradient(lambda x: np.sum(createModel(D, gamma, x).forward(X)[0]), beta);
     print(f"BatchNormalization1DLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dGamma error: {np.sum(np.abs(dGamma1 - dGammaN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print("\n");
+
+
+def testMinMaxLayerGradient1():
+    minValue, maxValue = 1, None;
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D);
+    m = MinMaxLayer(minValue, maxValue);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"MinMaxLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testMinMaxLayerGradient2():
+    minValue, maxValue = None, 1;
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D);
+    m = MinMaxLayer(minValue, maxValue);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"MinMaxLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testMinMaxLayerGradient3():
+    minValue, maxValue = 1, 2;
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D);
+    m = MinMaxLayer(minValue, maxValue);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"MinMaxLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testMinMaxLayerGradient4():
+    minValue, maxValue = 1, None;
+    N, T, D = 32, 24, 16;
+    X1 = np.random.randn(N, T, D);
+    X2 = np.random.randn(N, T, D);
+    m = MinMaxLayer(minValue, maxValue);
+    Y1, Y2 = m.forward(X1, X2);
+    dX1, dX2 = m.backward(np.ones_like(Y1), np.ones_like(Y2));
+    dX1N = numericGradient(lambda x: np.sum(np.add(*m.forward(x, X2))), X1);
+    dX2N = numericGradient(lambda x: np.sum(np.add(*m.forward(X1, x))), X2);
+    print(f"MinMaxLayer, numericGradient4, dX1 error: {np.sum(np.abs(dX1 - dX1N))}, dX2 error: {np.sum(np.abs(dX2 - dX2N))}");
+    print("\n");
+
+
+def testMinMaxLayerGradient5():
+    minValue, maxValue = None, 1;
+    N, T, D = 32, 24, 16;
+    X1 = np.random.randn(N, T, D);
+    X2 = np.random.randn(N, T, D);
+    m = MinMaxLayer(minValue, maxValue);
+    Y1, Y2 = m.forward(X1, X2);
+    dX1, dX2 = m.backward(np.ones_like(Y1), np.ones_like(Y2));
+    dX1N = numericGradient(lambda x: np.sum(np.add(*m.forward(x, X2))), X1);
+    dX2N = numericGradient(lambda x: np.sum(np.add(*m.forward(X1, x))), X2);
+    print(f"MinMaxLayer, numericGradient5, dX1 error: {np.sum(np.abs(dX1 - dX1N))}, dX2 error: {np.sum(np.abs(dX2 - dX2N))}");
+    print("\n");
+
+
+def testMinMaxLayerGradient6():
+    minValue, maxValue = 1, 2;
+    N, T, D = 32, 24, 16;
+    X1 = np.random.randn(N, T, D);
+    X2 = np.random.randn(N, T, D);
+    m = MinMaxLayer(minValue, maxValue);
+    Y1, Y2 = m.forward(X1, X2);
+    dX1, dX2 = m.backward(np.ones_like(Y1), np.ones_like(Y2));
+    dX1N = numericGradient(lambda x: np.sum(np.add(*m.forward(x, X2))), X1);
+    dX2N = numericGradient(lambda x: np.sum(np.add(*m.forward(X1, x))), X2);
+    print(f"MinMaxLayer, numericGradient6, dX1 error: {np.sum(np.abs(dX1 - dX1N))}, dX2 error: {np.sum(np.abs(dX2 - dX2N))}");
     print("\n");
 
 
