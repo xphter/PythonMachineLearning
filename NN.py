@@ -96,14 +96,19 @@ class INetParam(metaclass = abc.ABCMeta):
 
 class INetParamHandler(metaclass = abc.ABCMeta):
     @abc.abstractmethod
-    def process(self, param : INetParam):
+    def onPreUpdate(self, param: INetParam, lr : float):
+        pass;
+
+
+    @abc.abstractmethod
+    def onPostUpdate(self, param: INetParam, lr : float):
         pass;
 
 
 class INetParamDefinition(INetParam):
     @property
     @abc.abstractmethod
-    def preUpdateHandler(self) -> Optional[INetParamHandler]:
+    def handler(self) -> Optional[INetParamHandler]:
         pass;
 
 
@@ -414,22 +419,22 @@ class NetParam(INetParam):
 
 
 class NetParamDefinition(NetParam, INetParamDefinition):
-    def __init__(self, value : np.ndarray, preUpdateHandler: Optional[INetParamHandler] = None):
+    def __init__(self, value : np.ndarray, handler: Optional[INetParamHandler] = None):
         super().__init__(value);
 
-        self._preUpdateHandler = preUpdateHandler;
+        self._handler = handler;
 
 
     @property
-    def preUpdateHandler(self) -> Optional[INetParamHandler]:
-        return self._preUpdateHandler;
+    def handler(self) -> Optional[INetParamHandler]:
+        return self._handler;
 
 
     def copy(self, share : bool) -> INetParamDefinition:
         if share:
-            return NetParamDefinition(self._value, self._preUpdateHandler);
+            return NetParamDefinition(self._value, self._handler);
         else:
-            return NetParamDefinition(np.copy(self._value), self._preUpdateHandler);
+            return NetParamDefinition(np.copy(self._value), self._handler);
 
 
 class NetValueState(INetState):
@@ -885,14 +890,35 @@ class NetOptimizerBase(INetOptimizer, metaclass = abc.ABCMeta):
         self._lr = value;
 
 
-    def update(self, params : List[INetParamDefinition]):
-        handler : Optinal[INetParamHandler] = None;
+    def _onPreUpdate(self, params : List[INetParamDefinition]):
+        handler: Optinal[INetParamHandler] = None;
 
         for p in params:
-            if (handler := p.preUpdateHandler) is None:
+            if (handler := p.handler) is None:
                 continue;
 
-            handler.process(p);
+            handler.onPreUpdate(p, self.learningRate);
+
+
+    @abc.abstractmethod
+    def _onUpdate(self, params : List[INetParamDefinition]):
+        pass;
+
+
+    def _onPostUpdate(self, params : List[INetParamDefinition]):
+        handler: Optinal[INetParamHandler] = None;
+
+        for p in params:
+            if (handler := p.handler) is None:
+                continue;
+
+            handler.onPostUpdate(p, self.learningRate);
+
+
+    def update(self, params : List[INetParamDefinition]):
+        self._onPreUpdate(params);
+        self._onUpdate(params);
+        self._onPostUpdate(params);
 
 
 class FunctionalNetModule(NetModuleBase):
@@ -1276,7 +1302,7 @@ class FlattenLayer(NetModuleBase):
 
 
 class AffineLayer(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, includeBias : bool = True, W : np.ndarray = None, b : np.ndarray = None, weightPreUpdateHandler : INetParamHandler = None):
+    def __init__(self, inputSize : int, outputSize : int, includeBias : bool = True, W : np.ndarray = None, b : np.ndarray = None, weightHandler : INetParamHandler = None):
         super().__init__();
 
         self._X = None;
@@ -1289,7 +1315,7 @@ class AffineLayer(NetModuleBase):
         self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize).astype(defaultDType) if W is None else W;
         self._bias = (np.zeros(outputSize, dtype = defaultDType) if b is None else b) if includeBias else None;
 
-        self._params.append(NetParamDefinition(self._weight, weightPreUpdateHandler));
+        self._params.append(NetParamDefinition(self._weight, weightHandler));
         if self._bias is not None:
             self._params.append(NetParamDefinition(self._bias));
 
@@ -3029,9 +3055,33 @@ class L1Regularization(INetParamHandler):
         self._decay = max(0.0, decay);
 
 
-    def process(self, param: INetParam):
+    def onPreUpdate(self, param: INetParam, lr: float):
+        if self._decay == 0:
+            return;
+
         grad = param.grad;
         grad += self._decay * np.sign(param.value).astype(grad.dtype);
+
+
+    def onPostUpdate(self, param: INetParam, lr: float):
+        pass;
+
+
+class L1WeightDecay(INetParamHandler):
+    def __init__(self, decay : float = 0.01):
+        self._decay = max(0.0, decay);
+
+
+    def onPreUpdate(self, param: INetParam, lr: float):
+        if self._decay == 0:
+            return;
+
+        value = param.value;
+        value -= lr * self._decay * np.sign(param.value).astype(value.dtype);
+
+
+    def onPostUpdate(self, param: INetParam, lr: float):
+        pass;
 
 
 class L2Regularization(INetParamHandler):
@@ -3039,9 +3089,33 @@ class L2Regularization(INetParamHandler):
         self._decay = max(0.0, decay);
 
 
-    def process(self, param: INetParam):
+    def onPreUpdate(self, param: INetParam, lr: float):
+        if self._decay == 0:
+            return;
+
         grad = param.grad;
         grad += self._decay * param.value;
+
+
+    def onPostUpdate(self, param: INetParam, lr: float):
+        pass;
+
+
+class L2WeightDecay(INetParamHandler):
+    def __init__(self, decay : float = 0.01):
+        self._decay = max(0.0, decay);
+
+
+    def onPreUpdate(self, param: INetParam, lr: float):
+        if self._decay == 0:
+            return;
+
+        value = param.value;
+        value -= lr * self._decay * value;
+
+
+    def onPostUpdate(self, param: INetParam, lr: float):
+        pass;
 
 
 class _ParametersShareInfo:
@@ -3156,9 +3230,7 @@ class SGD(NetOptimizerBase):
         super().__init__(lr);
 
 
-    def update(self, params : List[INetParamDefinition]):
-        super().update(params);
-
+    def _onUpdate(self, params : List[INetParamDefinition]):
         for p in params:
             paramValue = p.value;
             paramValue -= self._lr * p.grad;
@@ -3246,9 +3318,7 @@ class Adam(NetOptimizerBase):
         self._t = 0;
 
 
-    def update(self, params : List[INetParamDefinition]):
-        super().update(params);
-
+    def _onUpdate(self, params : List[INetParamDefinition]):
         if self._m is None:
             self._m = [np.zeros_like(item.value) for item in params];
         if self._v is None:
