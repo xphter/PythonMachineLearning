@@ -3500,11 +3500,12 @@ class MinMaxScaler(ScalerBase):
 class StandardScaler(ScalerBase):
     INDEX_ARGUMENT_NAME = "index";
 
-    def __init__(self):
+    def __init__(self, takeMedian : bool = False):
         super().__init__();
 
         self._mu = None;
         self._sigma = None;
+        self._takeMedian = takeMedian;
 
 
     def _getParams(self) -> List:
@@ -3516,8 +3517,12 @@ class StandardScaler(ScalerBase):
 
 
     def _fit(self, X: np.ndarray):
-        self._mu = np.mean(X, axis = 0);
-        self._sigma = np.std(X, axis = 0);
+        if not self._takeMedian:
+            self._mu = np.mean(X, axis = 0);
+            self._sigma = np.std(X, axis = 0);
+        else:
+            self._mu = np.median(X, axis = 0);
+            self._sigma = np.median(np.abs(X - self._mu), axis = 0);
         return X;
 
 
