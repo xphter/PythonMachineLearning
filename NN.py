@@ -2859,6 +2859,29 @@ class SoftmaxLayer(NetModuleBase):
         return dX, ;
 
 
+class ConcatenationLayer(NetModuleBase):
+    def __init__(self):
+        super().__init__();
+
+        self._index = None;
+        self._name = "Concatenation";
+
+
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
+        index = [0];
+        for item in data:
+            index.append(index[-1] + item.shape[-1]);
+        self._index = np.array(index[1: -1]);
+
+        return np.concatenate(data, axis = -1), ;
+
+
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+
+        return tuple(np.split(dY, self._index, axis = -1));
+
+
 class CrossEntropyLoss(NetLossBase):
     def __init__(self):
         super().__init__();
