@@ -821,12 +821,12 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         if evaluator is not None:
             print("evaluating final training data...");
             finalTrainingLoss, finalTrainingAccuracy = self.eval(lossFunc, evaluator, None, trainingIterator);
-            print(f"the final training {evaluator.name}, loss: {finalTrainingLoss}, accuracy: {finalTrainingAccuracy}");
+            print(f"the final training accuracy, loss: {finalTrainingLoss}, {evaluator.name}: {finalTrainingAccuracy}");
 
             if testIterator is not None:
                 print("evaluating final test data...");
                 finalTestLoss, finalTestAccuracy = self.eval(lossFunc, evaluator, None, testIterator);
-                print(f"the final test {evaluator.name}, loss: {finalTestLoss}, accuracy: {finalTestAccuracy}");
+                print(f"the final test accuracy, loss: {finalTestLoss}, {evaluator.name}: {finalTestAccuracy}");
 
         self.context.isTrainingMode = False;
         print(f"[{datetime.datetime.now()}] complete to train model, elapsed time: {int(time.time() - startTime)}s");
