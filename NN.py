@@ -1721,6 +1721,43 @@ class MaxPooling2DLayer(NetModuleBase):
         return dX, ;
 
 
+class AvgPooling2DLayer(NetModuleBase):
+    def __init__(self, poolingSize : Union[Tuple[int, int], int], stride : Union[Tuple[int, int], int] = None, padding : Union[Tuple[int, ...], int] = 0):
+        super().__init__();
+
+        self._PH, self._PW = poolingSize[: 2] if isinstance(poolingSize, tuple) else (poolingSize, poolingSize);
+        self._stride = stride if stride is not None else (self._PH, self._PW);
+        self._padding = padding;
+        self._shape = None;
+        self._M = 1.0 / (self._PH * self._PW) * np.ones(self._PH * self._PW, dtype = defaultDType);
+        self._name = f"AvgPooling2D {self._PH}*{self._PW}";
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X = data[0];
+        self._shape = X.shape;
+
+        N, C, H, W = X.shape;
+
+        col, OH, OW = im2col(X, self._PH, self._PW, self._stride, self._padding);
+        col = col.reshape(-1, self._PH * self._PW);
+        Y = np.mean(col, axis = -1).reshape(N, OH, OW, C).transpose(0, 3, 1, 2);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+        N, C, OH, OW = dY.shape;
+
+        colDY = dY.transpose(0, 2, 3, 1).reshape(-1, 1);
+        colDY = colDY * self._M;
+        colDY = colDY.reshape(-1, C * self._PH * self._PW);
+        dX = col2im(colDY, self._shape, self._PH, self._PW, self._stride, self._padding, True);
+
+        return dX, ;
+
+
 class AdditiveResidualBlock(NetModuleBase):
     def __init__(self, mainModule : INetModule, adaptiveModule : INetModule = None, activationModule : INetModule = None):
         super().__init__();

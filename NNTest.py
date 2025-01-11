@@ -2085,11 +2085,16 @@ def unitTest():
     # testConvolution2DLayerGradient1();
     # testConvolution2DLayerGradient2();
     # testConvolution2DLayerGradient3();
-    testMaxPooling2DLayer1();
-    testMaxPooling2DLayerGradient1();
-    testMaxPooling2DLayerGradient2();
-    testMaxPooling2DLayerGradient3();
-    testMaxPooling2DLayerGradient4();
+    # testMaxPooling2DLayer1();
+    # testMaxPooling2DLayerGradient1();
+    # testMaxPooling2DLayerGradient2();
+    # testMaxPooling2DLayerGradient3();
+    # testMaxPooling2DLayerGradient4();
+    testAvgPooling2DLayer1();
+    testAvgPooling2DLayerGradient1();
+    testAvgPooling2DLayerGradient2();
+    testAvgPooling2DLayerGradient3();
+    testAvgPooling2DLayerGradient4();
     # testBatchNormalization1DLayer1();
     # testBatchNormalization1DLayer2();
     # testBatchNormalization1DLayerGradient1();
@@ -2806,6 +2811,87 @@ def testMaxPooling2DLayerGradient4():
     m.context.isTrainingMode = False;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"MaxPooling2DLayer, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testAvgPooling2DLayer1():
+    N, C, H, W = 32, 3, 48, 50;
+    PH, PW, S, P = 9, 13, (2, 4), (1, 2, 3, 4);
+    X = np.random.randn(N, C, H, W);
+    m = AvgPooling2DLayer((PH, PW), S, P);
+    Y1 = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y1))[0];
+
+    dm = 1.0 / (PH * PW);
+    OH = convOutputSize(H, PH, S[0], P[0] + P[1]);
+    OW = convOutputSize(W, PW, S[1], P[2] + P[3]);
+    Y2 = np.zeros((N, C, OH, OW));
+    PX = np.pad(X, [(0, 0), (0, 0), (P[0], P[1]), (P[2], P[3])], "constant");
+    dPX = np.zeros_like(PX);
+
+    for n in range(N):
+        for c in range(C):
+            for j in range(OH):
+                for i in range(OW):
+                    x = PX[n, c, j * S[0]: j * S[0] + PH, i * S[1]: i * S[1] + PW];
+                    Y2[n, c, j, i] = np.mean(x);
+                    dPX[n, c, j * S[0]: j * S[0] + PH, i * S[1]: i * S[1] + PW] += dm;
+    dX2 = dPX[:, :, P[0]: H + P[0], P[2]: W + P[2]];
+
+    print(f"AvgPooling2DLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}, dX error: {np.sum(np.abs(dX1 - dX2))}");
+    print("\n");
+
+
+def testAvgPooling2DLayerGradient1():
+    N, C, H, W = 32, 3, 28, 28;
+    PH, PW, S, P = 3, 3, 1, 0;
+    X = np.random.randn(N, C, H, W);
+    m = AvgPooling2DLayer((PH, PW), S, P);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"AvgPooling2DLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testAvgPooling2DLayerGradient2():
+    N, C, H, W = 32, 3, 24, 24;
+    PH, PW, S, P = 4, 4, 4, 2;
+    X = np.random.randn(N, C, H, W);
+    m = AvgPooling2DLayer((PH, PW), S, P);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"AvgPooling2DLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testAvgPooling2DLayerGradient3():
+    N, C, H, W = 32, 3, 24, 24;
+    PH, PW, S, P = 3, 3, (2, 4), (1, 2, 3, 4);
+    X = np.random.randn(N, C, H, W);
+    m = AvgPooling2DLayer((PH, PW), S, P);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"AvgPooling2DLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testAvgPooling2DLayerGradient4():
+    N, C, H, W = 32, 3, 24, 24;
+    PH, PW, S, P = 4, 4, 4, 2;
+    OH = convOutputSize(H, PH, S, 2 * P);
+    OW = convOutputSize(W, PW, S, 2 * P);
+    X = np.random.randn(N, C, H, W);
+    m = SequentialContainer(
+        AvgPooling2DLayer((PH, PW), S, P),
+        AffineLayer(OW, 2 * OW),
+    );
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"AvgPooling2DLayer, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 
