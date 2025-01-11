@@ -108,6 +108,12 @@ class INetParamHandler(metaclass = abc.ABCMeta):
 class INetParamDefinition(INetParam):
     @property
     @abc.abstractmethod
+    def name(self) -> str:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
     def handler(self) -> Optional[INetParamHandler]:
         pass;
 
@@ -419,10 +425,16 @@ class NetParam(INetParam):
 
 
 class NetParamDefinition(NetParam, INetParamDefinition):
-    def __init__(self, value : np.ndarray, handler: Optional[INetParamHandler] = None):
+    def __init__(self, name : str, value : np.ndarray, handler: Optional[INetParamHandler] = None):
         super().__init__(value);
 
+        self._name = name;
         self._handler = handler;
+
+
+    @property
+    def name(self) -> str:
+        return self._name;
 
 
     @property
@@ -432,9 +444,9 @@ class NetParamDefinition(NetParam, INetParamDefinition):
 
     def copy(self, share : bool) -> INetParamDefinition:
         if share:
-            return NetParamDefinition(self._value, self._handler);
+            return NetParamDefinition(self._name, self._value, self._handler);
         else:
-            return NetParamDefinition(np.copy(self._value), self._handler);
+            return NetParamDefinition(self._name, np.copy(self._value), self._handler);
 
 
 class NetValueState(INetState):
@@ -981,7 +993,7 @@ class PReluLayer(NetModuleBase):
         else:
             self._beta = sigmoid(np.random.randn(outputSize if outputSize is not None else 1).astype(defaultDType));
 
-        self._params.append(NetParamDefinition(self._beta));
+        self._params.append(NetParamDefinition("slope", self._beta));
 
 
     @property
@@ -1055,7 +1067,7 @@ class SwishLayer(NetModuleBase):
         else:
             self._beta = sigmoid(np.random.randn(outputSize if outputSize is not None else 1).astype(defaultDType));
 
-        self._params.append(NetParamDefinition(self._beta));
+        self._params.append(NetParamDefinition("slop", self._beta));
 
 
     @property
@@ -1315,9 +1327,9 @@ class AffineLayer(NetModuleBase):
         self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize).astype(defaultDType) if W is None else W;
         self._bias = (np.zeros(outputSize, dtype = defaultDType) if b is None else b) if includeBias else None;
 
-        self._params.append(NetParamDefinition(self._weight, weightHandler));
+        self._params.append(NetParamDefinition("weight", self._weight, weightHandler));
         if self._bias is not None:
-            self._params.append(NetParamDefinition(self._bias));
+            self._params.append(NetParamDefinition("bias", self._bias));
 
 
     def _setParams(self, params: List[NetParamDefinition]):
@@ -1391,8 +1403,8 @@ class BatchNormalization1DLayer(NetModuleBase):
         self._gamma = np.ones(inputSize, dtype = defaultDType) if gamma is None else gamma;
         self._beta = np.zeros(inputSize, dtype = defaultDType) if beta is None else beta;
 
-        self._params.append(NetParamDefinition(self._gamma));
-        self._params.append(NetParamDefinition(self._beta));
+        self._params.append(NetParamDefinition("weight", self._gamma));
+        self._params.append(NetParamDefinition("bias", self._beta));
 
         self._evalMean = np.zeros_like(self._gamma);
         self._evalVar = np.ones_like(self._gamma);
@@ -1553,8 +1565,8 @@ class Convolution1DLayer(NetModuleBase):
         self._weight = math.sqrt(2.0 / (FH * FW)) * np.random.randn(FN, FH, FW).astype(defaultDType) if W is None else W;
         self._bias = np.zeros(FN, dtype = defaultDType) if b is None else b;
 
-        self._params.append(NetParamDefinition(self._weight));
-        self._params.append(NetParamDefinition(self._bias));
+        self._params.append(NetParamDefinition("weight", self._weight));
+        self._params.append(NetParamDefinition("bias", self._bias));
 
 
     def _setParams(self, params: List[INetParamDefinition]):
@@ -1617,8 +1629,8 @@ class Convolution2DLayer(NetModuleBase):
         self._weight = math.sqrt(2.0 / (C * FH * FW)) * np.random.randn(FN, C, FH, FW).astype(defaultDType) if W is None else W;
         self._bias = np.zeros(FN, dtype = defaultDType) if b is None else b;
 
-        self._params.append(NetParamDefinition(self._weight));
-        self._params.append(NetParamDefinition(self._bias));
+        self._params.append(NetParamDefinition("weight", self._weight));
+        self._params.append(NetParamDefinition("bias", self._bias));
 
 
     def _setParams(self, params: List[INetParamDefinition]):
