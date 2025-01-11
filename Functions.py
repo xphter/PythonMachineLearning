@@ -303,53 +303,69 @@ def col2seq(X : np.ndarray, seqShape : tuple, FH : int, stride : int = 1, pad : 
     return seq[:, pad[0]: T + pad[0], :];
 
 
-def im2col(X : np.ndarray, FH : int, FW : int, stride : int = 1, pad : int = 0) -> np.ndarray:
+def parseStride2D(stride : Union[Tuple[int, int], int]) -> Tuple[int, int]:
+    strideH, strideW = stride[: 2] if isinstance(stride, tuple) else (stride, stride);
+    return strideH, strideW;
+
+
+def parsePadding2D(padding : Union[Tuple[int, ...], int]) -> Tuple[int, int, int, int]:
+    paddingTop, paddingBottom, paddingLeft, paddingRight  = ((padding[0], padding[0], padding[1], padding[1]) if len(padding) == 2 else padding[: 4]) if isinstance(padding, tuple) else (padding, padding, padding, padding);
+    return paddingTop, paddingBottom, paddingLeft, paddingRight;
+
+
+def im2col(X : np.ndarray, FH : int, FW : int, stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int] = 0) -> Tuple[np.ndarray, int, int]:
     N, C, H, W = X.shape;
+    strideH, strideW = parseStride2D(stride);
+    paddingTop, paddingBottom, paddingLeft, paddingRight = parsePadding2D(padding);
+    paddingH, paddingW = paddingTop + paddingBottom, paddingLeft + paddingRight;
 
-    if (H + 2 * pad - FH) % stride != 0 or (W + 2 * pad - FW) % stride != 0:
-        raise ValueError("the convolution core unable to cover all data");
+    if (H + paddingH - FH) % strideH != 0 or (W + paddingW - FW) % strideW != 0:
+        raise ValueError("the convolution kernel unable to cover all data");
 
-    OH = (H + 2 * pad - FH) // stride + 1;
-    OW = (W + 2 * pad - FW) // stride + 1;
+    OH = (H + paddingH - FH) // strideH + 1;
+    OW = (W + paddingW - FW) // strideW + 1;
 
-    img = X if pad <= 0 else np.pad(X, [(0, 0), (0, 0), (pad, pad), (pad, pad)], "constant");
+    img = X if paddingH + paddingW  <= 0 else np.pad(X, [(0, 0), (0, 0), (paddingTop, paddingBottom), (paddingLeft, paddingRight)], "constant");
     col = np.zeros((N, C, FH, FW, OH, OW), dtype = X.dtype);
 
     for y in range(FH):
-        yMax = y + stride * OH;
+        yMax = y + strideH * OH;
 
         for x in range(FW):
-            xMax = x + stride * OW;
+            xMax = x + strideW * OW;
 
-            col[:, :, y, x, :, :] = img[:, :, y: yMax: stride, x: xMax: stride];
+            col[:, :, y, x, :, :] = img[:, :, y: yMax: strideH, x: xMax: strideW];
 
-    return col.transpose(0, 4, 5, 1, 2, 3).reshape(N * OH * OW, -1);
+    return col.transpose(0, 4, 5, 1, 2, 3).reshape(N * OH * OW, -1), OH, OW;
 
 
-def col2im(X : np.ndarray, imShape : tuple, FH : int, FW : int, stride : int = 1, pad : int = 0, inDiff : bool = False) -> np.ndarray:
+def col2im(X : np.ndarray, imShape : Tuple[int, ...], FH : int, FW : int, stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int] = 0, inDiff : bool = False) -> np.ndarray:
     N, C, H, W = imShape;
+    strideH, strideW  = parseStride2D(stride);
+    paddingTop, paddingBottom, paddingLeft, paddingRight = parsePadding2D(padding);
+    paddingH, paddingW  = paddingTop + paddingBottom, paddingLeft + paddingRight;
 
-    if (H + 2 * pad - FH) % stride != 0 or (W + 2 * pad - FW) % stride != 0:
-        raise ValueError("the convolution core unable to cover all data");
+    if (H + paddingH - FH) % strideH != 0 or (W + paddingW - FW) % strideW != 0:
+        raise ValueError("the convolution kernel unable to cover all data");
 
-    OH = (H + 2 * pad - FH) // stride + 1;
-    OW = (W + 2 * pad - FW) // stride + 1;
+    OH = (H + paddingH - FH) // strideH + 1;
+    OW = (W + paddingW - FW) // strideW + 1;
 
     col = X.reshape(N, OH, OW, C, FH, FW).transpose(0, 3, 4, 5, 1, 2);
-    img = np.zeros((N, C, H + 2 * pad, W + 2 * pad), dtype = X.dtype);
+    img = np.zeros((N, C, H + paddingH, W + paddingW), dtype = X.dtype);
 
     for y in range(FH):
-        yMax = y + stride * OH;
+        yMax = y + strideH * OH;
 
         for x in range(FW):
-            xMax = x + stride * OW;
+            xMax = x + strideW * OW;
 
             if inDiff:
-                img[:, :, y: yMax: stride, x: xMax: stride] += col[:, :, y, x, :, :];
+                img[:, :, y: yMax: strideH, x: xMax: strideW] += col[:, :, y, x, :, :];
             else:
-                img[:, :, y: yMax: stride, x: xMax: stride] = col[:, :, y, x, :, :];
+                img[:, :, y: yMax: strideH, x: xMax: strideW] = col[:, :, y, x, :, :];
 
-    return img[:, :, pad: H + pad, pad: W + pad];
+    return img[:, :, paddingTop: H + paddingTop, paddingLeft: W + paddingLeft];
 
 
 def convOutputSize(inputSize : int, filterSize : int, stride : int = 1, pad : int = 0) -> int:

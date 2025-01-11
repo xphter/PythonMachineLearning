@@ -1616,11 +1616,11 @@ class Convolution1DLayer(NetModuleBase):
 
 
 class Convolution2DLayer(NetModuleBase):
-    def __init__(self, FN : int, C : int, FH : int, FW : int, stride = 1, pad = 0, W : np.ndarray = None, b : np.ndarray = None):
+    def __init__(self, FN : int, C : int, FH : int, FW : int, stride : Union[Tuple[int, int], int], padding : Union[Tuple[int, ...], int] = 0, W : np.ndarray = None, b : np.ndarray = None):
         super().__init__();
 
         self._stride = stride;
-        self._pad = pad;
+        self._padding = padding;
         self._shape = None;
         self._colX = None;
         self._colW = None;
@@ -1653,10 +1653,8 @@ class Convolution2DLayer(NetModuleBase):
 
         N, C, H, W = X.shape;
         FN, C, FH, FW = self._weight.shape;
-        OH = convOutputSize(H, FH, self._stride, 2 * self._pad);
-        OW = convOutputSize(W, FW, self._stride, 2 * self._pad);
 
-        self._colX = im2col(X, FH, FW, self._stride, self._pad);
+        self._colX, OH, OW = im2col(X, FH, FW, self._stride, self._padding);
         self._colW = self._weight.reshape(FN, -1).T;
         Y = self._colX @ self._colW + self._bias;
         Y = Y.reshape(N, OH, OW, FN).transpose(0, 3, 1, 2);
@@ -1672,7 +1670,7 @@ class Convolution2DLayer(NetModuleBase):
         dW = self._colX.T @ colDY;
         db = np.sum(colDY, axis = 0);
         dX = colDY @ self._colW.T;
-        dX = col2im(dX, self._shape, FH, FW, self._stride, self._pad, True);
+        dX = col2im(dX, self._shape, FH, FW, self._stride, self._padding, True);
 
         self._params[0].grad[...] = dW.T.reshape(FN, C, FH, FW);
         self._params[1].grad[...] = db;
@@ -1681,13 +1679,13 @@ class Convolution2DLayer(NetModuleBase):
 
 
 class MaxPoolingLayer(NetModuleBase):
-    def __init__(self, PH : int, PW : int, stride = 1, pad = 0):
+    def __init__(self, PH : int, PW : int, stride : Union[Tuple[int, int], int], padding : Union[Tuple[int, ...], int] = 0):
         super().__init__();
 
         self._PH = PH;
         self._PW = PW;
         self._stride = stride;
-        self._pad = pad;
+        self._padding = padding;
         self._shape = None;
         self._M = None;
         self._name = "MaxPooling";
@@ -1698,10 +1696,9 @@ class MaxPoolingLayer(NetModuleBase):
         self._shape = X.shape;
 
         N, C, H, W = X.shape;
-        OH = convOutputSize(H, self._PH, self._stride, 2 * self._pad);
-        OW = convOutputSize(W, self._PW, self._stride, 2 * self._pad);
 
-        col = im2col(X, self._PH, self._PW, self._stride, self._pad).reshape(-1, self._PH * self._PW);
+        col, OH, OW = im2col(X, self._PH, self._PW, self._stride, self._padding);
+        col = col.reshape(-1, self._PH * self._PW);
         Y = np.amax(col, axis = -1).reshape(N, OH, OW, C).transpose(0, 3, 1, 2);
 
         if self.context.isTrainingMode:
@@ -1719,7 +1716,7 @@ class MaxPoolingLayer(NetModuleBase):
         colDY = dY.transpose(0, 2, 3, 1).reshape(-1, 1);
         colDY = colDY * self._M;
         colDY = colDY.reshape(-1, C * self._PH * self._PW);
-        dX = col2im(colDY, self._shape, self._PH, self._PW, self._stride, self._pad, True);
+        dX = col2im(colDY, self._shape, self._PH, self._PW, self._stride, self._padding, True);
 
         return dX, ;
 
