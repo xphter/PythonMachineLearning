@@ -1616,18 +1616,19 @@ class Convolution1DLayer(NetModuleBase):
 
 
 class Convolution2DLayer(NetModuleBase):
-    def __init__(self, FN : int, C : int, FH : int, FW : int, stride : Union[Tuple[int, int], int], padding : Union[Tuple[int, ...], int] = 0, W : np.ndarray = None, b : np.ndarray = None):
+    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : Union[Tuple[int, int], int], stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int] = 0, W : np.ndarray = None, b : np.ndarray = None):
         super().__init__();
 
+        FH, FW = kernelSize[: 2] if isinstance(kernelSize, tuple) else (kernelSize, kernelSize);
         self._stride = stride;
         self._padding = padding;
         self._shape = None;
         self._colX = None;
         self._colW = None;
-        self._name = f"Convolution2D {FN}*{C}*{FH}*{FW}";
+        self._name = f"Convolution2D {outputChannel}*{inputChannel}*{FH}*{FW}";
 
-        self._weight = math.sqrt(2.0 / (C * FH * FW)) * np.random.randn(FN, C, FH, FW).astype(defaultDType) if W is None else W;
-        self._bias = np.zeros(FN, dtype = defaultDType) if b is None else b;
+        self._weight = math.sqrt(2.0 / (inputChannel * FH * FW)) * np.random.randn(outputChannel, inputChannel, FH, FW).astype(defaultDType) if W is None else W;
+        self._bias = np.zeros(outputChannel, dtype = defaultDType) if b is None else b;
 
         self._params.append(NetParamDefinition("weight", self._weight));
         self._params.append(NetParamDefinition("bias", self._bias));
@@ -1679,12 +1680,11 @@ class Convolution2DLayer(NetModuleBase):
 
 
 class MaxPooling2DLayer(NetModuleBase):
-    def __init__(self, PH : int, PW : int, stride : Union[Tuple[int, int], int], padding : Union[Tuple[int, ...], int] = 0):
+    def __init__(self, poolingSize : Union[Tuple[int, int], int], stride : Union[Tuple[int, int], int] = None, padding : Union[Tuple[int, ...], int] = 0):
         super().__init__();
 
-        self._PH = PH;
-        self._PW = PW;
-        self._stride = stride;
+        self._PH, self._PW = poolingSize[: 2] if isinstance(poolingSize, tuple) else (poolingSize, poolingSize);
+        self._stride = stride if stride is not None else (self._PH, self._PW);
         self._padding = padding;
         self._shape = None;
         self._M = None;

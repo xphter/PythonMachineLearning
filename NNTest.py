@@ -2649,7 +2649,7 @@ def testConvolution2DLayer1():
     Weight = np.random.randn(FN, C, FH, FW);
     bias = np.random.randn(FN);
 
-    m = Convolution2DLayer(FN, C, FH, FH, S, P, W = Weight, b = bias);
+    m = Convolution2DLayer(C, FN, (FH, FW), S, P, W = Weight, b = bias);
     Y1 = m.forward(X)[0];
 
     OH = convOutputSize(H, FH, S[0], P[0] + P[1]);
@@ -2674,13 +2674,13 @@ def testConvolution2DLayerGradient1():
     X = np.random.randn(N, C, H, W);
     Weight = np.random.randn(FN, C, FH, FW);
     bias = np.random.randn(FN);
-    m = Convolution2DLayer(FN, C, FH, FW, S, P, W = Weight, b = bias);
+    m = Convolution2DLayer(C, FN, (FH, FW), S, P, W = Weight, b = bias);
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dW1, db1 = m.params[0].grad, m.params[1].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(FN, C, FH, FW, S, P, W = x, b = bias).forward(X)[0]), Weight);
-    dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(FN, C, FH, FW, S, P, W = Weight, b = x).forward(X)[0]), bias);
+    dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = x, b = bias).forward(X)[0]), Weight);
+    dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = Weight, b = x).forward(X)[0]), bias);
     print(f"Convolution2DLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
     print("\n");
 
@@ -2691,13 +2691,13 @@ def testConvolution2DLayerGradient2():
     X = np.random.randn(N, C, H, W);
     Weight = np.random.randn(FN, C, FH, FW);
     bias = np.random.randn(FN);
-    m = Convolution2DLayer(FN, C, FH, FW, S, P, W = Weight, b = bias);
+    m = Convolution2DLayer(C, FN, (FH, FW), S, P, W = Weight, b = bias);
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dW1, db1 = m.params[0].grad, m.params[1].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(FN, C, FH, FW, S, P, W = x, b = bias).forward(X)[0]), Weight);
-    dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(FN, C, FH, FW, S, P, W = Weight, b = x).forward(X)[0]), bias);
+    dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = x, b = bias).forward(X)[0]), Weight);
+    dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = Weight, b = x).forward(X)[0]), bias);
     print(f"Convolution2DLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
     print("\n");
 
@@ -2708,13 +2708,13 @@ def testConvolution2DLayerGradient3():
     X = np.random.randn(N, C, H, W);
     Weight = np.random.randn(FN, C, FH, FW);
     bias = np.random.randn(FN);
-    m = Convolution2DLayer(FN, C, FH, FW, S, P, W = Weight, b = bias);
+    m = Convolution2DLayer(C, FN, (FH, FW), S, P, W = Weight, b = bias);
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dW1, db1 = m.params[0].grad, m.params[1].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(FN, C, FH, FW, S, P, W = x, b = bias).forward(X)[0]), Weight);
-    dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(FN, C, FH, FW, S, P, W = Weight, b = x).forward(X)[0]), bias);
+    dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = x, b = bias).forward(X)[0]), Weight);
+    dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = Weight, b = x).forward(X)[0]), bias);
     print(f"Convolution2DLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
     print("\n");
 
@@ -2723,7 +2723,7 @@ def testMaxPooling2DLayer1():
     N, C, H, W = 32, 3, 48, 50;
     PH, PW, S, P = 9, 13, (2, 4), (1, 2, 3, 4);
     X = np.random.randn(N, C, H, W);
-    m = MaxPooling2DLayer(PH, PW, S, P);
+    m = MaxPooling2DLayer((PH, PW), S, P);
     m.context.isTrainingMode = True;
     Y1 = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y1))[0];
@@ -2752,7 +2752,7 @@ def testMaxPooling2DLayerGradient1():
     N, C, H, W = 32, 3, 28, 28;
     PH, PW, S, P = 3, 3, 1, 0;
     X = np.random.randn(N, C, H, W);
-    m = MaxPooling2DLayer(PH, PW, S, P);
+    m = MaxPooling2DLayer((PH, PW), S, P);
     m.context.isTrainingMode = True;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
@@ -2766,7 +2766,7 @@ def testMaxPooling2DLayerGradient2():
     N, C, H, W = 32, 3, 24, 24;
     PH, PW, S, P = 4, 4, 4, 2;
     X = np.random.randn(N, C, H, W);
-    m = MaxPooling2DLayer(PH, PW, S, P);
+    m = MaxPooling2DLayer((PH, PW), S, P);
     m.context.isTrainingMode = True;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
@@ -2780,7 +2780,7 @@ def testMaxPooling2DLayerGradient3():
     N, C, H, W = 32, 3, 24, 24;
     PH, PW, S, P = 3, 3, (2, 4), (1, 2, 3, 4);
     X = np.random.randn(N, C, H, W);
-    m = MaxPooling2DLayer(PH, PW, S, P);
+    m = MaxPooling2DLayer((PH, PW), S, P);
     m.context.isTrainingMode = True;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
@@ -2797,7 +2797,7 @@ def testMaxPooling2DLayerGradient4():
     OW = convOutputSize(W, PW, S, 2 * P);
     X = np.random.randn(N, C, H, W);
     m = SequentialContainer(
-        MaxPooling2DLayer(PH, PW, S, P),
+        MaxPooling2DLayer((PH, PW), S, P),
         AffineLayer(OW, 2 * OW),
     );
     m.context.isTrainingMode = True;
