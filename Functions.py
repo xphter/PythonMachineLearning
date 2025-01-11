@@ -77,8 +77,8 @@ def reluGradient(X : np.ndarray) -> np.ndarray:
     return (X > 0).astype(X.dtype);
 
 
-def prelu(X : np.ndarray, alpha : Union[float, np.ndarray]) -> np.ndarray:
-    return np.maximum(0, X) + alpha * np.minimum(0, X);
+def prelu(X : np.ndarray, beta : Union[float, np.ndarray]) -> np.ndarray:
+    return np.maximum(0, X) + beta * np.minimum(0, X);
 
 
 def preluGradient(X : np.ndarray, beta : Union[float, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
