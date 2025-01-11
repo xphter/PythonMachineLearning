@@ -1453,7 +1453,7 @@ class BatchNormalization1DLayer(NetModuleBase):
             self._n = len(X);
             self._XC = X - mu;
             var = np.square(self._XC).mean(axis = 0);
-            s2 = self._n / (self._n - 1) * var;
+            s2 = self._n / (self._n - 1) * var if self._n > 1 else var;
 
             if self._momentum is not None:
                 self._evalMean[...] = (1.0 - self._momentum) * self._evalMean + self._momentum * mu;
@@ -1467,10 +1467,10 @@ class BatchNormalization1DLayer(NetModuleBase):
             self._XHat = self._XC / self._std;
             Y = self._gamma * self._XHat + self._beta;
         else:
-            if self._evalWeight is None:
-                self._evalWeight = self._gamma / np.sqrt(self._evalVar + self._epsilon);
-            if self._evalBias is None:
-                self._evalBias = self._beta  - self._gamma * self._evalMean / np.sqrt(self._evalVar + self._epsilon);
+            if self._evalWeight is None or self._evalBias is None:
+                evalStd = np.sqrt(self._evalVar + self._epsilon);
+                self._evalWeight = self._gamma / evalStd;
+                self._evalBias = self._beta  - self._gamma * self._evalMean / evalStd;
 
             Y = self._evalWeight * X + self._evalBias;
 
