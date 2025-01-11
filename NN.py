@@ -1678,7 +1678,7 @@ class Convolution2DLayer(NetModuleBase):
         return dX, ;
 
 
-class MaxPoolingLayer(NetModuleBase):
+class MaxPooling2DLayer(NetModuleBase):
     def __init__(self, PH : int, PW : int, stride : Union[Tuple[int, int], int], padding : Union[Tuple[int, ...], int] = 0):
         super().__init__();
 
@@ -1688,7 +1688,7 @@ class MaxPoolingLayer(NetModuleBase):
         self._padding = padding;
         self._shape = None;
         self._M = None;
-        self._name = "MaxPooling";
+        self._name = f"MaxPooling2D {self._PH}*{self._PW}";
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
