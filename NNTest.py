@@ -103,7 +103,7 @@ def createContextsAndTarget(corpus : np.ndarray, windowSize : int = 1) -> (np.nd
     return np.array(contexts, dtype = np.int32), target;
 
 
-def loadSpiral(N = 1000, C = 3):
+def loadSpiral(N = 1000, C = 3) -> Tuple[np.ndarray, np.ndarray]:
     np.random.seed(int(time.time()));
 
     X = np.zeros((N * C, 2));
@@ -123,29 +123,43 @@ def loadSpiral(N = 1000, C = 3):
 
 def testSpiral():
     C = 3;
-    X, T = loadSpiral(10000, C);
+    X, T = loadSpiral(100, C);
 
-    markers, colors = ["x", "*", "+", "s", "d"], ["b", "k", "g", "y", "r"];
+    markers, colors = ["x", "*", "+", "s", "d", "o"], ["b", "k", "g", "m", "y", "r"];
 
     plt.figure(1);
     for j in range(C):
-        plt.scatter(X[T[:, j] == 1, 0].get(), X[T[:, j] == 1, 1].get(), marker = markers[j], color = colors[j]);
+        plt.scatter(X[T[:, j] == 1, 0], X[T[:, j] == 1, 1], marker = markers[j], color = colors[j]);
     plt.show(block = True);
     plt.close();
+
+    lr ,batchSize, maxEpoch = 1.0, 30, 300;
+    trainIterator = SequentialDataIterator([X, T], batchSize = batchSize, shuffle = True);
+    lossFunc = SoftmaxWithCrossEntropyLoss();
+    optimizer = SGD(lr);
+    evaluator = ClassifierAccuracyEvaluator();
 
     model = SequentialContainer(
         AffineLayer(X.shape[1], 10),
         ReluLayer(),
         AffineLayer(10, C),
     );
-    lossFunc = SoftmaxWithCrossEntropyLoss();
-    optimizer = Adam();
-    iterator = DataIterator([X, T]);
-    evaluator = ClassifierAccuracyEvaluator();
+    model.fit(trainIterator, lossFunc, optimizer, maxEpoch, evaluator = evaluator, plot = True);
 
-    trainer = NetTrainer(model, lossFunc, optimizer, evaluator);
-    trainer.train(200, iterator);
-    trainer.plot();
+    minX, maxX = np.amin(X[:, 0]), np.amax(X[:, 0]);
+    minY, maxY = np.amin(X[:, 1]), np.amax(X[:, 1]);
+    x, y = np.arange(minX - 1, maxX + 1, 0.01), np.arange(minY - 1, maxY + 1, 0.01);
+    xx, yy = np.meshgrid(x, y);
+    features = np.stack((xx, yy), axis = -1).reshape(-1, 2);
+    labels = np.argmax(model.predictOne(features)[0], axis = -1);
+
+    plt.figure(1);
+    for j in range(C):
+        plt.scatter(features[labels == j, 0], features[labels == j, 1], marker = ".", color = colors[-(j + 1)]);
+    for j in range(C):
+        plt.scatter(X[T[:, j] == 1, 0], X[T[:, j] == 1, 1], marker = markers[j], color = colors[j]);
+    plt.show(block = True);
+    plt.close();
 
 
 def filter_show(filters, nx=8, margin=3, scale=10):
@@ -367,9 +381,7 @@ def testKeras():
 
 
 def test():
-    # with open("adam.lr", "rb") as file:
-    #     learningRate = pickle.load(file);
-
+    # testSpiral();
     # testMNIST();
     # testKeras();
     unitTest();
@@ -2090,11 +2102,11 @@ def unitTest():
     # testMaxPooling2DLayerGradient2();
     # testMaxPooling2DLayerGradient3();
     # testMaxPooling2DLayerGradient4();
-    testAvgPooling2DLayer1();
-    testAvgPooling2DLayerGradient1();
-    testAvgPooling2DLayerGradient2();
-    testAvgPooling2DLayerGradient3();
-    testAvgPooling2DLayerGradient4();
+    # testAvgPooling2DLayer1();
+    # testAvgPooling2DLayerGradient1();
+    # testAvgPooling2DLayerGradient2();
+    # testAvgPooling2DLayerGradient3();
+    # testAvgPooling2DLayerGradient4();
     # testBatchNormalization1DLayer1();
     # testBatchNormalization1DLayer2();
     # testBatchNormalization1DLayerGradient1();
@@ -2105,6 +2117,8 @@ def unitTest():
     # testMinMaxLayerGradient4();
     # testMinMaxLayerGradient5();
     # testMinMaxLayerGradient6();
+    testEmbeddingLayerGradient1();
+    testEmbeddingLayerGradient2();
     # testAdditiveResidualBlockGradient1();
     # testAdditiveResidualBlockGradient2();
     # testAdditiveResidualBlockGradient3();
@@ -3108,6 +3122,40 @@ def testMinMaxLayerGradient6():
     dX1N = numericGradient(lambda x: np.sum(np.add(*m.forward(x, X2))), X1);
     dX2N = numericGradient(lambda x: np.sum(np.add(*m.forward(X1, x))), X2);
     print(f"MinMaxLayer, numericGradient6, dX1 error: {np.sum(np.abs(dX1 - dX1N))}, dX2 error: {np.sum(np.abs(dX2 - dX2N))}");
+    print("\n");
+
+
+def testEmbeddingLayerGradient1():
+    N, T, D, V = 320, 24, 10, 1000;
+    Weight = np.random.randn(V, D);
+    X = np.random.choice(np.arange(V), (N, T), True);
+    m = EmbeddingLayer(V, D, W = Weight);
+    Y = m.forward(X)[0];
+    dX = m.backward(np.ones_like(Y))[0];
+    dW = m.params[0].grad;
+    dWN = numericGradient(lambda x: np.sum(*EmbeddingLayer(V, D, W = x).forward(X)), Weight);
+    print(f"EmbeddingLayer, numericGradient1, dW error: {np.sum(np.abs(dW - dWN))}");
+    print("\n");
+
+
+def testEmbeddingLayerGradient2():
+    def createModel(W1 : np.ndarray, W2 : np.ndarray) -> SequentialContainer:
+        return SequentialContainer(
+            EmbeddingLayer(V, D, W = W1),
+            AffineLayer(D, 2 * D, includeBias = False, W = W2),
+        );
+
+
+    N, T, D, V = 320, 24, 10, 1000;
+    Weight1 = np.random.randn(V, D);
+    Weight2 = np.random.randn(D, 2 * D);
+    X = np.random.choice(np.arange(V), (N, T), True);
+    m = createModel(Weight1, Weight2);
+    Y = m.forward(X)[0];
+    dX = m.backward(np.ones_like(Y))[0];
+    dW = m.modules[0].params[0].grad;
+    dWN = numericGradient(lambda x: np.sum(*createModel(x, Weight2).forward(X)), Weight1);
+    print(f"EmbeddingLayer, numericGradient2, dW error: {np.sum(np.abs(dW - dWN))}");
     print("\n");
 
 

@@ -1806,16 +1806,15 @@ class EmbeddingLayer(NetModuleBase):
         self._name = f"Embedding {inputSize}*{outputSize}";
 
         self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize).astype(defaultDType) if W is None else W;
-        self._params.append(self._weight);
-        self._grads.append(np.zeros_like(self._weight));
+        self._params.append(NetParamDefinition("weight", self._weight));
 
 
-    def _setParams(self, value: List[np.ndarray]):
-        self._weight = value[0];
+    def _setParams(self, params: List[INetParamDefinition]):
+        self._weight = params[0].value;
 
 
     @property
-    def weight(self):
+    def weight(self) -> np.ndarray:
         return self._weight;
 
 
@@ -1832,10 +1831,7 @@ class EmbeddingLayer(NetModuleBase):
         dY = dout[0];
         dY = dY.reshape(-1, self._outputSize);
 
-        dW = self._grads[0];
-        # dW[...] = 0;
-
-        # np.add.at(dW, self._index, dY);
+        dW = self._params[0].grad;
         npAddAt(dW, self._index, dY);
 
         # the dX is always zero!!!
