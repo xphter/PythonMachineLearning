@@ -1796,16 +1796,16 @@ class AdditiveResidualBlock(NetModuleBase):
 
 
 class EmbeddingLayer(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, W : np.ndarray = None):
+    def __init__(self, embeddingNum : int, embeddingSize : int, W : np.ndarray = None):
         super().__init__();
 
         self._index = None;
         self._shape = None;
-        self._inputSize = inputSize;
-        self._outputSize = outputSize;
-        self._name = f"Embedding {inputSize}*{outputSize}";
+        self._embeddingNum = embeddingNum;
+        self._embeddingSize = embeddingSize;
+        self._name = f"Embedding {embeddingNum}*{embeddingSize}";
 
-        self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize).astype(defaultDType) if W is None else W;
+        self._weight = math.sqrt(2.0 / embeddingSize) * np.random.randn(embeddingNum, embeddingSize).astype(defaultDType) if W is None else W;
         self._params.append(NetParamDefinition("weight", self._weight));
 
 
@@ -1818,18 +1818,18 @@ class EmbeddingLayer(NetModuleBase):
         return self._weight;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
         self._shape = X.shape;
         self._index = X.flatten();
-        Y = self._weight[self._index].reshape(X.shape + (self._outputSize, ));
+        Y = self._weight[self._index].reshape(X.shape + (self._embeddingSize,));
 
         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
-        dY = dY.reshape(-1, self._outputSize);
+        dY = dY.reshape(-1, self._embeddingSize);
 
         dW = self._params[0].grad;
         npAddAt(dW, self._index, dY);
@@ -1839,40 +1839,31 @@ class EmbeddingLayer(NetModuleBase):
 
 
 class EmbeddingWithDotLayer(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, W : np.ndarray = None):
+    def __init__(self, embeddingNum : int, embeddingSize : int, W : np.ndarray = None):
         super().__init__();
 
         self._X = None;
         self._W = None;
-        self._inputSize = inputSize;
-        self._outputSize = outputSize;
-        self._name = f"EmbeddingWithDot {outputSize}*{inputSize}";
-
-        weight = math.sqrt(2.0 / inputSize) * np.random.randn(outputSize, inputSize).astype(defaultDType) if W is None else W;
-        self._embeddingLayer = EmbeddingLayer(outputSize, inputSize, W = weight);
+        self._name = f"EmbeddingWithDot {embeddingNum}*{embeddingSize}";
+        self._embeddingLayer = EmbeddingLayer(embeddingNum, embeddingSize, W = W);
 
 
     @property
-    def params(self) -> List[np.ndarray]:
+    def params(self) -> List[INetParamDefinition]:
         return self._embeddingLayer.params;
 
 
     @params.setter
-    def params(self, value: List[np.ndarray]):
+    def params(self, value: List[INetParamDefinition]):
         self._embeddingLayer.params = value;
 
 
     @property
-    def grads(self) -> List[np.ndarray]:
-        return self._embeddingLayer.grads;
-
-
-    @property
-    def weight(self):
+    def weight(self) -> np.ndarray:
         return self._embeddingLayer.weight;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X, T = data;
         self._X = X;
         self._W = self._embeddingLayer.forward(T)[0];
@@ -1881,7 +1872,7 @@ class EmbeddingWithDotLayer(NetModuleBase):
         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         dY = np.expand_dims(dY, axis = -1);
 
@@ -2710,7 +2701,7 @@ class CorpusNegativeSampler:
         return self._resampleNumber;
 
 
-    def _findSample(self, sampleSize : int, exceptIndex = None):
+    def _findSample(self, sampleSize : int, exceptIndex = None) -> np.ndarray:
         p = self._probability;
         if exceptIndex is not None:
             p = p.copy();
@@ -2721,7 +2712,7 @@ class CorpusNegativeSampler:
 
 
     # return: negative samples, final tags
-    def getSample(self, T : np.ndarray) -> (np.ndarray, np.ndarray):
+    def getSample(self, T : np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         index = None;
         PS = T.flatten();
         NS = self._findSample(T.size * self._sampleSize);

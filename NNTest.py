@@ -2119,6 +2119,8 @@ def unitTest():
     # testMinMaxLayerGradient6();
     testEmbeddingLayerGradient1();
     testEmbeddingLayerGradient2();
+    testEmbeddingWithDotLayerGradient1();
+    testEmbeddingWithDotLayerGradient2();
     # testAdditiveResidualBlockGradient1();
     # testAdditiveResidualBlockGradient2();
     # testAdditiveResidualBlockGradient3();
@@ -3126,36 +3128,74 @@ def testMinMaxLayerGradient6():
 
 
 def testEmbeddingLayerGradient1():
-    N, T, D, V = 320, 24, 10, 1000;
-    Weight = np.random.randn(V, D);
+    N, T, H, V = 320, 24, 10, 1000;
+    Weight = np.random.randn(V, H);
     X = np.random.choice(np.arange(V), (N, T), True);
-    m = EmbeddingLayer(V, D, W = Weight);
+    m = EmbeddingLayer(V, H, W = Weight);
     Y = m.forward(X)[0];
-    dX = m.backward(np.ones_like(Y))[0];
-    dW = m.params[0].grad;
-    dWN = numericGradient(lambda x: np.sum(*EmbeddingLayer(V, D, W = x).forward(X)), Weight);
-    print(f"EmbeddingLayer, numericGradient1, dW error: {np.sum(np.abs(dW - dWN))}");
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dW1 = m.params[0].grad;
+    dWN = numericGradient(lambda x: np.sum(*EmbeddingLayer(V, H, W = x).forward(X)), Weight);
+    print(f"EmbeddingLayer, numericGradient1, dW error: {np.sum(np.abs(dW1 - dWN))}");
     print("\n");
 
 
 def testEmbeddingLayerGradient2():
     def createModel(W1 : np.ndarray, W2 : np.ndarray) -> SequentialContainer:
         return SequentialContainer(
-            EmbeddingLayer(V, D, W = W1),
-            AffineLayer(D, 2 * D, includeBias = False, W = W2),
+            EmbeddingLayer(V, H, W = W1),
+            AffineLayer(H, 2 * H, includeBias = False, W = W2),
         );
 
 
-    N, T, D, V = 320, 24, 10, 1000;
-    Weight1 = np.random.randn(V, D);
-    Weight2 = np.random.randn(D, 2 * D);
+    N, T, H, V = 320, 24, 10, 1000;
+    Weight1 = np.random.randn(V, H);
+    Weight2 = np.random.randn(H, 2 * H);
     X = np.random.choice(np.arange(V), (N, T), True);
     m = createModel(Weight1, Weight2);
     Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dW1 = m.modules[0].params[0].grad;
+    dWN = numericGradient(lambda x: np.sum(*createModel(x, Weight2).forward(X)), Weight1);
+    print(f"EmbeddingLayer, numericGradient2, dW error: {np.sum(np.abs(dW1 - dWN))}");
+    print("\n");
+
+
+def testEmbeddingWithDotLayerGradient1():
+    N, C1, C2, H, V = 32, 24, 12, 10, 1000;
+    Weight = np.random.randn(V, H);
+    X = np.random.randn(N, C1, C2, H);
+    T = np.random.choice(np.arange(V), (N, C1, C2), True);
+    m = EmbeddingWithDotLayer(V, H, W = Weight);
+    Y = m.forward(X, T)[0];
+    dX = m.backward(np.ones_like(Y))[0];
+    dW = m.params[0].grad;
+    dXN = numericGradient(lambda x: np.sum(*EmbeddingWithDotLayer(V, H, W = Weight).forward(x, T)), X);
+    dWN = numericGradient(lambda x: np.sum(*EmbeddingWithDotLayer(V, H, W = x).forward(X, T)), Weight);
+    print(f"EmbeddingWithDotLayer, numericGradient1, dX error: {np.sum(np.abs(dX - dXN))}, dW error: {np.sum(np.abs(dW - dWN))}");
+    print("\n");
+
+
+def testEmbeddingWithDotLayerGradient2():
+    def createModel(W1 : np.ndarray, W2 : np.ndarray) -> SequentialContainer:
+        return SequentialContainer(
+            EmbeddingWithDotLayer(V, H, W = W1),
+            AffineLayer(C2, 2 * C2, includeBias = False, W = W2),
+        );
+
+
+    N, C1, C2, H, V = 32, 24, 12, 10, 1000;
+    Weight1 = np.random.randn(V, H);
+    Weight2 = np.random.randn(C2, 2 * C2);
+    X = np.random.randn(N, C1, C2, H);
+    T = np.random.choice(np.arange(V), (N, C1, C2), True);
+    m = createModel(Weight1, Weight2);
+    Y = m.forward(X, T)[0];
     dX = m.backward(np.ones_like(Y))[0];
     dW = m.modules[0].params[0].grad;
-    dWN = numericGradient(lambda x: np.sum(*createModel(x, Weight2).forward(X)), Weight1);
-    print(f"EmbeddingLayer, numericGradient2, dW error: {np.sum(np.abs(dW - dWN))}");
+    dXN = numericGradient(lambda x: np.sum(*createModel(Weight1, Weight2).forward(x, T)), X);
+    dWN = numericGradient(lambda x: np.sum(*createModel(x, Weight2).forward(X, T)), Weight1);
+    print(f"EmbeddingWithDotLayer, numericGradient2, dX error: {np.sum(np.abs(dX - dXN))}, dW error: {np.sum(np.abs(dW - dWN))}");
     print("\n");
 
 
