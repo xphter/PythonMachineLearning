@@ -91,14 +91,8 @@ def ppmi(C : np.ndarray, epsilon = 1e-8) -> np.ndarray:
 
 
 def createContextsAndTarget(corpus : np.ndarray, windowSize : int = 1) -> (np.ndarray, np.ndarray):
-    contexts = [];
     target = corpus[windowSize: -windowSize];
-
-    for i in range(windowSize, len(corpus) - windowSize, 1):
-        cs = corpus[i - windowSize: i + windowSize + 1].tolist();
-        cs.pop(windowSize);
-
-        contexts.append(cs);
+    contexts = [np.concatenate((corpus[i - windowSize: i], corpus[i + 1: i + 1 + windowSize])) for i in range(windowSize, len(corpus) - windowSize, 1)];
 
     return np.array(contexts, dtype = np.int32), target;
 
@@ -242,7 +236,7 @@ def testMNIST():
     # filter_show(model.modules[0].weight.get());
 
 
-def testWord2Vec():
+def testWord2VecPTB():
     ptb = PTB("/media/WindowsE/Data/PTB");
     corpus, word2ID, id2Word = ptb.trainCorpus, ptb.word2ID, ptb.id2Word;
     windowSize, hiddenSize, batchSize, negativeSize, maxEpoch = 5, 100, 2 ** 8, 5, 10;
@@ -269,24 +263,21 @@ def testWord2Vec():
     # model = CBOWModel(windowSize, vocabSize, hiddenSize, negativeSampler);
     # # data = [contexts, target, np.ones_like(target)];
     # data = [contexts, target];
-    # filename = "ptb_cbow.weights";
+    # filename = "data/ptb_cbow.weights";
 
     model = SkipGramModel(windowSize, vocabSize, hiddenSize, negativeSampler);
     # data = [target, contexts, np.ones_like(contexts)];
     data = [target, contexts];
-    filename = "ptb_skipgram.weights";
+    filename = "data/ptb_skipgram.weights";
 
     lossFunc = SigmoidWithCrossEntropyLoss();
     optimizer = Adam();
     trainIterator = SequentialDataIterator(data, batchSize = batchSize);
     evaluator = ClassifierAccuracyEvaluator();
-
-    # trainer = NetTrainer(model, lossFunc, optimizer, evaluator);
-    # trainer.train(maxEpoch, trainIterator);
     model.fit(trainIterator, lossFunc, optimizer, maxEpoch, evaluator = evaluator, plot = True);
+
     with open(filename, "bw") as file:
         pickle.dump(model.weights, file);
-    # trainer.plot();
 
 
 def testPTB():
@@ -382,9 +373,10 @@ def testKeras():
 
 def test():
     # testSpiral();
+    testWord2VecPTB();
     # testMNIST();
     # testKeras();
-    unitTest();
+    # unitTest();
     # testSeq2Seq();
     # testAddition();
     # testTS_Many2One();

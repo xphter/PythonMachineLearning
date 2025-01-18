@@ -2740,38 +2740,31 @@ class CBOWModel(NetModelBase):
         self._vocabSize = vocabSize;
         self._hiddenSize = hiddenSize;
         self._negativeSampler = negativeSampler;
-        self._W0 = math.sqrt(2.0 / vocabSize) * np.random.randn(vocabSize, hiddenSize).astype(defaultDType) if inW is None else inW;
-        self._W1 = math.sqrt(2.0 / hiddenSize) * np.random.randn(hiddenSize, vocabSize).astype(defaultDType).T if outW is None else outW;
 
-        self._embeddingLayer = EmbeddingLayer(vocabSize, hiddenSize, W = self._W0);
-        self._outputLayer = EmbeddingWithDotLayer(hiddenSize, vocabSize, W = self._W1);
+        self._embeddingLayer = EmbeddingLayer(vocabSize, hiddenSize, W = inW);
+        self._outputLayer = EmbeddingWithDotLayer(vocabSize, hiddenSize, W = outW);
 
         super().__init__(self._embeddingLayer, self._outputLayer);
         self._name = "CBOW";
 
 
-    def _setParams(self, value: List[np.ndarray]):
-        super()._setParams(value);
-        self._W0, self._W1 = value[0], value[1];
+    @property
+    def wordVector(self) -> np.ndarray:
+        return self._embeddingLayer.weight;
 
 
     @property
-    def wordVector(self):
-        return self._W0;
+    def weights(self) -> Tuple[np.ndarray, np.ndarray]:
+        return self._embeddingLayer.weight, self._outputLayer.weight;
 
 
-    @property
-    def weights(self) -> (np.ndarray, np.ndarray):
-        return self._W0, self._W1;
-
-
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X, T = data;
         N, C = X.shape;
         S = self._negativeSampler.sampleSize;
 
         H = self._embeddingLayer.forward(X)[0];
-        H = np.sum(H, axis = 1) / C;
+        H = np.sum(H, axis = -2) / C;
 
         H = np.expand_dims(H, axis = -2);
         H = np.repeat(H, S + 1, axis = -2);
@@ -2782,20 +2775,17 @@ class CBOWModel(NetModelBase):
         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         N, C = len(dY), 2 * self._windowSize;
 
         dH = self._outputLayer.backward(dY)[0];
         dH = np.sum(dH, axis = -2) / C;
-        dH = np.expand_dims(dH, axis = 1);
-        dH = np.repeat(dH, C, axis = 1);
-        self._embeddingLayer.backward(dH);
+        dH = np.expand_dims(dH, axis = -2);
+        dH = np.repeat(dH, C, axis = -2);
+        dX = self._embeddingLayer.backward(dH)[0];
 
-        self._grads[0][...] = self._embeddingLayer.grads[0];
-        self._grads[1][...] = self._outputLayer.grads[0];
-
-        return np.zeros((N, C), dtype = dY.dtype), ;
+        return dX, ;
 
 
     def getFinalTag(self, T : np.ndarray) -> np.ndarray:
@@ -2809,32 +2799,25 @@ class SkipGramModel(NetModelBase):
         self._vocabSize = vocabSize;
         self._hiddenSize = hiddenSize;
         self._negativeSampler = negativeSampler;
-        self._W0 = math.sqrt(2.0 / vocabSize) * np.random.randn(vocabSize, hiddenSize).astype(defaultDType) if inW is None else inW;
-        self._W1 = math.sqrt(2.0 / hiddenSize) * np.random.randn(hiddenSize, vocabSize).astype(defaultDType).T if outW is None else outW;
 
-        self._embeddingLayer = EmbeddingLayer(vocabSize, hiddenSize, W = self._W0);
-        self._outputLayer = EmbeddingWithDotLayer(hiddenSize, vocabSize, W = self._W1);
+        self._embeddingLayer = EmbeddingLayer(vocabSize, hiddenSize, W = inW);
+        self._outputLayer = EmbeddingWithDotLayer(vocabSize, hiddenSize, W = outW);
 
         super().__init__(self._embeddingLayer, self._outputLayer);
         self._name = "SkipGram";
 
 
-    def _setParams(self, value: List[np.ndarray]):
-        super()._setParams(value);
-        self._W0, self._W1 = value[0], value[1];
+    @property
+    def wordVector(self) -> np.ndarray:
+        return self._embeddingLayer.weight;
 
 
     @property
-    def wordVector(self):
-        return self._W0;
+    def weights(self) -> Tuple[np.ndarray, np.ndarray]:
+        return self._embeddingLayer.weight, self._outputLayer.weight;
 
 
-    @property
-    def weights(self) -> (np.ndarray, np.ndarray):
-        return self._W0, self._W1;
-
-
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X, T = data;
         N, C = T.shape;
         S = self._negativeSampler.sampleSize;
@@ -2852,14 +2835,11 @@ class SkipGramModel(NetModelBase):
         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         dH = self._outputLayer.backward(dY)[0];
         dH = np.sum(dH, axis = (-2, -3));
         dX = self._embeddingLayer.backward(dH)[0];
-
-        self._grads[0][...] = self._embeddingLayer.grads[0];
-        self._grads[1][...] = self._outputLayer.grads[0];
 
         return dX, ;
 
