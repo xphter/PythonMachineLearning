@@ -164,7 +164,7 @@ def crossEntropyError(Y : np.ndarray, T : np.ndarray, epsilon : float = 1e-8) ->
     if Y.shape != T.shape:
         raise ValueError("the shapes is not same.");
 
-    return float(np.sum(-(T * np.log(Y + epsilon)))) / lengthExceptLastDimension(T);
+    return float(np.sum(-(T * np.log(Y + epsilon)))) / T.shape[0];
 
 
 # Y and T has the same shape
@@ -204,7 +204,7 @@ def getDropoutMask(inputs : np.ndarray, dropoutRatio : float):
 # T was used as a 1-D index array
 def crossEntropyError1D(Y : np.ndarray, T : np.ndarray, epsilon : float = 1e-8) -> float:
     n = T.size;
-    return float(np.sum(-np.log(Y.reshape((n, -1))[np.arange(n), T.flatten()] + epsilon))) / n;
+    return float(np.sum(-np.log(Y.reshape((n, -1))[np.arange(n), T.flatten()] + epsilon))) / T.shape[0];
 
 
 def labelSmoothing(T : np.ndarray, alpha : float = 0.1) -> np.ndarray:

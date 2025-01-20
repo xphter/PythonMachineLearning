@@ -239,7 +239,7 @@ def testMNIST():
 def testWord2VecPTB():
     ptb = PTB("/media/WindowsE/Data/PTB");
     corpus, word2ID, id2Word = ptb.trainCorpus, ptb.word2ID, ptb.id2Word;
-    windowSize, hiddenSize, batchSize, negativeSize, maxEpoch = 5, 100, 2 ** 8, 5, 10;
+    windowSize, hiddenSize, batchSize, negativeSize, maxEpoch = 5, 100, 2 ** 8, 5, 20;
 
     # with open("ptb_skipgram.weights", "br") as file:
     #     wordVec = pickle.load(file)[0];
@@ -372,11 +372,22 @@ def testKeras():
 
 
 def test():
+    # X = np.random.randn(300, 200, 100, 10);
+    # T = np.random.choice(np.arange(X.shape[-1]), size = X.shape[: -1], replace = True);
+    #
+    # n = T.size;
+    # Y1 = X.reshape(n, -1)[np.arange(n), T.flatten()].reshape(X.shape[: -1])
+    #
+    # T2 = np.expand_dims(T, axis = -1);
+    # Y2 = np.take_along_axis(X, T2, axis = -1);
+
+    print("go");
+
     # testSpiral();
-    testWord2VecPTB();
+    # testWord2VecPTB();
     # testMNIST();
     # testKeras();
-    # unitTest();
+    unitTest();
     # testSeq2Seq();
     # testAddition();
     # testTS_Many2One();
@@ -2062,6 +2073,15 @@ def unitTest():
 
     # testIdentityWithMeanAbsoluteLossGradient1();
     # testIdentityWithMeanAbsoluteLossGradient2();
+    # testCrossEntropyLossGradient1();
+    # testCrossEntropyLossGradient2();
+    # testSoftmaxWithCrossEntropyLossGradient1();
+    # testSoftmaxWithCrossEntropyLossGradient2();
+    # testSigmoidWithCrossEntropyLossGradient1();
+    # testSigmoidWithCrossEntropyLossGradient2();
+    # testSigmoidWithCrossEntropyLossGradient3();
+    testSoftmaxWithCrossEntropy1DLossGradient1();
+    testSoftmaxWithCrossEntropy1DLossGradient2();
     # testPReluLayerGradient1();
     # testPReluLayerGradient2();
     # testPReluLayerGradient3();
@@ -2109,10 +2129,10 @@ def unitTest():
     # testMinMaxLayerGradient4();
     # testMinMaxLayerGradient5();
     # testMinMaxLayerGradient6();
-    testEmbeddingLayerGradient1();
-    testEmbeddingLayerGradient2();
-    testEmbeddingWithDotLayerGradient1();
-    testEmbeddingWithDotLayerGradient2();
+    # testEmbeddingLayerGradient1();
+    # testEmbeddingLayerGradient2();
+    # testEmbeddingWithDotLayerGradient1();
+    # testEmbeddingWithDotLayerGradient2();
     # testAdditiveResidualBlockGradient1();
     # testAdditiveResidualBlockGradient2();
     # testAdditiveResidualBlockGradient3();
@@ -2291,6 +2311,113 @@ def testIdentityWithMeanAbsoluteLossGradient2():
     dY1 = m.backward()[0];
     dYN = numericGradient(lambda x: m.forward(x, T), Y);
     print(f"IdentityWithMeanAbsoluteLoss, numericGradient2, dY error: {np.sum(np.abs(dY1 - dYN))}");
+    print("\n");
+
+
+def testCrossEntropyLossGradient1():
+    N, C = 320, 24;
+    X, T = np.random.randn(N, C), np.zeros((N, C));
+    Y = softmax(X);
+    T[np.arange(N), np.argmax(X, axis = -1)] = 1;
+    m = CrossEntropyLoss();
+    loss = m.forward(Y, T);
+    dY1 = m.backward()[0];
+    dYN = numericGradient(lambda x: m.forward(x, T), Y);
+    print(f"CrossEntropyLoss, numericGradient1, dY error: {np.sum(np.abs(dY1 - dYN))}");
+    print("\n");
+
+
+def testCrossEntropyLossGradient2():
+    N, D, C = 320, 24, 10;
+    X, T = np.random.randn(N, D, C), np.zeros((N, D, C));
+    index = np.argmax(X.reshape(-1, C), axis = -1);
+    Y = softmax(X);
+    T.reshape(-1, C)[np.arange(N * D), index] = 1;
+    m = CrossEntropyLoss();
+    loss = m.forward(Y, T);
+    dY1 = m.backward()[0];
+    dYN = numericGradient(lambda x: m.forward(x, T), Y);
+    print(f"CrossEntropyLoss, numericGradient1, dY error: {np.sum(np.abs(dY1 - dYN))}");
+    print("\n");
+
+
+def testSoftmaxWithCrossEntropyLossGradient1():
+    N, C = 320, 24;
+    X, T = np.random.randn(N, C), np.zeros((N, C));
+    T[np.arange(N), np.argmax(X, axis = -1)] = 1;
+    m = SoftmaxWithCrossEntropyLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"SoftmaxWithCrossEntropyLoss, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSoftmaxWithCrossEntropyLossGradient2():
+    N, D, C = 320, 24, 10;
+    X, T = np.random.randn(N, D, C), np.zeros((N, D, C));
+    index = np.argmax(X.reshape(-1, C), axis = -1);
+    T.reshape(-1, C)[np.arange(N * D), index] = 1;
+    m = SoftmaxWithCrossEntropyLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"SoftmaxWithCrossEntropyLoss, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSigmoidWithCrossEntropyLossGradient1():
+    N = 320;
+    X, T = np.random.randn(N), np.random.choice(np.arange(2), size = N, replace = True);
+    m = SigmoidWithCrossEntropyLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"SigmoidWithCrossEntropyLoss, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSigmoidWithCrossEntropyLossGradient2():
+    N, D = 320, 24;
+    X, T = np.random.randn(N, D), np.random.choice(np.arange(2), size = (N, D), replace = True);
+    m = SigmoidWithCrossEntropyLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"SigmoidWithCrossEntropyLoss, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSigmoidWithCrossEntropyLossGradient3():
+    N, C, D = 320, 24, 10;
+    X, T = np.random.randn(N, C, D), np.random.choice(np.arange(2), size = (N, C, D), replace = True);
+    m = SigmoidWithCrossEntropyLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"SigmoidWithCrossEntropyLoss, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSoftmaxWithCrossEntropy1DLossGradient1():
+    N, C = 320, 24;
+    X, T = np.random.randn(N, C), np.random.choice(np.arange(C), N, replace = True);
+    m = SoftmaxWithCrossEntropy1DLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSoftmaxWithCrossEntropy1DLossGradient2():
+    N, D, C = 320, 24, 10;
+    X, T = np.random.randn(N, D, C), np.random.choice(np.arange(C), size = (N, D), replace = True);
+    m = SoftmaxWithCrossEntropy1DLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 

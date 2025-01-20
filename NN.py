@@ -2911,7 +2911,7 @@ class CrossEntropyLoss(NetLossBase):
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
-        dY = -(self._T / self._Y).astype(self._Y.dtype) / lengthExceptLastDimension(self.T);
+        dY = -(self._T / self._Y).astype(self._Y.dtype) / self._T.shape[0];
 
         return dY, ;
 
@@ -2934,7 +2934,7 @@ class SoftmaxWithCrossEntropyLoss(NetLossBase):
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
-        dX = (self._Y - self._T).astype(self._Y.dtype) / lengthExceptLastDimension(self._T);
+        dX = (self._Y - self._T).astype(self._Y.dtype) / self._T.shape[0];
 
         return dX, ;
 
@@ -2961,7 +2961,7 @@ class SoftmaxWithCrossEntropy1DLoss(NetLossBase):
 
         dX = self._Y.reshape((n, -1));
         dX[np.arange(n), self._T.flatten()] -= 1;
-        dX /= n;
+        dX /= self._T.shape[0];
 
         return dX.reshape(self._Y.shape), ;
 
@@ -2979,16 +2979,16 @@ class SigmoidWithCrossEntropyLoss(NetLossBase):
         self._T = T;
         self._Y = sigmoid(X);
 
-        Y = self._Y.flatten();
-        T = self._T.flatten();
-        self._loss = crossEntropyError(np.column_stack((Y, 1 - Y)),
-                                       np.column_stack((T, 1 - T)));
+        Y2 = np.expand_dims(self._Y, axis = -1);
+        T2 = np.expand_dims(self._T, axis = -1);
+        self._loss = crossEntropyError(np.concatenate((Y2, 1 - Y2), axis = -1),
+                                       np.concatenate((T2, 1 - T2), axis = -1));
 
         return self._loss;
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
-        dX = (self._Y - self._T).astype(self._Y.dtype) / self._T.size;
+        dX = (self._Y - self._T).astype(self._Y.dtype) / self._T.shape[0];
 
         return dX, ;
 
