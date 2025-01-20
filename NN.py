@@ -3003,13 +3003,13 @@ class IdentityWithMeanSquareLoss(NetLossBase):
 
     def forward(self, *data: np.ndarray) -> float:
         self._Y, self._T = data;
-        self._loss = meanSquareError(self._Y, self._T);
+        self._loss = meanSquareError(self._Y, self._T) / 2;
 
         return self._loss;
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
-        dY = (self._Y - self._T) / lengthExceptLastDimension(self._T);
+        dY = (self._Y - self._T) / self._T.size;
 
         return dY, ;
 
@@ -3031,7 +3031,7 @@ class IdentityWithMeanAbsoluteLoss(NetLossBase):
     def backward(self) -> Tuple[np.ndarray, ...]:
         ML = self._Y < self._T;
         MH = self._Y > self._T;
-        dY = (MH * 1 - ML * 1).astype(self._Y.dtype) / lengthExceptLastDimension(self._T);
+        dY = (MH * 1 - ML * 1).astype(self._Y.dtype) / self._T.size;
 
         return dY, ;
 
@@ -3055,33 +3055,35 @@ class IdentityWithHuberLoss(NetLossBase):
         ML, MH = self._Y < self._T - self._delta, self._Y > self._T + self._delta;
         MM = np.logical_and(~ML, ~MH);
         dY = ML * (-self._delta) + MM * (self._Y - self._T) + MH * self._delta;
-        dY /= lengthExceptLastDimension(self._T);
+        dY /= self._T.size;
 
         return dY, ;
 
 
-class SumWithMeanSquareLossLayer(NetLossBase):
+class SumWithMeanSquareLoss(NetLossBase):
     def __init__(self):
         super().__init__();
 
+        self._X = None;
         self._Y = None;
         self._T = None;
-        self._shape = None;
+        # self._shape = None;
 
 
     def forward(self, *data: np.ndarray) -> float:
         X, T = data;
         self._T = T;
-        self._Y = np.sum(X, 1, keepdims = True);
-        self._loss = meanSquareError(self._Y, self._T);
-        self._shape = X.shape;
+        self._X = X;
+        self._Y = np.sum(self._X, axis = -1, keepdims = True);
+        self._loss = meanSquareError(self._Y, self._T) / 2;
+        # self._shape = X.shape;
 
         return self._loss;
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
-        dY = (self._Y - self._T) / lengthExceptLastDimension(self._T);
-        dX = dY * np.ones_like(self._shape);
+        dY = (self._Y - self._T) / self._T.size;
+        dX = np.repeat(dY, self._X.shape[-1], axis = -1);
 
         return dX, ;
 
@@ -4050,7 +4052,7 @@ class MaeAccuracyEvaluator(INetAccuracyEvaluator):
         Y, T = data;
         # self._rss += float(np.sum(np.square(Y - T)));
         self._rss += float(np.sum(np.abs(Y - T)));
-        self._totalCount += lengthExceptLastDimension(Y);
+        self._totalCount += T.size;
 
 
     def reset(self):
@@ -4110,7 +4112,7 @@ class MseAccuracyEvaluator(INetAccuracyEvaluator):
             T = np.log(T);
 
         self._rss += float(np.sum(np.square(Y - T)));
-        self._totalCount += lengthExceptLastDimension(Y);
+        self._totalCount += T.size;
 
 
     def reset(self):

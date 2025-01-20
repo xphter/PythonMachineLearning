@@ -149,14 +149,14 @@ def meanSquareError(Y : np.ndarray, T : np.ndarray):
     if Y.shape != T.shape:
         raise ValueError("the shapes is not same.");
 
-    return float(np.sum(np.square(Y - T))) / (2 * lengthExceptLastDimension(T));
+    return float(np.sum(np.square(Y - T))) / T.size;
 
 
 def meanAbsoluteError(Y : np.ndarray, T : np.ndarray):
     if Y.shape != T.shape:
         raise ValueError("the shapes is not same.");
 
-    return float(np.sum(np.abs(Y - T))) / lengthExceptLastDimension(T);
+    return float(np.sum(np.abs(Y - T))) / T.size;
 
 
 # Y and T has the same shape
@@ -189,7 +189,7 @@ def huberError(Y : np.ndarray, T : np.ndarray, delta : Union[float, np.ndarray] 
     EH = delta * (Y - T) - b;
     E = ML * EL + MM * EM + MH * EH;
 
-    return float(np.sum(E)) / lengthExceptLastDimension(T);
+    return float(np.sum(E)) / T.size;
 
 
 def getDropoutMask(inputs : np.ndarray, dropoutRatio : float):
