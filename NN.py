@@ -3235,8 +3235,10 @@ class ParametersShare(INetOptimizer):
         self._optimizer.update(params, grads);
 
 
-class GradientsClipping(INetOptimizer):
+class GradientsClipping(NetOptimizerBase):
     def __init__(self, maxL2 : float, optimizer : INetOptimizer, epsilon : float = 1e-8):
+        super().__init__(optimizer.learningRate);
+
         self._maxL2 = maxL2;
         self._optimizer = optimizer;
         self._epsilon = epsilon;
@@ -3252,15 +3254,16 @@ class GradientsClipping(INetOptimizer):
         self._optimizer.learningRate = value;
 
 
-    def update(self, params : List[np.ndarray], grads : List[np.ndarray]):
-        totalL2 = sum([float(np.sum(g ** 2)) for g in grads]);
+    def _onUpdate(self, params : List[INetParamDefinition]):
+        totalL2 = sum([float(np.sum(p.grad ** 2)) for p in params]);
         ratio = self._maxL2 / math.sqrt(totalL2 + self._epsilon);
 
         if ratio < 1:
-            for g in grads:
-                g *= ratio;
+            for p in params:
+                grad = p.grad;
+                grad *= ratio;
 
-        self._optimizer.update(params, grads);
+        super()._onUpdate(params);
 
 
 class SGD(NetOptimizerBase):
