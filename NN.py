@@ -213,7 +213,7 @@ class INetAccuracyEvaluator(metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def update(self, *data : np.ndarray):
+    def update(self, loss : float, *data : np.ndarray):
         pass;
 
 
@@ -743,7 +743,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                     loss = lossFunc.forward(*Y, T) if T is not None else lossFunc.forward(*Y);
 
                     lossValues.append(loss);
-                    evaluator.update(*Y, T);
+                    evaluator.update(loss, *Y, T);
 
                 evaluator.fromLoss(lossValues);
         finally:
@@ -791,7 +791,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
                 lossValues.append(loss);
                 if evaluator is not None:
-                    evaluator.update(*Y, T);
+                    evaluator.update(loss, *Y, T);
 
                 self.backward(*lossFunc.backward());
                 optimizer.update(self.params);
@@ -3210,10 +3210,8 @@ class ParametersShare(INetOptimizer):
         self._optimizer.update(params, grads);
 
 
-class GradientsClipping(NetOptimizerBase):
+class GradientsClipping(INetOptimizer):
     def __init__(self, maxL2 : float, optimizer : INetOptimizer, epsilon : float = 1e-8):
-        super().__init__(optimizer.learningRate);
-
         self._maxL2 = maxL2;
         self._optimizer = optimizer;
         self._epsilon = epsilon;
@@ -3229,7 +3227,7 @@ class GradientsClipping(NetOptimizerBase):
         self._optimizer.learningRate = value;
 
 
-    def _onUpdate(self, params : List[INetParamDefinition]):
+    def update(self, params : List[INetParamDefinition]):
         totalL2 = sum([float(np.sum(p.grad ** 2)) for p in params]);
         ratio = self._maxL2 / math.sqrt(totalL2 + self._epsilon);
 
@@ -3238,7 +3236,7 @@ class GradientsClipping(NetOptimizerBase):
                 grad = p.grad;
                 grad *= ratio;
 
-        super()._onUpdate(params);
+        self._optimizer.update(params);
 
 
 class SGD(NetOptimizerBase):
@@ -4026,7 +4024,7 @@ class MaeAccuracyEvaluator(INetAccuracyEvaluator):
         return False;
 
 
-    def update(self, *data: np.ndarray):
+    def update(self, loss : float, *data: np.ndarray):
         Y, T = data;
         # self._rss += float(np.sum(np.square(Y - T)));
         self._rss += float(np.sum(np.abs(Y - T)));
@@ -4079,7 +4077,7 @@ class MseAccuracyEvaluator(INetAccuracyEvaluator):
         return False;
 
 
-    def update(self, *data: np.ndarray):
+    def update(self, loss : float, *data: np.ndarray):
         Y, T = data;
 
         if self._takeLog:
@@ -4124,7 +4122,7 @@ class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
         return False;
 
 
-    def update(self, *data: np.ndarray):
+    def update(self, loss : float, *data: np.ndarray):
         Y, T = data;
         if Y.shape[-1] == 1:
             if self._sigmoid4BinaryClass:
@@ -4173,7 +4171,7 @@ class PerplexityAccuracyEvaluator(INetAccuracyEvaluator):
         return True;
 
 
-    def update(self, *data: np.ndarray):
+    def update(self, loss : float, *data: np.ndarray):
         pass;
 
 
