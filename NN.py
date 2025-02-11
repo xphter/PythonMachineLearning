@@ -1883,122 +1883,91 @@ class EmbeddingWithDotLayer(NetModuleBase):
         return dX, ;
 
 
-class RnnCell(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None):
-        super().__init__();
-
-        self._X = None;
-        self._H = None;
-        self._Y = None;
+class RnnCell(AggregateNetModule):
+    def __init__(self, inputSize : int, hiddenSize : int, activationFunc : INetModule = None, W : np.ndarray = None, b : np.ndarray = None):
         self._inputSize = inputSize;
-        self._outputSize = outputSize;
-        self._name = f"RNN Cell {inputSize}*{outputSize}";
+        self._hiddenSize = hiddenSize;
+        self._affineLayer = AffineLayer(inputSize + hiddenSize, hiddenSize, W = W, b = b);
+        self._activationFunc = activationFunc if activationFunc is not None else TanhLayer();
 
-        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize).astype(defaultDType) if Wx is None else Wx;
-        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize).astype(defaultDType) if Wh is None else Wh;
-        self._bias = np.zeros(outputSize, dtype = defaultDType) if b is None else b;
+        if len(self._activationFunc.params) > 0:
+            raise ValueError("not supports activation function with parameters");
 
-        weights = [self._weightX, self._weightH, self._bias];
-        self._params.extend(weights);
-        self._grads.extend([np.zeros_like(w) for w in weights]);
-
-
-    def _setParams(self, value: List[np.ndarray]):
-        self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
+        super().__init__(self._affineLayer, self._activationFunc);
+        self._name = f"RNN Cell {inputSize}*{hiddenSize}";
 
 
     @property
-    def weightX(self) -> np.ndarray:
-        return self._weightX;
-
-
-    @property
-    def weightH(self) -> np.ndarray:
-        return self._weightH;
+    def weight(self) -> np.ndarray:
+        return self._affineLayer.weight;
 
 
     @property
     def bias(self) -> np.ndarray:
-        return self._bias;
+        return self._affineLayer.bias;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        self._X, self._H = data;
-        self._Y = tanh(self._X @ self._weightX + self._H @ self._weightH + self._bias);
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X, H = data;
+        Y, = self._affineLayer.forward(np.concatenate((X, H), axis = -1));
+        A, = self._activationFunc.forward(Y);
 
-        return self._Y, ;
+        return A, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dY = dout[0];
-        dY = dY * tanhGradient(self._Y);
-
-        dWx = self._X.T @ dY;
-        dWh = self._H.T @ dY;
-        db = np.sum(dY, axis = 0);
-
-        dX = dY @ self._weightX.T;
-        dH = dY @ self._weightH.T;
-
-        self._grads[0][...] = dWx;
-        self._grads[1][...] = dWh;
-        self._grads[2][...] = db;
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY, = self._activationFunc.backward(*dout);
+        dX, dH = tuple(np.split(self._affineLayer.backward(dY)[0], [self._inputSize], axis = -1));
 
         return dX, dH;
 
 
 class RnnLayer(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, stateful : bool = True):
+    def __init__(self, inputSize : int, hiddenSize : int, activationFunc : INetModule = None, W : np.ndarray = None, b : np.ndarray = None, stateful : bool = True):
         super().__init__();
 
         self._H = None;
         self._dH = None;
         self._stateful = stateful;
         self._inputSize = inputSize;
-        self._outputSize = outputSize;
-        self._name = f"RNN {inputSize}*{outputSize}";
+        self._hiddenSize = hiddenSize;
+        self._activationFunc = activationFunc;
+        self._name = f"RNN {inputSize}*{hiddenSize}";
 
-        self._weightX, self._weightH, self._bias = self._initParams(inputSize, outputSize, Wx, Wh, b);
-        self._rnnModules : List[INetModule] = [];
+        self._weight, self._bias = self._initParams(inputSize, hiddenSize, W, b);
+        self._cells: List[INetModule] = [];
 
-        weights = [self._weightX, self._weightH, self._bias];
-        self._params.extend(weights);
-        self._grads.extend([np.zeros_like(w) for w in weights]);
+        self._params.append(NetParamDefinition("weight", self._weight));
+        self._params.append(NetParamDefinition("bias", self._bias));
 
 
     def _setContext(self, context : INetContext):
-        for cell in self._rnnModules:
+        for cell in self._cells:
             cell.context = value;
 
 
-    def _setParams(self, value: List[np.ndarray]):
-        self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
-        for cell in self._rnnModules:
+    def _setParams(self, params: List[INetParamDefinition]):
+        self._weight, self._bias = params[0].value, params[1].value;
+        for cell in self._cells:
             cell.params = value;
 
 
-    def _initParams(self, inputSize : int, outputSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
+    def _initParams(self, inputSize : int, hiddenSize : int, W : np.ndarray, b : np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         return (
-            math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, outputSize).astype(defaultDType) if Wx is None else Wx,
-            math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize).astype(defaultDType) if Wh is None else Wh,
-            np.zeros(outputSize, dtype = defaultDType) if b is None else b
+            math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize + hiddenSize, hiddenSize).astype(defaultDType) if W is None else W,
+            np.zeros(hiddenSize, dtype = defaultDType) if b is None else b
         );
 
 
-    def _getCell(self, inputSize : int, outputSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> INetModule:
-        cell = RnnCell(inputSize, outputSize, Wx, Wh, b);
+    def _getCell(self, inputSize : int, hiddenSize : int, activationFunc : INetModule, W : np.ndarray, b : np.ndarray) -> INetModule:
+        cell = RnnCell(inputSize, hiddenSize, activationFunc = activationFunc, W = W, b = b);
         cell.context = self.context;
         return cell;
 
 
     @property
-    def weightX(self) -> np.ndarray:
-        return self._weightX;
-
-
-    @property
-    def weightH(self) -> np.ndarray:
-        return self._weightH;
+    def weight(self) -> np.ndarray:
+        return self._weight;
 
 
     @property
@@ -2015,42 +1984,48 @@ class RnnLayer(NetModuleBase):
         self._H = None;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
         N, T, D = X.shape;
 
-        if len(self._rnnModules) != T:
-            self._rnnModules = [self._getCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias) for _ in range(T)];
+        if len(self._cells) != T:
+            self._cells = [self._getCell(self._inputSize, self._hiddenSize, self._activationFunc, self._weight, self._bias) for _ in range(T)];
 
         if not self._stateful or self._H is None:
-            self._H = np.zeros((N, self._outputSize), X.dtype);
+            self._H = np.zeros((N, self._hiddenSize), X.dtype);
 
-        Y = np.zeros((N, T, self._outputSize), X.dtype);
+        Y = np.zeros((N, T, self._hiddenSize), X.dtype);
         for t in range(T):
-            self._H = self._rnnModules[t].forward(X[:, t, :], self._H)[0];
+            self._H = self._cells[t].forward(X[:, t, :], self._H)[0];
             Y[:, t, :] = self._H;
 
         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
         N, T = dY.shape[: 2];
 
         # truncated BPTT
         self._dH = np.zeros_like(self._H);
         dX = np.zeros((N, T, self._inputSize), dY.dtype);
-        # for i in range(len(self._grads)):
-        #     self._grads[i][...] = 0;
 
         for t in reversed(range(T)):
-            rnn = self._rnnModules[t];
-            dX[:, t, :], self._dH = rnn.backward(dY[:, t, :] + self._dH);
+            cell = self._cells[t];
+            dX[:, t, :], self._dH = cell.backward(dY[:, t, :] + self._dH);
 
-            for i in range(len(self._grads)):
-                self._grads[i] += rnn.grads[i];
+            for i in range(len(self._params)):
+                grad = self._params[i].grad;
+                grad += cell.params[i].grad;
 
         return dX, ;
+
+
+    def clearGrads(self):
+        super().clearGrads();
+
+        for cell in self._cells:
+            cell.clearGrads();
 
 
     def setState(self, H : np.ndarray):
@@ -2627,22 +2602,22 @@ class GruCell(NetModuleBase):
 
 
 class GruLayer(RnnLayer):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, stateful : bool = True):
-        super().__init__(inputSize, outputSize, Wx, Wh, b, stateful);
+    def __init__(self, inputSize : int, hiddenSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, stateful : bool = True):
+        super().__init__(inputSize, hiddenSize, Wx, Wh, b, stateful);
 
-        self._name = f"GRU {inputSize}*{outputSize}";
+        self._name = f"GRU {inputSize}*{hiddenSize}";
 
 
-    def _initParams(self, inputSize : int, outputSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
+    def _initParams(self, inputSize : int, hiddenSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
         return (
-            math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 3 * outputSize).astype(defaultDType) if Wx is None else Wx,
-            math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 3 * outputSize).astype(defaultDType) if Wh is None else Wh,
-            np.zeros(3 * outputSize, dtype = defaultDType) if b is None else b
+            math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 3 * hiddenSize).astype(defaultDType) if Wx is None else Wx,
+            math.sqrt(2.0 / hiddenSize) * np.random.randn(hiddenSize, 3 * hiddenSize).astype(defaultDType) if Wh is None else Wh,
+            np.zeros(3 * hiddenSize, dtype = defaultDType) if b is None else b
         );
 
 
-    def _getCell(self, inputSize : int, outputSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> INetModule:
-        cell = GruCell(inputSize, outputSize, Wx, Wh, b);
+    def _getCell(self, inputSize : int, hiddenSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> INetModule:
+        cell = GruCell(inputSize, hiddenSize, Wx, Wh, b);
         cell.context = self.context;
         return cell;
 
@@ -3998,7 +3973,7 @@ class PartitionedDataIterator(IDataIterator):
         offset = int(np.random.randint(0, self._stepSize)) if self._randomOffset else 0;
         totalLength = ((self._length - offset) // self._batchSize) * self._batchSize;
         data = [d[offset: offset + totalLength].reshape((self._batchSize, -1) + d.shape[1:]) for d in self._data];
-        self._totalIterations = data[0].shape[1] // self._stepSize
+        self._totalIterations = int(math.ceil(data[0].shape[1] / self._stepSize));
 
         for i in range(0, self._totalIterations * self._stepSize, self._stepSize):
             yield tuple([d[:, i: i + self._stepSize] for d in data]);
