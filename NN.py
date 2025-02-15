@@ -805,6 +805,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
             self.reset();
             trainingLossData.append(sum(lossValues) / len(lossValues));
             if evaluator is not None:
+                evaluator.fromLoss(lossValues);
                 trainingAccuracyData.append(evaluator.accuracy);
 
             if evaluator is not None and evalEpoch:
@@ -1923,7 +1924,7 @@ class RnnCell(AggregateNetModule):
 
 
 class RnnLayer(NetModuleBase):
-    def __init__(self, inputSize : int, hiddenSize : int, activationFunc : INetModule = None, W : np.ndarray = None, b : np.ndarray = None, stateful : bool = True):
+    def __init__(self, inputSize : int, hiddenSize : int, activationFuncSelector : Callable = None, W : np.ndarray = None, b : np.ndarray = None, stateful : bool = True):
         super().__init__();
 
         self._H = None;
@@ -1931,7 +1932,7 @@ class RnnLayer(NetModuleBase):
         self._stateful = stateful;
         self._inputSize = inputSize;
         self._hiddenSize = hiddenSize;
-        self._activationFunc = activationFunc;
+        self._activationFuncSelector = activationFuncSelector;
         self._name = f"RNN {inputSize}*{hiddenSize}";
 
         self._weight, self._bias = self._initParams(inputSize, hiddenSize, W, b);
@@ -1948,8 +1949,7 @@ class RnnLayer(NetModuleBase):
 
     def _setParams(self, params: List[INetParamDefinition]):
         self._weight, self._bias = params[0].value, params[1].value;
-        for cell in self._cells:
-            cell.params = value;
+        self._cells.clear();
 
 
     def _initParams(self, inputSize : int, hiddenSize : int, W : np.ndarray, b : np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -1989,7 +1989,7 @@ class RnnLayer(NetModuleBase):
         N, T, D = X.shape;
 
         if len(self._cells) != T:
-            self._cells = [self._getCell(self._inputSize, self._hiddenSize, self._activationFunc, self._weight, self._bias) for _ in range(T)];
+            self._cells = [self._getCell(self._inputSize, self._hiddenSize, self._activationFuncSelector() if self._activationFuncSelector is not None else None, self._weight, self._bias) for _ in range(T)];
 
         if not self._stateful or self._H is None:
             self._H = np.zeros((N, self._hiddenSize), X.dtype);
