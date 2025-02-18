@@ -668,7 +668,7 @@ class AggregateNetModule(NetModuleBase):
 class NetFitResult(INetFitResult):
     def __init__(self, trainingLossData : List[float], trainingAccuracyData : List[float],
                  testLossData : List[float], testAccuracyData : List[float],
-                 finalTrainingLoss : Optional[float] = None, finalTrainingAccuracy :Optional[float] = None,
+                 finalTrainingLoss : Optional[float] = None, finalTrainingAccuracy : Optional[float] = None,
                  finalTestLoss : Optional[float] = None, finalTestAccuracy : Optional[float] = None):
         self._trainingLossData = trainingLossData;
         self._trainingAccuracyData = trainingAccuracyData;
@@ -1884,47 +1884,85 @@ class EmbeddingWithDotLayer(NetModuleBase):
         return dX, ;
 
 
-class RnnCell(AggregateNetModule):
-    def __init__(self, inputSize : int, hiddenSize : int, activationFunc : INetModule = None, W : np.ndarray = None, b : np.ndarray = None):
-        self._inputSize = inputSize;
-        self._hiddenSize = hiddenSize;
-        self._affineLayer = AffineLayer(inputSize + hiddenSize, hiddenSize, W = W, b = b);
-        self._activationFunc = activationFunc if activationFunc is not None else TanhLayer();
-
-        if len(self._activationFunc.params) > 0:
+class RnnCell(NetModuleBase):
+    def __init__(self, inputSize : int, hiddenSize : int, activationFunc : INetModule = None, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
+        if activationFunc is not None and len(activationFunc.params) > 0:
             raise ValueError("not supports activation function with parameters");
 
-        super().__init__(self._affineLayer, self._activationFunc);
+        super().__init__();
+
+        self._X = None;
+        self._W = None;
+        self._Y = None;
+        self._inputSize = inputSize;
+        self._hiddenSize = hiddenSize;
+        self._activationFunc = activationFunc if activationFunc is not None else TanhLayer();
         self._name = f"RNN Cell {inputSize}*{hiddenSize}";
 
+        self._weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, hiddenSize).astype(defaultDType) if Wx is None else Wx;
+        self._weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, hiddenSize).astype(defaultDType) if Wh is None else Wh;
+        self._biasX = np.zeros(hiddenSize, dtype = defaultDType) if bx is None else bx;
+        self._biasH = np.zeros(hiddenSize, dtype = defaultDType) if bh is None else bh;
+
+        self._params.append(NetParamDefinition("weightX", self._weightX));
+        self._params.append(NetParamDefinition("weightH", self._weightH));
+        self._params.append(NetParamDefinition("biasX", self._biasX));
+        self._params.append(NetParamDefinition("biasH", self._biasH));
+
+
+    def _setParams(self, params: List[INetParamDefinition]):
+        self._weightX, self._weightH, self._biasX, self._biasH = params[0].value, params[1].value, params[2].value, params[3].value;
+
 
     @property
-    def weight(self) -> np.ndarray:
-        return self._affineLayer.weight;
+    def weightX(self) -> np.ndarray:
+        return self._weightX;
 
 
     @property
-    def bias(self) -> np.ndarray:
-        return self._affineLayer.bias;
+    def weightH(self) -> np.ndarray:
+        return self._weightH;
+
+
+    @property
+    def biasX(self) -> np.ndarray:
+        return self._biasX;
+
+
+    @property
+    def biasH(self) -> np.ndarray:
+        return self._biasH;
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X, H = data;
-        Y, = self._affineLayer.forward(np.concatenate((X, H), axis = -1));
-        A, = self._activationFunc.forward(Y);
+        self._X = np.concatenate((X, H), axis = -1);
+        self._W = np.concatenate((self._weightX, self._weightH), axis = 0);
+        self._Y = self._X @ self._W + self._biasX + self._biasH;
+        A, = self._activationFunc.forward(self._Y);
 
         return A, ;
 
 
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY, = self._activationFunc.backward(*dout);
-        dX, dH = tuple(np.split(self._affineLayer.backward(dY)[0], [self._inputSize], axis = -1));
+        dX = dY @ self._W.T;
+        dW = self._X.T @ dY;
+        db = np.sum(dY, axis = 0);
+
+        dX, dH = tuple(np.split(dX, [self._inputSize], axis = -1));
+        dWx, dWh = tuple(np.split(dW, [self._inputSize], axis = 0));
+
+        self._params[0].grad[...] = dWx;
+        self._params[1].grad[...] = dWh;
+        self._params[2].grad[...] = db;
+        self._params[3].grad[...] = db;
 
         return dX, dH;
 
 
 class RnnLayer(NetModuleBase):
-    def __init__(self, inputSize : int, hiddenSize : int, activationFuncSelector : Callable = None, W : np.ndarray = None, b : np.ndarray = None, stateful : bool = True):
+    def __init__(self, inputSize : int, hiddenSize : int, activationFuncSelector : Callable = None, stateful : bool = True, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
         super().__init__();
 
         self._H = None;
@@ -1932,47 +1970,50 @@ class RnnLayer(NetModuleBase):
         self._stateful = stateful;
         self._inputSize = inputSize;
         self._hiddenSize = hiddenSize;
-        self._activationFuncSelector = activationFuncSelector;
+        self._activationFuncSelector = activationFuncSelector if activationFuncSelector is not None else (lambda: TanhLayer());
         self._name = f"RNN {inputSize}*{hiddenSize}";
 
-        self._weight, self._bias = self._initParams(inputSize, hiddenSize, W, b);
-        self._cells: List[INetModule] = [];
+        self._Xs, self._W = None, None;
+        self._activationFuncs : List[INetModel] = [];
 
-        self._params.append(NetParamDefinition("weight", self._weight));
-        self._params.append(NetParamDefinition("bias", self._bias));
+        self._weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, hiddenSize).astype(defaultDType) if Wx is None else Wx;
+        self._weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, hiddenSize).astype(defaultDType) if Wh is None else Wh;
+        self._biasX = np.zeros(hiddenSize, dtype = defaultDType) if bx is None else bx;
+        self._biasH = np.zeros(hiddenSize, dtype = defaultDType) if bh is None else bh;
+
+        self._params.append(NetParamDefinition("weightX", self._weightX));
+        self._params.append(NetParamDefinition("weightH", self._weightH));
+        self._params.append(NetParamDefinition("biasX", self._biasX));
+        self._params.append(NetParamDefinition("biasH", self._biasH));
 
 
     def _setContext(self, context : INetContext):
-        for cell in self._cells:
-            cell.context = value;
+        for af in self._activationFuncs:
+            af.context = value;
 
 
     def _setParams(self, params: List[INetParamDefinition]):
-        self._weight, self._bias = params[0].value, params[1].value;
-        self._cells.clear();
-
-
-    def _initParams(self, inputSize : int, hiddenSize : int, W : np.ndarray, b : np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        return (
-            math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize + hiddenSize, hiddenSize).astype(defaultDType) if W is None else W,
-            np.zeros(hiddenSize, dtype = defaultDType) if b is None else b
-        );
-
-
-    def _getCell(self, inputSize : int, hiddenSize : int, activationFunc : INetModule, W : np.ndarray, b : np.ndarray) -> INetModule:
-        cell = RnnCell(inputSize, hiddenSize, activationFunc = activationFunc, W = W, b = b);
-        cell.context = self.context;
-        return cell;
+        self._weightX, self._weightH, self._biasX, self._biasH = params[0].value, params[1].value, params[2].value, params[3].value;
 
 
     @property
-    def weight(self) -> np.ndarray:
-        return self._weight;
+    def weightX(self) -> np.ndarray:
+        return self._weightX;
 
 
     @property
-    def bias(self) -> np.ndarray:
-        return self._bias;
+    def weightH(self) -> np.ndarray:
+        return self._weightH;
+
+
+    @property
+    def biasX(self) -> np.ndarray:
+        return self._biasX;
+
+
+    @property
+    def biasH(self) -> np.ndarray:
+        return self._biasH;
 
 
     @property
@@ -1985,47 +2026,61 @@ class RnnLayer(NetModuleBase):
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
-        X = data[0];
-        N, T, D = X.shape;
+        Xs = data[0];
+        T, N = Xs.shape[: 2];
 
-        if len(self._cells) != T:
-            self._cells = [self._getCell(self._inputSize, self._hiddenSize, self._activationFuncSelector() if self._activationFuncSelector is not None else None, self._weight, self._bias) for _ in range(T)];
+        if len(self._activationFuncs) != T:
+            self._activationFuncs = [self._activationFuncSelector() for _ in range(T)];
 
         if not self._stateful or self._H is None:
-            self._H = np.zeros((N, self._hiddenSize), X.dtype);
+            self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
 
-        Y = np.zeros((N, T, self._hiddenSize), X.dtype);
+        self._Xs, Ys = [], [];
+        self._W = np.concatenate((self._weightX, self._weightH), axis = 0);
         for t in range(T):
-            self._H = self._cells[t].forward(X[:, t, :], self._H)[0];
-            Y[:, t, :] = self._H;
+            X, af = Xs[t], self._activationFuncs[t];
 
-        return Y, ;
+            X = np.concatenate((X, self._H), axis = -1);
+            self._Xs.append(X);
+
+            self._H, = af.forward(X @ self._W + self._biasX + self._biasH);
+            Ys.append(self._H);
+
+        return np.array(Ys), ;
 
 
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
-        dY = dout[0];
-        N, T = dY.shape[: 2];
+        dYs = dout[0];
+        T, N = dYs.shape[: 2];
 
         # truncated BPTT
-        self._dH = np.zeros_like(self._H);
-        dX = np.zeros((N, T, self._inputSize), dY.dtype);
+        dH = np.zeros_like(self._H);
+
+        dXs = [];
+        dW = np.zeros_like(self._W);
+        db = np.zeros_like(self._biasH);
+        WT = self._W.T;
 
         for t in reversed(range(T)):
-            cell = self._cells[t];
-            dX[:, t, :], self._dH = cell.backward(dY[:, t, :] + self._dH);
+            af, X, dY = self._activationFuncs[t], self._Xs[t], dYs[t];
 
-            for i in range(len(self._params)):
-                grad = self._params[i].grad;
-                grad += cell.params[i].grad;
+            dA, = af.backward(dY + dH);
+            dW += X.T @ dA;
+            db += np.sum(dA, axis = 0);
+            dX, dH = tuple(np.split(dA @ WT, [self._inputSize], axis = -1));
 
-        return dX, ;
+            dXs.append(dX);
 
+        dXs.reverse();
+        dWx, dWh = tuple(np.split(dW, [self._inputSize], axis = 0));
 
-    def clearGrads(self):
-        super().clearGrads();
+        self._dH = dH;
+        self._params[0].grad[...] = dWx;
+        self._params[1].grad[...] = dWh;
+        self._params[2].grad[...] = db;
+        self._params[3].grad[...] = db;
 
-        for cell in self._cells:
-            cell.clearGrads();
+        return np.array(dXs), ;
 
 
     def setState(self, H : np.ndarray):
