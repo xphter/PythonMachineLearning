@@ -373,7 +373,7 @@ def convOutputSize(inputSize : int, filterSize : int, stride : int = 1, pad : in
 
 
 # expand elements of last axis to a one-hot vector
-def expand2OneHot(X : np.ndarray, size : int, dtype = np.float64) -> np.ndarray:
+def expand2OneHot(X : np.ndarray, size : int, dtype = defaultDType) -> np.ndarray:
     Y = np.zeros((X.size, size), dtype = dtype);
     Y[list(range(X.size)), X.flatten().tolist()] = 1;
     return Y.reshape(X.shape + (size,));
