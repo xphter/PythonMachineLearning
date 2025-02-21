@@ -2581,26 +2581,31 @@ class BahdanauAttentionLstmLayer(LstmLayer):
 
 
 class GruCell(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None):
+    def __init__(self, inputSize : int, hiddenSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
         super().__init__();
 
-        self._X, self._H = None, None;
-        self._R, self._Z, self._C, self._Y = None, None, None, None;
         self._inputSize = inputSize;
-        self._outputSize = outputSize;
-        self._name = f"GRU Cell {inputSize}*{outputSize}";
+        self._hiddenSize = hiddenSize;
+        self._name = f"GRU Cell {inputSize}*{hiddenSize}";
 
-        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 3 * outputSize).astype(defaultDType) if Wx is None else Wx;
-        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 3 * outputSize).astype(defaultDType) if Wh is None else Wh;
-        self._bias = np.zeros(3 * outputSize, dtype = defaultDType) if b is None else b;
+        self._Xg, self._Xa = None, None;
+        self._Wg, self._Wa = None, None;
+        self._H, self._G, self._R, self._Z, self._A = None, None, None, None, None;
+        self._gi, self._ri, self._xi = [2 * hiddenSize], [hiddenSize], [inputSize];
 
-        weights = [self._weightX, self._weightH, self._bias];
-        self._params.extend(weights);
-        self._grads.extend([np.zeros_like(w) for w in weights]);
+        self._weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, 3 * hiddenSize).astype(defaultDType) if Wx is None else Wx;
+        self._weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, 3 * hiddenSize).astype(defaultDType) if Wh is None else Wh;
+        self._biasX = np.zeros(3 * hiddenSize, dtype = defaultDType) if bx is None else bx;
+        self._biasH = np.zeros(3 * hiddenSize, dtype = defaultDType) if bh is None else bh;
+
+        self._params.append(NetParamDefinition("weightX", self._weightX));
+        self._params.append(NetParamDefinition("weightH", self._weightH));
+        self._params.append(NetParamDefinition("biasX", self._biasX));
+        self._params.append(NetParamDefinition("biasH", self._biasH));
 
 
-    def _setParams(self, value: List[np.ndarray]):
-        self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
+    def _setParams(self, params: List[INetParamDefinition]):
+        self._weightX, self._weightH, self._biasX, self._biasH = params[0].value, params[1].value, params[2].value, params[3].value;
 
 
     @property
@@ -2614,67 +2619,237 @@ class GruCell(NetModuleBase):
 
 
     @property
-    def bias(self) -> np.ndarray:
-        return self._bias;
+    def biasX(self) -> np.ndarray:
+        return self._biasX;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        self._X, self._H = data;
-
-        Wxr, Wxz, Wxh = tuple(np.hsplit(self._weightX, 3));
-        Whr, Whz, Whh = tuple(np.hsplit(self._weightH, 3));
-        br, bz, bh = tuple(np.hsplit(self._bias, 3));
-
-        self._R = sigmoid(self._X @ Wxr + self._H @ Whr + br);
-        self._Z = sigmoid(self._X @ Wxz + self._H @ Whz + bz);
-        self._C = tanh(self._X @ Wxh + (self._H * self._R) @ Whh + bh);
-        self._Y = self._H * self._Z + self._C * (1 - self._Z);
-
-        return self._Y, ;
+    @property
+    def biasH(self) -> np.ndarray:
+        return self._biasH;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X, self._H = data;
+
+        W = np.concatenate((self._weightX, self._weightH), axis = 0);
+        b = self._biasX + self._biasH;
+
+        self._Wg, self._Wa = tuple(np.split(W, self._gi, axis = -1));
+        bg, ba = tuple(np.split(b, self._gi, axis = -1));
+
+        self._Xg = np.concatenate((X, self._H), axis = -1);
+        self._G = sigmoid(self._Xg @ self._Wg + bg);
+        self._R, self._Z = tuple(np.split(self._G, self._ri, axis = -1));
+
+        self._Xa = np.concatenate((X, self._R * self._H), axis = -1);
+        self._A = tanh(self._Xa @ self._Wa + ba);
+
+        Y = self._Z * self._H + (1 - self._Z) * self._A;
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
-        Wxr, Wxz, Wxh = tuple(np.hsplit(self._weightX, 3));
-        Whr, Whz, Whh = tuple(np.hsplit(self._weightH, 3));
 
-        dC = dY * (1 - self._Z) * tanhGradient(self._C);
-        dZ = dY * (self._H - self._C) * sigmoidGradient(self._Z);
-        dR = dC @ Whh.T * self._H * sigmoidGradient(self._R);
+        dZ = dY * (self._H - self._A);
+        dH = dY * self._Z;
+        dA = dY * (1 - self._Z) * tanhGradient(self._A);
 
-        dWxr, dWhr, dbr = self._X.T @ dR, self._H.T @ dR, np.sum(dR, axis = 0);
-        dWxz, dWhz, dbz = self._X.T @ dZ, self._H.T @ dZ, np.sum(dZ, axis = 0);
-        dWxh, dWhh, dbh = self._X.T @ dC, (self._H * self._R).T @ dC, np.sum(dC, axis = 0);
+        dXa = dA @ self._Wa.T;
+        dWa = self._Xa.T @ dA;
+        dba = np.sum(dA, axis = 0);
 
-        dX = dC @ Wxh.T + dZ @ Wxz.T + dR @ Wxr.T;
-        dH = dY * self._Z + dC @ Whh.T * self._R + dZ @ Whz.T + dR @ Whr.T;
+        dX, dRH = tuple(np.split(dXa, self._xi, axis = -1));
+        dR = dRH * self._H;
+        dH += dRH * self._R;
 
-        self._grads[0][...] = np.hstack((dWxr, dWxz, dWxh));
-        self._grads[1][...] = np.hstack((dWhr, dWhz, dWhh));
-        self._grads[2][...] = np.hstack((dbr, dbz, dbh));
+        dG = np.concatenate((dR, dZ), axis = -1) * sigmoidGradient(self._G);
+        dXg = dG @ self._Wg.T;
+        dWg = self._Xg.T @ dG;
+        dbg = np.sum(dG, axis = 0);
+
+        dXgx, dXgh = tuple(np.split(dXg, self._xi, axis = -1));
+        dX += dXgx;
+        dH += dXgh;
+
+        dW = np.concatenate((dWg, dWa), axis = -1);
+        db = np.concatenate((dbg, dba), axis = -1);
+        dWx, dWh = tuple(np.split(dW, self._xi, axis = 0));
+
+        self._params[0].grad[...] = dWx;
+        self._params[1].grad[...] = dWh;
+        self._params[2].grad[...] = db;
+        self._params[3].grad[...] = db;
 
         return dX, dH;
 
 
-class GruLayer(RnnLayer):
-    def __init__(self, inputSize : int, hiddenSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, stateful : bool = True):
-        super().__init__(inputSize, hiddenSize, Wx, Wh, b, stateful);
+class GruLayer(NetModuleBase):
+    def __init__(self, inputSize : int, hiddenSize : int, stateful : bool = True, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
+        super().__init__();
 
+        self._H = None;
+        self._dH = None;
+        self._stateful = stateful;
+        self._inputSize = inputSize;
+        self._hiddenSize = hiddenSize;
         self._name = f"GRU {inputSize}*{hiddenSize}";
 
+        self._Xgs, self._Xas = [], [];
+        self._Wg, self._Wa = None, None;
+        self._Hs, self._Gs, self._Rs, self._Zs, self._As = [], [], [], [], [];
+        self._gi, self._ri, self._xi = [2 * hiddenSize], [hiddenSize], [inputSize];
 
-    def _initParams(self, inputSize : int, hiddenSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
-        return (
-            math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 3 * hiddenSize).astype(defaultDType) if Wx is None else Wx,
-            math.sqrt(2.0 / hiddenSize) * np.random.randn(hiddenSize, 3 * hiddenSize).astype(defaultDType) if Wh is None else Wh,
-            np.zeros(3 * hiddenSize, dtype = defaultDType) if b is None else b
-        );
+        self._weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, 3 * hiddenSize).astype(defaultDType) if Wx is None else Wx;
+        self._weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, 3 * hiddenSize).astype(defaultDType) if Wh is None else Wh;
+        self._biasX = np.zeros(3 * hiddenSize, dtype = defaultDType) if bx is None else bx;
+        self._biasH = np.zeros(3 * hiddenSize, dtype = defaultDType) if bh is None else bh;
+
+        self._params.append(NetParamDefinition("weightX", self._weightX));
+        self._params.append(NetParamDefinition("weightH", self._weightH));
+        self._params.append(NetParamDefinition("biasX", self._biasX));
+        self._params.append(NetParamDefinition("biasH", self._biasH));
 
 
-    def _getCell(self, inputSize : int, hiddenSize : int, Wx : np.ndarray, Wh : np.ndarray, b : np.ndarray) -> INetModule:
-        cell = GruCell(inputSize, hiddenSize, Wx, Wh, b);
-        cell.context = self.context;
-        return cell;
+    def _setParams(self, params: List[INetParamDefinition]):
+        self._weightX, self._weightH, self._biasX, self._biasH = params[0].value, params[1].value, params[2].value, params[3].value;
+
+
+    @property
+    def weightX(self) -> np.ndarray:
+        return self._weightX;
+
+
+    @property
+    def weightH(self) -> np.ndarray:
+        return self._weightH;
+
+
+    @property
+    def biasX(self) -> np.ndarray:
+        return self._biasX;
+
+
+    @property
+    def biasH(self) -> np.ndarray:
+        return self._biasH;
+
+
+    @property
+    def dH(self) -> np.ndarray:
+        return self._dH;
+
+
+    def _reset(self):
+        self._H = None;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        Xs = data[0];
+        T, N = Xs.shape[: 2];
+
+        if not self._stateful or self._H is None:
+            self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
+
+        W = np.concatenate((self._weightX, self._weightH), axis = 0);
+        b = self._biasX + self._biasH;
+
+        self._Wg, self._Wa = tuple(np.split(W, self._gi, axis = -1));
+        bg, ba = tuple(np.split(b, self._gi, axis = -1));
+
+        Ys = [];
+        self._Hs.clear();
+        self._Xgs.clear();
+        self._Gs.clear();
+        self._Rs.clear();
+        self._Zs.clear();
+        self._Xas.clear();
+        self._As.clear();
+
+        for X in Xs:
+            self._Hs.append(self._H);
+
+            Xg = np.concatenate((X, self._H), axis = -1);
+
+            G = sigmoid(Xg @ self._Wg + bg);
+            R, Z = tuple(np.split(G, self._ri, axis = -1));
+
+            Xa = np.concatenate((X, R * self._H), axis = -1);
+            A = tanh(Xa @ self._Wa + ba);
+
+            self._H = Z * self._H + (1 - Z) * A;
+
+            self._Xgs.append(Xg);
+            self._Gs.append(G);
+            self._Rs.append(R);
+            self._Zs.append(Z);
+            self._Xas.append(Xa);
+            self._As.append(A);
+            Ys.append(self._H);
+
+        return np.array(Ys), ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dYs = dout[0];
+        T, N = dYs.shape[: 2];
+
+        # truncated BPTT
+        dH = np.zeros_like(self._H);
+
+        dXs = [];
+        dWg = np.zeros_like(self._Wg);
+        dWa = np.zeros_like(self._Wa);
+        dbg = np.zeros(2 * self._hiddenSize, dtype = dYs.dtype);
+        dba = np.zeros(self._hiddenSize, dtype = dYs.dtype);
+        WgT, WaT = self._Wg.T, self._Wa.T;
+
+        for t in reversed(range(T)):
+            dY = dYs[t];
+            H, Xg, G, R, Z, Xa, A = self._Hs[t], self._Xgs[t], self._Gs[t], self._Rs[t], self._Zs[t], self._Xas[t], self._As[t];
+
+            dY = dY + dH;
+
+            dZ = dY * (H - A);
+            dH = dY * Z;
+            dA = dY * (1 - Z) * tanhGradient(A);
+
+            dXa = dA @ WaT;
+            dWa += Xa.T @ dA;
+            dba += np.sum(dA, axis = 0);
+
+            dX, dRH = tuple(np.split(dXa, self._xi, axis = -1));
+            dR = dRH * H;
+            dH += dRH * R;
+
+            dG = np.concatenate((dR, dZ), axis = -1) * sigmoidGradient(G);
+            dXg = dG @ WgT;
+            dWg += Xg.T @ dG;
+            dbg += np.sum(dG, axis = 0);
+
+            dXgx, dXgh = tuple(np.split(dXg, self._xi, axis = -1));
+            dX += dXgx;
+            dH += dXgh;
+
+            dXs.append(dX);
+
+        dXs.reverse();
+        dW = np.concatenate((dWg, dWa), axis = -1);
+        db = np.concatenate((dbg, dba), axis = -1);
+        dWx, dWh = tuple(np.split(dW, self._xi, axis = 0));
+
+        self._dH = dH;
+        self._params[0].grad[...] = dWx;
+        self._params[1].grad[...] = dWh;
+        self._params[2].grad[...] = db;
+        self._params[3].grad[...] = db;
+
+        return np.array(dXs), ;
+
+
+    def setState(self, H : np.ndarray):
+        self._H = H;
 
 
 class BiRnnLayer(AggregateNetModule):
