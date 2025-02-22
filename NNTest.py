@@ -2063,7 +2063,7 @@ def testSeq2Seq():
 
 
 def unitTest():
-    # testPerformance();
+    testPerformance();
     # testFunctionalNetModuleGradient1();
     # testFunctionalNetModuleGradient2();
     # testSigmoid1();
@@ -2150,13 +2150,16 @@ def unitTest():
     # testRnnLayer1();
     # testRnnLayerGradient1();
     # testRnnLayerGradient2();
-    testGruCell1();
-    testGruCellGradient1();
-    testGruLayer1();
-    testGruLayerGradient1();
+    # testGruCell1();
+    # testGruCellGradient1();
+    # testGruLayer1();
+    # testGruLayerGradient1();
+    # testLstmCell1();
     # testLstmCellGradient1();
     # testLstmCellGradient2();
     # testLstmCellGradient_Dropout();
+    # testLstmLayer1();
+    # testLstmLayerGradient1();
     # testLstmLayerGradient(False);
     # testLstmLayerGradient_State(False);
     # testLstmLayerGradient_State_Dropout(False);
@@ -2202,30 +2205,34 @@ def sumAll(*X : np.ndarray) -> float:
 
 
 def testPerformance():
-    n = 100000;
+    n = 10000;
     N, stepSize, inputSize, outputSize = 32, 100, 24, 48;
-    Wx, Wh = np.random.randn(inputSize, 3 * outputSize), np.random.randn(outputSize, 3 * outputSize);
-    bx, bh = np.random.randn(3 * outputSize), np.random.randn(3 * outputSize);
+    Wx, Wh = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize);
+    bx, bh = np.random.randn(4 * outputSize), np.random.randn(4 * outputSize);
     b = bx + bh;
 
     X1 = np.random.randn(N, inputSize);
     H1 = np.random.randn(N, outputSize);
-    dY1 = np.random.randn(N, outputSize);
+    C1 = np.random.randn(N, outputSize);
+    dYH1 = np.random.randn(N, outputSize);
+    dYC1 = np.random.randn(N, outputSize);
 
     X2 = X1;
     H2 = H1;
-    dY2 = dY1;
+    C2 = C1;
+    dYH2 = dYH1;
+    dYC2 = dYC1;
 
-    layer1 = GruCell(inputSize, outputSize, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
-    layer2 = GruCell2(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b);
+    layer1 = LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
+    layer2 = LstmCell2(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b);
 
-    Y1, = layer1.forward(X1, H1);
-    Y2, = layer2.forward(X2, H2);
-    print(f"{np.sum(np.abs(Y1 - Y2))}");
+    YH1, YC1 = layer1.forward(X1, H1, C1);
+    YH2, YC2 = layer2.forward(X2, H2, C2);
+    print(f"H error: {np.sum(np.abs(YH1 - YH2))}, C error: {np.sum(np.abs(YC1 - YC2))}");
 
-    dX1, dH1 = layer1.backward(dY1);
-    dX2, dH2 = layer2.backward(dY2);
-    print(f"dX error: {np.sum(np.abs(dX1 - dX2))}, dH error: {np.sum(np.abs(dH1 - dH2))}");
+    dX1, dH1, dC1 = layer1.backward(dYH1, dYC1);
+    dX2, dH2, dC2 = layer2.backward(dYH2, dYC2);
+    print(f"dX error: {np.sum(np.abs(dX1 - dX2))}, dH error: {np.sum(np.abs(dH1 - dH2))}, dC error: {np.sum(np.abs(dC1 - dC2))}");
 
     for i in range(len(layer1.params) - 1):
         p1 = layer1.params[i];
@@ -2248,18 +2255,18 @@ def testPerformance():
     #     print(f"{p1.name}: {np.sum(np.abs(p1.grad - p2.grad))}");
 
     now = time.time();
-    Y1, = layer1.forward(X1, H1);
+    H1, C1 = layer1.forward(X1, H1, C1);
     for _ in range(n):
-        Y1, = layer1.forward(X1, H1);
-        dX1, dH1, = layer1.backward(dY1);
+        H1, C1 = layer1.forward(X1, H1, C1);
+        dX1, dH1, dC1 = layer1.backward(dYH1, dYC1);
     t1 = time.time() - now;
     print(f"t1: {t1}");
 
     now = time.time();
-    Y2, = layer2.forward(X2, H2);
+    H2, C2 = layer2.forward(X2, H2, C2);
     for _ in range(n):
-        Y2, = layer2.forward(X2, H2);
-        dX2, dH2, = layer2.backward(dY2);
+        H2, C2 = layer2.forward(X2, H2, C2);
+        dX2, dH2, dC2 = layer2.backward(dYH2, dYC2);
     t2 = time.time() - now;
     print(f"t2: {t2}");
 
@@ -3752,71 +3759,160 @@ def testGruLayerGradient1():
     print("\n");
 
 
+def testLstmCell1():
+    N, inputSize, hiddenSize = 32, 100, 64;
+    X, H, C = np.random.randn(N, inputSize), np.random.randn(N, hiddenSize), np.random.randn(N, hiddenSize);
+    Wxf, Wxi, Wxo, Wxh = np.random.randn(inputSize, hiddenSize), np.random.randn(inputSize, hiddenSize), np.random.randn(inputSize, hiddenSize), np.random.randn(inputSize, hiddenSize);
+    Whf, Whi, Who, Whh = np.random.randn(hiddenSize, hiddenSize), np.random.randn(hiddenSize, hiddenSize), np.random.randn(hiddenSize, hiddenSize), np.random.randn(hiddenSize, hiddenSize);
+    bxf, bxi, bxo, bxh = np.random.randn(hiddenSize), np.random.randn(hiddenSize), np.random.randn(hiddenSize), np.random.randn(hiddenSize);
+    bhf, bhi, bho, bhh = np.random.randn(hiddenSize), np.random.randn(hiddenSize), np.random.randn(hiddenSize), np.random.randn(hiddenSize);
+
+    F = sigmoid(X @ Wxf + H @ Whf + bxf + bhf);
+    I = sigmoid(X @ Wxi + H @ Whi + bxi + bhi);
+    O = sigmoid(X @ Wxo + H @ Who + bxo + bho);
+    S = tanh(X @ Wxh + H @ Whh + bxh + bhh);
+    YC1 = F * C + I * S;
+    YH1 = O * tanh(YC1);
+
+    m = LstmCell(inputSize, hiddenSize,
+                 Wx = np.concatenate((Wxf, Wxi, Wxo, Wxh), axis = -1), Wh = np.concatenate((Whf, Whi, Who, Whh), axis = -1),
+                 bx = np.concatenate((bxf, bxi, bxo, bxh), axis = -1), bh = np.concatenate((bhf, bhi, bho, bhh), axis = -1));
+    YH2, YC2 = m.forward(X, H, C);
+
+    print(f"LstmCell1, H error: {np.sum(np.abs(YH1 - YH2))}, C error: {np.sum(np.abs(YC1 - YC2))}");
+    print("\n");
+
+
 def testLstmCellGradient1():
-    N, inputSize, outputSize = 32, 12, 16;
-    X, H, C = np.random.randn(N, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
-    Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
-    m = LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b);
+    N, inputSize, hiddenSize = 32, 24, 48;
+    X, H, C = np.random.randn(N, inputSize), np.random.randn(N, hiddenSize), np.random.randn(N, hiddenSize);
+    Wx, Wh, bx, bh = np.random.randn(inputSize, 4 * hiddenSize), np.random.randn(hiddenSize, 4 * hiddenSize), np.random.randn(4 * hiddenSize), np.random.randn(4 * hiddenSize);
+    m = LstmCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
     YH, YC = m.forward(X, H, C);
     dX1, dH1, dC1 = m.backward(np.ones_like(YH), np.ones_like(YC));
-    dWx1, dWh1, db1 = tuple(m.grads);
+    dWx1, dWh1 = m.params[0].grad, m.params[1].grad;
+    dbx1, dbh1 = m.params[2].grad, m.params[3].grad;
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
     dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
-    dWxN = numericGradient(lambda x: sumAll(*LstmCell(inputSize, outputSize, Wx = x, Wh = Wh, b = b).forward(X, H, C)), Wx);
-    dWhN = numericGradient(lambda x: sumAll(*LstmCell(inputSize, outputSize, Wx = Wx, Wh = x, b = b).forward(X, H, C)), Wh);
-    dbN = numericGradient(lambda x: sumAll(*LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x).forward(X, H, C)), b);
-    print(f"LstmCell, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbN error: {np.sum(np.abs(db1 - dbN))}");
+    dWxN = numericGradient(lambda x: sumAll(*LstmCell(inputSize, hiddenSize, Wx = x, Wh = Wh, bx = bx, bh = bh).forward(X, H, C)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*LstmCell(inputSize, hiddenSize, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X, H, C)), Wh);
+    dbxN = numericGradient(lambda x: sumAll(*LstmCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X, H, C)), bx);
+    dbhN = numericGradient(lambda x: sumAll(*LstmCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X, H, C)), bh);
+    print(f"LstmCell, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
     print("\n");
 
 
-def testLstmCellGradient2():
-    N, inputSize, outputSize = 32, 12, 16;
-    X, H, C = np.random.randn(N, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
-    Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
-    m = LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b);
-    YH, YC = m.forward(X, H, C);
-    dX1, dH1, dC1 = m.backward(np.ones_like(YH), np.zeros_like(YC));
-    dWx1, dWh1, db1 = tuple(m.grads);
-    dXN = numericGradient(lambda x: np.sum(m.forward(x, H, C)[0]), X);
-    dHN = numericGradient(lambda x: np.sum(m.forward(X, x, C)[0]), H);
-    dCN = numericGradient(lambda x: np.sum(m.forward(X, H, x)[0]), C);
-    dWxN = numericGradient(lambda x: np.sum(LstmCell(inputSize, outputSize, Wx = x, Wh = Wh, b = b).forward(X, H, C)[0]), Wx);
-    dWhN = numericGradient(lambda x: np.sum(LstmCell(inputSize, outputSize, Wx = Wx, Wh = x, b = b).forward(X, H, C)[0]), Wh);
-    dbN = numericGradient(lambda x: np.sum(LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x).forward(X, H, C)[0]), b);
-    print(f"LstmCell, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbN error: {np.sum(np.abs(db1 - dbN))}");
+# def testLstmCellGradient2():
+#     N, inputSize, outputSize = 32, 12, 16;
+#     X, H, C = np.random.randn(N, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
+#     Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
+#     m = LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b);
+#     YH, YC = m.forward(X, H, C);
+#     dX1, dH1, dC1 = m.backward(np.ones_like(YH), np.zeros_like(YC));
+#     dWx1, dWh1, db1 = tuple(m.grads);
+#     dXN = numericGradient(lambda x: np.sum(m.forward(x, H, C)[0]), X);
+#     dHN = numericGradient(lambda x: np.sum(m.forward(X, x, C)[0]), H);
+#     dCN = numericGradient(lambda x: np.sum(m.forward(X, H, x)[0]), C);
+#     dWxN = numericGradient(lambda x: np.sum(LstmCell(inputSize, outputSize, Wx = x, Wh = Wh, b = b).forward(X, H, C)[0]), Wx);
+#     dWhN = numericGradient(lambda x: np.sum(LstmCell(inputSize, outputSize, Wx = Wx, Wh = x, b = b).forward(X, H, C)[0]), Wh);
+#     dbN = numericGradient(lambda x: np.sum(LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x).forward(X, H, C)[0]), b);
+#     print(f"LstmCell, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbN error: {np.sum(np.abs(db1 - dbN))}");
+#     print("\n");
+# 
+# 
+# def testLstmCellGradient_Dropout():
+#     def newCell(Wx2, Wh2, b2):
+#         cell = LstmCell(inputSize, outputSize, Wx = Wx2, Wh = Wh2, b = b2, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
+#         cell.context.isTrainingMode = True;
+#         cell.setInputDropoutMask(inputMask);
+#         cell.setRecurrentDropoutMask(recurrentMask);
+#         return cell;
+# 
+# 
+#     N, inputSize, outputSize = 32, 12, 16;
+#     inputDropout, recurrentDropout = 0.5, 0.5;
+#     X, H, C = np.random.randn(N, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
+#     Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
+#     inputMask = getDropoutMask(H, inputDropout);
+#     recurrentMask = getDropoutMask(C, recurrentDropout);
+#     m = LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
+#     m.context.isTrainingMode = True;
+#     m.setInputDropoutMask(inputMask);
+#     m.setRecurrentDropoutMask(recurrentMask);
+#     YH, YC = m.forward(X, H, C);
+#     dX1, dH1, dC1 = m.backward(np.ones_like(YH), np.ones_like(YC));
+#     dWx1, dWh1, db1 = tuple(m.grads);
+#     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
+#     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
+#     dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
+#     dWxN = numericGradient(lambda x: sumAll(*newCell(x, Wh, b).forward(X, H, C)), Wx);
+#     dWhN = numericGradient(lambda x: sumAll(*newCell(Wx, x, b).forward(X, H, C)), Wh);
+#     dbN = numericGradient(lambda x: sumAll(*newCell(Wx, Wh, x).forward(X, H, C)), b);
+#     print(f"LstmCell, numericGradient dropout, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbN error: {np.sum(np.abs(db1 - dbN))}");
+#     print("\n");
+
+
+def testLstmLayer1():
+    N, stepSize, inputSize, hiddenSize = 32, 100, 24, 48;
+    Xs, H, C = np.random.randn(stepSize, N, inputSize), np.zeros((N, hiddenSize)), np.zeros((N, hiddenSize));
+    Wx, Wh = np.random.randn(inputSize, 4 * hiddenSize), np.random.randn(hiddenSize, 4 * hiddenSize);
+    bx, bh = np.random.randn(4 * hiddenSize), np.random.randn(4 * hiddenSize);
+    dYs = np.random.randn(stepSize, N, hiddenSize);
+
+    cells = [LstmCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = bx, bh = bh) for _ in range(stepSize)];
+    layer = LstmLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
+
+    Y1 = [];
+    for X, cell in zip(Xs, cells):
+        H, C  = cell.forward(X, H, C);
+        Y1.append(H);
+    Y1 = np.array(Y1);
+
+    dXs1, dH1, dC1 = [], np.zeros_like(H), np.zeros_like(C);
+    dWx1, dWh1, dbx1, dbh1 = np.zeros_like(Wx), np.zeros_like(Wh), np.zeros_like(bx), np.zeros_like(bh);
+    for t in reversed(range(stepSize)):
+        dY, cell = dYs[t], cells[t];
+        dX, dH1, dC1 = cell.backward(dY + dH1, dC1);
+
+        dXs1.append(dX);
+        dWx1 += cell.params[0].grad;
+        dWh1 += cell.params[1].grad;
+        dbx1 += cell.params[2].grad;
+        dbh1 += cell.params[3].grad;
+    dXs1.reverse();
+    dXs1 = np.array(dXs1);
+
+    Y2, = layer.forward(Xs);
+    dXs2, = layer.backward(dYs);
+    dH2 = layer.dH;
+    dC2 = layer.dC;
+    dWx2 = layer.params[0].grad;
+    dWh2 = layer.params[1].grad;
+    dbx2 = layer.params[2].grad;
+    dbh2 = layer.params[3].grad;
+
+    print(f"LstmLayer1, Y error: {np.sum(np.abs(Y1 - Y2))}, dX error: {np.sum(np.abs(dXs1 - dXs2))}, dH error: {np.sum(np.abs(dH1 - dH2))}, dC error: {np.sum(np.abs(dC1 - dC2))}, dWx error: {np.sum(np.abs(dWx1 - dWx2))}, dWh error: {np.sum(np.abs(dWh1 - dWh2))}, dbx error: {np.sum(np.abs(dbx1 - dbx2))}, dbh error: {np.sum(np.abs(dbh1 - dbh2))}");
+
     print("\n");
 
 
-def testLstmCellGradient_Dropout():
-    def newCell(Wx2, Wh2, b2):
-        cell = LstmCell(inputSize, outputSize, Wx = Wx2, Wh = Wh2, b = b2, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
-        cell.context.isTrainingMode = True;
-        cell.setInputDropoutMask(inputMask);
-        cell.setRecurrentDropoutMask(recurrentMask);
-        return cell;
-
-
-    N, inputSize, outputSize = 32, 12, 16;
-    inputDropout, recurrentDropout = 0.5, 0.5;
-    X, H, C = np.random.randn(N, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
-    Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
-    inputMask = getDropoutMask(H, inputDropout);
-    recurrentMask = getDropoutMask(C, recurrentDropout);
-    m = LstmCell(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, inputDropout = inputDropout, recurrentDropout = recurrentDropout);
-    m.context.isTrainingMode = True;
-    m.setInputDropoutMask(inputMask);
-    m.setRecurrentDropoutMask(recurrentMask);
-    YH, YC = m.forward(X, H, C);
-    dX1, dH1, dC1 = m.backward(np.ones_like(YH), np.ones_like(YC));
-    dWx1, dWh1, db1 = tuple(m.grads);
-    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
-    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
-    dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
-    dWxN = numericGradient(lambda x: sumAll(*newCell(x, Wh, b).forward(X, H, C)), Wx);
-    dWhN = numericGradient(lambda x: sumAll(*newCell(Wx, x, b).forward(X, H, C)), Wh);
-    dbN = numericGradient(lambda x: sumAll(*newCell(Wx, Wh, x).forward(X, H, C)), b);
-    print(f"LstmCell, numericGradient dropout, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbN error: {np.sum(np.abs(db1 - dbN))}");
+def testLstmLayerGradient1():
+    T, N, inputSize, hiddenSize = 8, 32, 24, 48;
+    X = np.random.randn(T, N, inputSize);
+    Wx, Wh = np.random.randn(inputSize, 4 * hiddenSize), np.random.randn(hiddenSize, 4 * hiddenSize);
+    bx, bh = np.random.randn(4 * hiddenSize), np.random.randn(4 * hiddenSize);
+    m = LstmLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
+    Y, = m.forward(X);
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dWx1, dWh1 = m.params[0].grad, m.params[1].grad;
+    dbx1, dbh1 = m.params[2].grad, m.params[3].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dWxN = numericGradient(lambda x: np.sum(LstmLayer(inputSize, hiddenSize, stateful = False, Wx = x, Wh = Wh, bx = bx, bh = bh).forward(X)[0]), Wx);
+    dWhN = numericGradient(lambda x: np.sum(LstmLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
+    dbxN = numericGradient(lambda x: np.sum(LstmLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
+    dbhN = numericGradient(lambda x: np.sum(LstmLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
+    print(f"LstmLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
     print("\n");
 
 

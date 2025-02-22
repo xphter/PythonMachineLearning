@@ -2087,10 +2087,267 @@ class RnnLayer(NetModuleBase):
         self._H = H;
 
 
+class LstmCell(NetModuleBase):
+    def __init__(self, inputSize : int, hiddenSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
+        super().__init__();
+
+        self._inputSize = inputSize;
+        self._hiddenSize = hiddenSize;
+        self._name = f"LSTM Cell {inputSize}*{hiddenSize}";
+
+        self._X, self._W, self._C = None, None, None;
+        self._F, self._I, self._O, self._G, self._S, self._tanhYC = None, None, None, None, None, None;
+        self._xi, self._si, self._gi = [self._inputSize], [3 * self._hiddenSize], [self._hiddenSize, 2 * self._hiddenSize];
+
+        self._weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, 4 * hiddenSize).astype(defaultDType) if Wx is None else Wx;
+        self._weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, 4 * hiddenSize).astype(defaultDType) if Wh is None else Wh;
+        self._biasX = np.zeros(4 * hiddenSize, dtype = defaultDType) if bx is None else bx;
+        self._biasH = np.zeros(4 * hiddenSize, dtype = defaultDType) if bh is None else bh;
+
+        self._params.append(NetParamDefinition("weightX", self._weightX));
+        self._params.append(NetParamDefinition("weightH", self._weightH));
+        self._params.append(NetParamDefinition("biasX", self._biasX));
+        self._params.append(NetParamDefinition("biasH", self._biasH));
+
+
+    def _setParams(self, params: List[INetParamDefinition]):
+        self._weightX, self._weightH, self._biasX, self._biasH = params[0].value, params[1].value, params[2].value, params[3].value;
+
+
+    @property
+    def weightX(self) -> np.ndarray:
+        return self._weightX;
+
+
+    @property
+    def weightH(self) -> np.ndarray:
+        return self._weightH;
+
+
+    @property
+    def biasX(self) -> np.ndarray:
+        return self._biasX;
+
+
+    @property
+    def biasH(self) -> np.ndarray:
+        return self._biasH;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X, H, self._C  = data;
+
+        self._X = np.concatenate((X, H), axis = -1);
+        self._W = np.concatenate((self._weightX, self._weightH), axis = 0);
+        b = self._biasX + self._biasH;
+
+        G, S = np.split(self._X @ self._W + b, self._si, axis = -1);
+        self._G, self._S = sigmoid(G), tanh(S);
+        self._F, self._I, self._O = np.split(self._G, self._gi, axis = -1);
+
+        YC = self._F * self._C + self._I * self._S;
+        self._tanhYC = tanh(YC);
+        YH = self._O * self._tanhYC;
+
+        return YH, YC;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dYH, dYC = dout;
+
+        dO = dYH * self._tanhYC;
+        dYC = dYC + dYH * self._O * tanhGradient(self._tanhYC);
+
+        dF = dYC * self._C;
+        dC = dYC * self._F;
+        dI = dYC * self._S;
+        dS = dYC * self._I * tanhGradient(self._S);
+        dG = np.concatenate((dF, dI, dO), axis = -1);
+        dG *= sigmoidGradient(self._G);
+        dA = np.concatenate((dG, dS), axis = -1);
+
+        dX = dA @ self._W.T;
+        dW = self._X.T @ dA;
+        db = np.sum(dA, axis = 0);
+
+        dX, dH = np.split(dX, self._xi, axis = -1);
+        dWx, dWh = np.split(dW, self._xi, axis = 0);
+        self._params[0].grad[...] = dWx;
+        self._params[1].grad[...] = dWh;
+        self._params[2].grad[...] = db;
+        self._params[3].grad[...] = db;
+
+        return dX, dH, dC;
+
+
+class LstmLayer(NetModuleBase):
+    def __init__(self, inputSize : int, hiddenSize : int, stateful : bool = True, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
+        super().__init__();
+
+        self._H, self._C = None, None;
+        self._dH, self._dC = None, None;
+        self._stateful = stateful;
+        self._inputSize = inputSize;
+        self._hiddenSize = hiddenSize;
+        self._name = f"LSTM {inputSize}*{hiddenSize}";
+
+        self._Xs, self._W, self._Cs = [], None, [];
+        self._Fs, self._Is, self._Os, self._Gs, self._Ss, self._tanhYCs = [], [], [], [], [], [];
+        self._xi, self._si, self._gi = [self._inputSize], [3 * self._hiddenSize], [self._hiddenSize, 2 * self._hiddenSize];
+
+        self._weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, 4 * hiddenSize).astype(defaultDType) if Wx is None else Wx;
+        self._weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, 4 * hiddenSize).astype(defaultDType) if Wh is None else Wh;
+        self._biasX = np.zeros(4 * hiddenSize, dtype = defaultDType) if bx is None else bx;
+        self._biasH = np.zeros(4 * hiddenSize, dtype = defaultDType) if bh is None else bh;
+
+        self._params.append(NetParamDefinition("weightX", self._weightX));
+        self._params.append(NetParamDefinition("weightH", self._weightH));
+        self._params.append(NetParamDefinition("biasX", self._biasX));
+        self._params.append(NetParamDefinition("biasH", self._biasH));
+
+
+    def _setParams(self, params: List[INetParamDefinition]):
+        self._weightX, self._weightH, self._biasX, self._biasH = params[0].value, params[1].value, params[2].value, params[3].value;
+
+
+    @property
+    def weightX(self) -> np.ndarray:
+        return self._weightX;
+
+
+    @property
+    def weightH(self) -> np.ndarray:
+        return self._weightH;
+
+
+    @property
+    def biasX(self) -> np.ndarray:
+        return self._biasX;
+
+
+    @property
+    def biasH(self) -> np.ndarray:
+        return self._biasH;
+
+
+    @property
+    def dH(self) -> np.ndarray:
+        return self._dH;
+
+
+    @property
+    def dC(self) -> np.ndarray:
+        return self._dC;
+
+
+    def _reset(self):
+        self._H, self._C = None, None;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        Xs = data[0];
+        T, N = Xs.shape[: 2];
+
+        if not self._stateful or self._H is None:
+            self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
+        if not self._stateful or self._C is None:
+            self._C = np.zeros((N, self._hiddenSize), Xs.dtype);
+
+        self._W = np.concatenate((self._weightX, self._weightH), axis = 0);
+        b = self._biasX + self._biasH;
+
+        YHs = [];
+        self._Xs.clear();
+        self._Cs.clear();
+        self._Fs.clear();
+        self._Is.clear();
+        self._Os.clear();
+        self._Gs.clear();
+        self._Ss.clear();
+        self._tanhYCs.clear();
+
+        for X in Xs:
+            self._Cs.append(self._C);
+
+            X = np.concatenate((X, self._H), axis = -1);
+            G, S = np.split(X @ self._W + b, self._si, axis = -1);
+            G, S = sigmoid(G), tanh(S);
+            F, I, O = np.split(G, self._gi, axis = -1);
+
+            self._C = F * self._C + I * S;
+            tanhYC = tanh(self._C);
+            self._H = O * tanhYC;
+
+            self._Xs.append(X);
+            self._Fs.append(F);
+            self._Is.append(I);
+            self._Os.append(O);
+            self._Gs.append(G);
+            self._Ss.append(S);
+            self._tanhYCs.append(tanhYC);
+            YHs.append(self._H);
+
+        return np.array(YHs), ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dYs = dout[0];
+        T, N = dYs.shape[: 2];
+
+        # truncated BPTT
+        dH = np.zeros_like(self._H);
+        dC = np.zeros_like(self._C);
+
+        dXs = [];
+        dW = np.zeros_like(self._W);
+        db = np.zeros_like(self._biasX);
+        WT = self._W.T;
+
+        for t in reversed(range(T)):
+            dY = dYs[t];
+            C, X, F, I, O, G, S, tanhYC = self._Cs[t], self._Xs[t], self._Fs[t], self._Is[t], self._Os[t], self._Gs[t], self._Ss[t], self._tanhYCs[t];
+
+            dYH = dY + dH;
+            dYC = dC;
+
+            dO = dYH * tanhYC;
+            dYC = dYC + dYH * O * tanhGradient(tanhYC);
+
+            dF = dYC * C;
+            dC = dYC * F;
+            dI = dYC * S;
+            dS = dYC * I * tanhGradient(S);
+            dG = np.concatenate((dF, dI, dO), axis = -1);
+            dG *= sigmoidGradient(G);
+            dA = np.concatenate((dG, dS), axis = -1);
+
+            dX = dA @ WT;
+            dW += X.T @ dA;
+            db += np.sum(dA, axis = 0);
+
+            dX, dH = np.split(dX, self._xi, axis = -1);
+            dXs.append(dX);
+
+        dXs.reverse();
+        dWx, dWh = np.split(dW, self._xi, axis = 0);
+
+        self._dH = dH;
+        self._dC = dC;
+        self._params[0].grad[...] = dWx;
+        self._params[1].grad[...] = dWh;
+        self._params[2].grad[...] = db;
+        self._params[3].grad[...] = db;
+
+        return np.array(dXs), ;
+
+
+    def setState(self, H : np.ndarray, C : np.ndarray):
+        self._H, self._C = H, C;
+
 '''
 dropout mechanism: https://arxiv.org/abs/1603.05118 <Recurrent Dropout without Memory Loss>
 '''
-class LstmCell(NetModuleBase):
+class LstmCell2(NetModuleBase):
     def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, inputDropout : float = 0, recurrentDropout : float = 0):
         super().__init__();
 
@@ -2109,9 +2366,9 @@ class LstmCell(NetModuleBase):
         self._inputDropoutMask = None;
         self._recurrentDropoutMask = None;
 
-        weights = [self._weightX, self._weightH, self._bias];
-        self._params.extend(weights);
-        self._grads.extend([np.zeros_like(w) for w in weights]);
+        self._params.append(NetParamDefinition("weightX", self._weightX));
+        self._params.append(NetParamDefinition("weightH", self._weightH));
+        self._params.append(NetParamDefinition("bias", self._bias));
 
 
     def _setParams(self, value: List[np.ndarray]):
@@ -2138,7 +2395,7 @@ class LstmCell(NetModuleBase):
         return self._bias;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         self._X, self._H, self._C = data;
 
         if self._inputDropoutMask is None:
@@ -2150,8 +2407,8 @@ class LstmCell(NetModuleBase):
             A = self._X @ self._weightX + (self._inputDropoutMask * self._H) @ self._weightH + self._bias;
         else:
             A = self._X @ self._weightX + ((1 - self._inputDropout) * self._H) @ self._weightH + self._bias;
-        self._F, self._G, self._I, self._O = tuple(np.hsplit(A, 4));
-        self._F, self._G, self._I, self._O = sigmoid(self._F), tanh(self._G), sigmoid(self._I), sigmoid(self._O);
+        self._F, self._I, self._O, self._G = tuple(np.hsplit(A, 4));
+        self._F, self._I, self._O, self._G = sigmoid(self._F), sigmoid(self._I), sigmoid(self._O), tanh(self._G);
 
         if self.context.isTrainingMode:
             self._YC = self._C * self._F + self._recurrentDropoutMask * self._G * self._I;
@@ -2163,7 +2420,7 @@ class LstmCell(NetModuleBase):
         return self._YH, self._YC;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dYH, dYC = dout;
 
         dYC += dYH * self._O * tanhGradient(self._tanhYC);
@@ -2172,7 +2429,7 @@ class LstmCell(NetModuleBase):
         dG *= tanhGradient(self._G);
         dI *= sigmoidGradient(self._I);
         dO *= sigmoidGradient(self._O);
-        dA = np.hstack((dF, dG, dI, dO));
+        dA = np.hstack((dF, dI, dO, dG));
 
         dWx = self._X.T @ dA;
         dWh = (self._inputDropoutMask * self._H).T @ dA;
@@ -2182,9 +2439,9 @@ class LstmCell(NetModuleBase):
         dH = (dA @ self._weightH.T) * self._inputDropoutMask;
         dC = dYC * self._F;
 
-        self._grads[0][...] = dWx;
-        self._grads[1][...] = dWh;
-        self._grads[2][...] = db;
+        self._params[0].grad[...] = dWx;
+        self._params[1].grad[...] = dWh;
+        self._params[2].grad[...] = db;
 
         return dX, dH, dC;
 
@@ -2197,7 +2454,7 @@ class LstmCell(NetModuleBase):
         self._recurrentDropoutMask = mask;
 
 
-class LstmLayer(NetModuleBase):
+class LstmLayer2(NetModuleBase):
     def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, inputDropout : float = 0, recurrentDropout : float = 0):
         super().__init__();
 
@@ -2223,10 +2480,9 @@ class LstmLayer(NetModuleBase):
         self._recurrentDropoutMask = None;
         self._lstmModules : List[LstmCell] = [];
 
-
-        weights = [self._weightX, self._weightH, self._bias];
-        self._params.extend(weights);
-        self._grads.extend([np.zeros_like(w) for w in weights]);
+        self._params.append(NetParamDefinition("weightX", self._weightX));
+        self._params.append(NetParamDefinition("weightH", self._weightH));
+        self._params.append(NetParamDefinition("bias", self._bias));
 
 
     def _setContext(self, context : INetContext):
