@@ -2900,7 +2900,7 @@ class GruCell(NetModuleBase):
         self._Xa = np.concatenate((X, self._R * self._H), axis = -1);
         self._A = tanh(self._Xa @ self._Wa + ba);
 
-        Y = self._Z * self._H + (1 - self._Z) * self._A;
+        Y = self._Z * (self._H - self._A) + self._A;
 
         return Y, ;
 
@@ -3034,7 +3034,7 @@ class GruLayer(NetModuleBase):
             Xa = np.concatenate((X, R * self._H), axis = -1);
             A = tanh(Xa @ self._Wa + ba);
 
-            self._H = Z * self._H + (1 - Z) * A;
+            self._H = Z * (self._H - A) + A;
 
             self._Xgs.append(Xg);
             self._Gs.append(G);

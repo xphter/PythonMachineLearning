@@ -2063,7 +2063,7 @@ def testSeq2Seq():
 
 
 def unitTest():
-    testPerformance();
+    # testPerformance();
     # testFunctionalNetModuleGradient1();
     # testFunctionalNetModuleGradient2();
     # testSigmoid1();
@@ -2150,10 +2150,10 @@ def unitTest():
     # testRnnLayer1();
     # testRnnLayerGradient1();
     # testRnnLayerGradient2();
-    # testGruCell1();
-    # testGruCellGradient1();
-    # testGruLayer1();
-    # testGruLayerGradient1();
+    testGruCell1();
+    testGruCellGradient1();
+    testGruLayer1();
+    testGruLayerGradient1();
     # testLstmCell1();
     # testLstmCellGradient1();
     # testLstmCellGradient2();
@@ -3693,7 +3693,7 @@ def testGruCellGradient1():
     dWhN = numericGradient(lambda x: np.sum(GruCell(inputSize, hiddenSize, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X, H)[0]), Wh);
     dbxN = numericGradient(lambda x: np.sum(GruCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X, H)[0]), bx);
     dbhN = numericGradient(lambda x: np.sum(GruCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X, H)[0]), bh);
-    print(f"RnnCell, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"GruCell, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
     print("\n");
 
 
