@@ -2148,20 +2148,24 @@ def unitTest():
     # testRnnCell1();
     # testRnnCellGradient1();
     # testRnnLayer1();
-    # testRnnLayerGradient1();
-    # testRnnLayerGradient2();
-    testGruCell1();
-    testGruCellGradient1();
-    testGruLayer1();
-    testGruLayerGradient1();
+    # testRnnLayerGradient1_Sequence();
+    # testRnnLayerGradient2_Sequence();
+    # testRnnLayerGradient3_State();
+    # testRnnLayerGradient4_Sequence_State();
+    # testGruCell1();
+    # testGruCellGradient1();
+    # testGruLayer1();
+    # testGruLayerGradient1_Sequence();
+    # testGruLayerGradient2_State();
+    # testGruLayerGradient3_Sequence_State();
     # testLstmCell1();
     # testLstmCellGradient1();
     # testLstmCellGradient2();
     # testLstmCellGradient_Dropout();
-    # testLstmLayer1();
-    # testLstmLayerGradient1();
-    # testLstmLayerGradient(False);
-    # testLstmLayerGradient_State(False);
+    testLstmLayer1();
+    testLstmLayerGradient1_Sequence();
+    testLstmLayerGradient2_State();
+    testLstmLayerGradient3_Sequence_State();
     # testLstmLayerGradient_State_Dropout(False);
     # testLstmLayerGradient_Stepwise(False);
     # testLstmLayerGradient_Stepwise_State(False);
@@ -3599,7 +3603,7 @@ def testRnnCellGradient1():
 
 
 def testRnnLayer1():
-    T, N, inputSize, hiddenSize = 100, 32, 24, 48;
+    T, N, inputSize, hiddenSize = 50, 32, 24, 48;
     Xs, H = np.random.randn(T, N, inputSize), np.zeros((N, hiddenSize));
     Wx, Wh = np.random.randn(inputSize, hiddenSize), np.random.randn(hiddenSize, hiddenSize);
     bx, bh = np.random.randn(hiddenSize), np.random.randn(hiddenSize);
@@ -3617,8 +3621,8 @@ def testRnnLayer1():
     print("\n");
 
 
-def testRnnLayerGradient1():
-    T, N, inputSize, hiddenSize = 8, 32, 24, 48;
+def testRnnLayerGradient1_Sequence():
+    T, N, inputSize, hiddenSize = 4, 32, 24, 48;
     X = np.random.randn(T, N, inputSize);
     Wx, Wh = np.random.randn(inputSize, hiddenSize), np.random.randn(hiddenSize, hiddenSize);
     bx, bh = np.random.randn(hiddenSize), np.random.randn(hiddenSize);
@@ -3632,12 +3636,12 @@ def testRnnLayerGradient1():
     dWhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
     dbxN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
     dbhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
-    print(f"RnnLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"RnnLayer, numericGradient1, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
     print("\n");
 
 
-def testRnnLayerGradient2():
-    T, N, inputSize, hiddenSize = 8, 32, 24, 48;
+def testRnnLayerGradient2_Sequence():
+    T, N, inputSize, hiddenSize = 4, 32, 24, 48;
     X = np.random.randn(T, N, inputSize);
     Wx, Wh = np.random.randn(inputSize, hiddenSize), np.random.randn(hiddenSize, hiddenSize);
     bx, bh = np.random.randn(hiddenSize), np.random.randn(hiddenSize);
@@ -3651,7 +3655,45 @@ def testRnnLayerGradient2():
     dWhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda: ReluLayer(), stateful = False, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
     dbxN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda: ReluLayer(), stateful = False, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
     dbhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda: ReluLayer(), stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
-    print(f"RnnLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"RnnLayer, numericGradient2, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print("\n");
+
+
+def testRnnLayerGradient3_State():
+    T, N, inputSize, hiddenSize = 4, 32, 24, 48;
+    X = np.random.randn(T, N, inputSize);
+    Wx, Wh = np.random.randn(inputSize, hiddenSize), np.random.randn(hiddenSize, hiddenSize);
+    bx, bh = np.random.randn(hiddenSize), np.random.randn(hiddenSize);
+    m = RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
+    Y, = m.forward(X);
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dWx1, dWh1 = m.params[0].grad, m.params[1].grad;
+    dbx1, dbh1 = m.params[2].grad, m.params[3].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dWxN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = x, Wh = Wh, bx = bx, bh = bh).forward(X)[0]), Wx);
+    dWhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
+    dbxN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
+    dbhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
+    print(f"RnnLayer, numericGradient3, State, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print("\n");
+
+
+def testRnnLayerGradient4_Sequence_State():
+    T, N, inputSize, hiddenSize = 4, 32, 24, 48;
+    X = np.random.randn(T, N, inputSize);
+    Wx, Wh = np.random.randn(inputSize, hiddenSize), np.random.randn(hiddenSize, hiddenSize);
+    bx, bh = np.random.randn(hiddenSize), np.random.randn(hiddenSize);
+    m = RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
+    Y, S = m.forward(X);
+    dX1 = m.backward(np.ones_like(Y), np.ones_like(S))[0];
+    dWx1, dWh1 = m.params[0].grad, m.params[1].grad;
+    dbx1, dbh1 = m.params[2].grad, m.params[3].grad;
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
+    dWxN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = x, Wh = Wh, bx = bx, bh = bh).forward(X)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)), Wh);
+    dbxN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)), bx);
+    dbhN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)), bh);
+    print(f"RnnLayer, numericGradient4, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
     print("\n");
 
 
@@ -3740,8 +3782,8 @@ def testGruLayer1():
     print("\n");
 
 
-def testGruLayerGradient1():
-    T, N, inputSize, hiddenSize = 8, 32, 24, 48;
+def testGruLayerGradient1_Sequence():
+    T, N, inputSize, hiddenSize = 4, 32, 24, 48;
     X = np.random.randn(T, N, inputSize);
     Wx, Wh = np.random.randn(inputSize, 3 * hiddenSize), np.random.randn(hiddenSize, 3 * hiddenSize);
     bx, bh = np.random.randn(3 * hiddenSize), np.random.randn(3 * hiddenSize);
@@ -3755,7 +3797,45 @@ def testGruLayerGradient1():
     dWhN = numericGradient(lambda x: np.sum(GruLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
     dbxN = numericGradient(lambda x: np.sum(GruLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
     dbhN = numericGradient(lambda x: np.sum(GruLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
-    print(f"GruLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"GruLayer, numericGradient1, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print("\n");
+
+
+def testGruLayerGradient2_State():
+    T, N, inputSize, hiddenSize = 4, 32, 24, 48;
+    X = np.random.randn(T, N, inputSize);
+    Wx, Wh = np.random.randn(inputSize, 3 * hiddenSize), np.random.randn(hiddenSize, 3 * hiddenSize);
+    bx, bh = np.random.randn(3 * hiddenSize), np.random.randn(3 * hiddenSize);
+    m = GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
+    Y, = m.forward(X);
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dWx1, dWh1 = m.params[0].grad, m.params[1].grad;
+    dbx1, dbh1 = m.params[2].grad, m.params[3].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dWxN = numericGradient(lambda x: np.sum(GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = x, Wh = Wh, bx = bx, bh = bh).forward(X)[0]), Wx);
+    dWhN = numericGradient(lambda x: np.sum(GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
+    dbxN = numericGradient(lambda x: np.sum(GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
+    dbhN = numericGradient(lambda x: np.sum(GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
+    print(f"GruLayer, numericGradient2, State, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print("\n");
+
+
+def testGruLayerGradient3_Sequence_State():
+    T, N, inputSize, hiddenSize = 4, 32, 24, 48;
+    X = np.random.randn(T, N, inputSize);
+    Wx, Wh = np.random.randn(inputSize, 3 * hiddenSize), np.random.randn(hiddenSize, 3 * hiddenSize);
+    bx, bh = np.random.randn(3 * hiddenSize), np.random.randn(3 * hiddenSize);
+    m = GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
+    Y, S = m.forward(X);
+    dX1 = m.backward(np.ones_like(Y), np.ones_like(S))[0];
+    dWx1, dWh1 = m.params[0].grad, m.params[1].grad;
+    dbx1, dbh1 = m.params[2].grad, m.params[3].grad;
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
+    dWxN = numericGradient(lambda x: sumAll(*GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = x, Wh = Wh, bx = bx, bh = bh).forward(X)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)), Wh);
+    dbxN = numericGradient(lambda x: sumAll(*GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)), bx);
+    dbhN = numericGradient(lambda x: sumAll(*GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)), bh);
+    print(f"GruLayer, numericGradient3, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
     print("\n");
 
 
@@ -3858,18 +3938,20 @@ def testLstmLayer1():
     Xs, H, C = np.random.randn(stepSize, N, inputSize), np.zeros((N, hiddenSize)), np.zeros((N, hiddenSize));
     Wx, Wh = np.random.randn(inputSize, 4 * hiddenSize), np.random.randn(hiddenSize, 4 * hiddenSize);
     bx, bh = np.random.randn(4 * hiddenSize), np.random.randn(4 * hiddenSize);
-    dYs = np.random.randn(stepSize, N, hiddenSize);
+    dYs, dH, dC = np.random.randn(stepSize, N, hiddenSize), np.random.randn(N, hiddenSize), np.random.randn(N, hiddenSize);
 
     cells = [LstmCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = bx, bh = bh) for _ in range(stepSize)];
-    layer = LstmLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
+    layer = LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
 
     Y1 = [];
+    H1 = H;
+    C1 = C;
     for X, cell in zip(Xs, cells):
-        H, C  = cell.forward(X, H, C);
-        Y1.append(H);
+        H1, C1  = cell.forward(X, H1, C1);
+        Y1.append(H1);
     Y1 = np.array(Y1);
 
-    dXs1, dH1, dC1 = [], np.zeros_like(H), np.zeros_like(C);
+    dXs1, dH1, dC1 = [], dH, dC;
     dWx1, dWh1, dbx1, dbh1 = np.zeros_like(Wx), np.zeros_like(Wh), np.zeros_like(bx), np.zeros_like(bh);
     for t in reversed(range(stepSize)):
         dY, cell = dYs[t], cells[t];
@@ -3883,8 +3965,8 @@ def testLstmLayer1():
     dXs1.reverse();
     dXs1 = np.array(dXs1);
 
-    Y2, = layer.forward(Xs);
-    dXs2, = layer.backward(dYs);
+    Y2, H2, C2 = layer.forward(Xs);
+    dXs2, = layer.backward(dYs, dH, dC);
     dH2 = layer.dH;
     dC2 = layer.dC;
     dWx2 = layer.params[0].grad;
@@ -3892,13 +3974,13 @@ def testLstmLayer1():
     dbx2 = layer.params[2].grad;
     dbh2 = layer.params[3].grad;
 
-    print(f"LstmLayer1, Y error: {np.sum(np.abs(Y1 - Y2))}, dX error: {np.sum(np.abs(dXs1 - dXs2))}, dH error: {np.sum(np.abs(dH1 - dH2))}, dC error: {np.sum(np.abs(dC1 - dC2))}, dWx error: {np.sum(np.abs(dWx1 - dWx2))}, dWh error: {np.sum(np.abs(dWh1 - dWh2))}, dbx error: {np.sum(np.abs(dbx1 - dbx2))}, dbh error: {np.sum(np.abs(dbh1 - dbh2))}");
+    print(f"LstmLayer1, Y error: {np.sum(np.abs(Y1 - Y2))}, H error: {np.sum(np.abs(H1 - H2))}, C error: {np.sum(np.abs(C1 - C2))}, dX error: {np.sum(np.abs(dXs1 - dXs2))}, dH error: {np.sum(np.abs(dH1 - dH2))}, dC error: {np.sum(np.abs(dC1 - dC2))}, dWx error: {np.sum(np.abs(dWx1 - dWx2))}, dWh error: {np.sum(np.abs(dWh1 - dWh2))}, dbx error: {np.sum(np.abs(dbx1 - dbx2))}, dbh error: {np.sum(np.abs(dbh1 - dbh2))}");
 
     print("\n");
 
 
-def testLstmLayerGradient1():
-    T, N, inputSize, hiddenSize = 8, 32, 24, 48;
+def testLstmLayerGradient1_Sequence():
+    T, N, inputSize, hiddenSize = 4, 32, 24, 48;
     X = np.random.randn(T, N, inputSize);
     Wx, Wh = np.random.randn(inputSize, 4 * hiddenSize), np.random.randn(hiddenSize, 4 * hiddenSize);
     bx, bh = np.random.randn(4 * hiddenSize), np.random.randn(4 * hiddenSize);
@@ -3912,45 +3994,45 @@ def testLstmLayerGradient1():
     dWhN = numericGradient(lambda x: np.sum(LstmLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
     dbxN = numericGradient(lambda x: np.sum(LstmLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
     dbhN = numericGradient(lambda x: np.sum(LstmLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
-    print(f"LstmLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"LstmLayer, numericGradient1, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
     print("\n");
 
 
-def testLstmLayerGradient(returnSequences = False):
-    N, T, inputSize, outputSize = 32, 10, 12, 16;
-    X, H, C = np.random.randn(N, T, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
-    Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
-    m = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, stateful = True);
-    m.context.isTrainingMode = True;
-    Y, = m.forward(X, H, C);
-    dX1, dH1, dC1 = m.backward(np.ones_like(Y));
-    dWx1, dWh1, db1 = tuple(m.grads);
-    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
-    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
-    dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
-    dWxN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, outputSize, Wx = x, Wh = Wh, b = b, returnSequences = returnSequences, stateful = True).forward(X, H, C)), Wx);
-    dWhN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, outputSize, Wx = Wx, Wh = x, b = b, returnSequences = returnSequences, stateful = True).forward(X, H, C)), Wh);
-    dbN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x, returnSequences = returnSequences, stateful = True).forward(X, H, C)), b);
-    print(f"LstmLayer, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+def testLstmLayerGradient2_State():
+    T, N, inputSize, hiddenSize = 4, 32, 24, 48;
+    X = np.random.randn(T, N, inputSize);
+    Wx, Wh = np.random.randn(inputSize, 4 * hiddenSize), np.random.randn(hiddenSize, 4 * hiddenSize);
+    bx, bh = np.random.randn(4 * hiddenSize), np.random.randn(4 * hiddenSize);
+    m = LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
+    H, C = m.forward(X);
+    dX1 = m.backward(np.ones_like(H), np.ones_like(C))[0];
+    dWx1, dWh1 = m.params[0].grad, m.params[1].grad;
+    dbx1, dbh1 = m.params[2].grad, m.params[3].grad;
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
+    dWxN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = x, Wh = Wh, bx = bx, bh = bh).forward(X)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)), Wh);
+    dbxN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)), bx);
+    dbhN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)), bh);
+    print(f"LstmLayer, numericGradient2, State, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
     print("\n");
 
 
-def testLstmLayerGradient_State(returnSequences = False):
-    N, T, inputSize, outputSize = 32, 10, 12, 16;
-    X, H, C = np.random.randn(N, T, inputSize), np.random.randn(N, outputSize), np.random.randn(N, outputSize);
-    Wx, Wh, b = np.random.randn(inputSize, 4 * outputSize), np.random.randn(outputSize, 4 * outputSize), np.random.randn(4 * outputSize);
-    m = LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True);
-    m.context.isTrainingMode = True;
-    Y, OH, OC = m.forward(X, H, C);
-    dX1, dH1, dC1 = m.backward(np.ones_like(Y), np.ones_like(OH), np.ones_like(OC));
-    dWx1, dWh1, db1 = tuple(m.grads);
-    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
-    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
-    dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
-    dWxN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, outputSize, Wx = x, Wh = Wh, b = b, returnSequences = returnSequences, returnState = True, stateful = True).forward(X, H, C)), Wx);
-    dWhN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, outputSize, Wx = Wx, Wh = x, b = b, returnSequences = returnSequences, returnState = True, stateful = True).forward(X, H, C)), Wh);
-    dbN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, outputSize, Wx = Wx, Wh = Wh, b = x, returnSequences = returnSequences, returnState = True, stateful = True).forward(X, H, C)), b);
-    print(f"LstmLayer, numericGradient state, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+def testLstmLayerGradient3_Sequence_State():
+    T, N, inputSize, hiddenSize = 4, 32, 24, 48;
+    X = np.random.randn(T, N, inputSize);
+    Wx, Wh = np.random.randn(inputSize, 4 * hiddenSize), np.random.randn(hiddenSize, 4 * hiddenSize);
+    bx, bh = np.random.randn(4 * hiddenSize), np.random.randn(4 * hiddenSize);
+    m = LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
+    Y, H, C = m.forward(X);
+    dX1 = m.backward(np.ones_like(Y), np.ones_like(H), np.ones_like(C))[0];
+    dWx1, dWh1 = m.params[0].grad, m.params[1].grad;
+    dbx1, dbh1 = m.params[2].grad, m.params[3].grad;
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
+    dWxN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = x, Wh = Wh, bx = bx, bh = bh).forward(X)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)), Wh);
+    dbxN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)), bx);
+    dbhN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)), bh);
+    print(f"LstmLayer, numericGradient3, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
     print("\n");
 
 
