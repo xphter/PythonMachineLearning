@@ -2210,7 +2210,7 @@ class RnnLayer(RnnLayerBase):
         if len(self._activationFuncs) != self._sequenceLength:
             self._activationFuncs = [self._activationFuncSelector() for _ in range(self._sequenceLength)];
 
-        if not self._stateful or self._H is None:
+        if self.context.isTrainingMode and not self._stateful or self._H is None:
             self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
 
         self._Xs, Ys = [], [];
@@ -2313,7 +2313,7 @@ class GruLayer(RnnLayerBase):
         Xs = data[0];
         self._sequenceLength, N = Xs.shape[: 2];
 
-        if not self._stateful or self._H is None:
+        if self.context.isTrainingMode and not self._stateful or self._H is None:
             self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
 
         W = np.concatenate((self._weightX, self._weightH), axis = 0);
@@ -2468,9 +2468,8 @@ class LstmLayer(RnnLayerBase):
         Xs = data[0];
         self._sequenceLength, N = Xs.shape[: 2];
 
-        if not self._stateful or self._H is None:
+        if self.context.isTrainingMode and not self._stateful or self._H is None:
             self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
-        if not self._stateful or self._C is None:
             self._C = np.zeros((N, self._hiddenSize), Xs.dtype);
 
         self._W = np.concatenate((self._weightX, self._weightH), axis = 0);
