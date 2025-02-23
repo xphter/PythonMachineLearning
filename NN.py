@@ -1884,26 +1884,14 @@ class EmbeddingWithDotLayer(NetModuleBase):
         return dX, ;
 
 
-class RnnCell(NetModuleBase):
-    def __init__(self, inputSize : int, hiddenSize : int, activationFunc : INetModule = None, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
-        if activationFunc is not None and len(activationFunc.params) > 0:
-            raise ValueError("not supports activation function with parameters");
-
+class RnnCellBase(NetModuleBase, metaclass = abc.ABCMeta):
+    def __init__(self, inputSize : int, hiddenSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
         super().__init__();
 
-        self._X = None;
-        self._W = None;
-        self._Y = None;
         self._inputSize = inputSize;
         self._hiddenSize = hiddenSize;
-        self._activationFunc = activationFunc if activationFunc is not None else TanhLayer();
-        self._name = f"RNN Cell {inputSize}*{hiddenSize}";
 
-        self._weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, hiddenSize).astype(defaultDType) if Wx is None else Wx;
-        self._weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, hiddenSize).astype(defaultDType) if Wh is None else Wh;
-        self._biasX = np.zeros(hiddenSize, dtype = defaultDType) if bx is None else bx;
-        self._biasH = np.zeros(hiddenSize, dtype = defaultDType) if bh is None else bh;
-
+        self._weightX, self._weightH, self._biasX, self._biasH = self._initParams(inputSize, hiddenSize, Wx, Wh, bx, bh);
         self._params.append(NetParamDefinition("weightX", self._weightX));
         self._params.append(NetParamDefinition("weightH", self._weightH));
         self._params.append(NetParamDefinition("biasX", self._biasX));
@@ -1912,6 +1900,11 @@ class RnnCell(NetModuleBase):
 
     def _setParams(self, params: List[INetParamDefinition]):
         self._weightX, self._weightH, self._biasX, self._biasH = params[0].value, params[1].value, params[2].value, params[3].value;
+
+
+    @abc.abstractmethod
+    def _initParams(self, inputSize: int, hiddenSize: int, Wx: np.ndarray, Wh: np.ndarray, bx: np.ndarray, bh: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        pass;
 
 
     @property
@@ -1934,12 +1927,33 @@ class RnnCell(NetModuleBase):
         return self._biasH;
 
 
+class RnnCell(RnnCellBase):
+    def __init__(self, inputSize : int, hiddenSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None, activationFunc : INetModule = None):
+        if activationFunc is not None and len(activationFunc.params) > 0:
+            raise ValueError("not supports activation function with parameters");
+
+        super().__init__(inputSize, hiddenSize, Wx, Wh, bx, bh);
+
+        self._X, self._W = None, None;
+        self._xi = [inputSize];
+        self._activationFunc = activationFunc if activationFunc is not None else TanhLayer();
+        self._name = f"RNN Cell {inputSize}*{hiddenSize}";
+
+
+    def _initParams(self, inputSize : int, hiddenSize : int, Wx : np.ndarray, Wh : np.ndarray, bx : np.ndarray, bh : np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, hiddenSize).astype(defaultDType) if Wx is None else Wx;
+        weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, hiddenSize).astype(defaultDType) if Wh is None else Wh;
+        biasX = np.zeros(hiddenSize, dtype = defaultDType) if bx is None else bx;
+        biasH = np.zeros(hiddenSize, dtype = defaultDType) if bh is None else bh;
+
+        return weightX, weightH, biasX, biasH;
+
+
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X, H = data;
         self._X = np.concatenate((X, H), axis = -1);
         self._W = np.concatenate((self._weightX, self._weightH), axis = 0);
-        self._Y = self._X @ self._W + self._biasX + self._biasH;
-        A, = self._activationFunc.forward(self._Y);
+        A, = self._activationFunc.forward(self._X @ self._W + self._biasX + self._biasH);
 
         return A, ;
 
@@ -1950,8 +1964,8 @@ class RnnCell(NetModuleBase):
         dW = self._X.T @ dY;
         db = np.sum(dY, axis = 0);
 
-        dX, dH = tuple(np.split(dX, [self._inputSize], axis = -1));
-        dWx, dWh = tuple(np.split(dW, [self._inputSize], axis = 0));
+        dX, dH = tuple(np.split(dX, self._xi, axis = -1));
+        dWx, dWh = tuple(np.split(dW, self._xi, axis = 0));
 
         self._params[0].grad[...] = dWx;
         self._params[1].grad[...] = dWh;
@@ -1961,52 +1975,24 @@ class RnnCell(NetModuleBase):
         return dX, dH;
 
 
-class GruCell(NetModuleBase):
+class GruCell(RnnCellBase):
     def __init__(self, inputSize : int, hiddenSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
-        super().__init__();
-
-        self._inputSize = inputSize;
-        self._hiddenSize = hiddenSize;
-        self._name = f"GRU Cell {inputSize}*{hiddenSize}";
+        super().__init__(inputSize, hiddenSize, Wx, Wh, bx, bh);
 
         self._Xg, self._Xa = None, None;
         self._Wg, self._Wa = None, None;
         self._H, self._G, self._R, self._Z, self._A = None, None, None, None, None;
         self._gi, self._ri, self._xi = [2 * hiddenSize], [hiddenSize], [inputSize];
-
-        self._weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, 3 * hiddenSize).astype(defaultDType) if Wx is None else Wx;
-        self._weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, 3 * hiddenSize).astype(defaultDType) if Wh is None else Wh;
-        self._biasX = np.zeros(3 * hiddenSize, dtype = defaultDType) if bx is None else bx;
-        self._biasH = np.zeros(3 * hiddenSize, dtype = defaultDType) if bh is None else bh;
-
-        self._params.append(NetParamDefinition("weightX", self._weightX));
-        self._params.append(NetParamDefinition("weightH", self._weightH));
-        self._params.append(NetParamDefinition("biasX", self._biasX));
-        self._params.append(NetParamDefinition("biasH", self._biasH));
+        self._name = f"GRU Cell {inputSize}*{hiddenSize}";
 
 
-    def _setParams(self, params: List[INetParamDefinition]):
-        self._weightX, self._weightH, self._biasX, self._biasH = params[0].value, params[1].value, params[2].value, params[3].value;
+    def _initParams(self, inputSize: int, hiddenSize: int, Wx: np.ndarray, Wh: np.ndarray, bx: np.ndarray, bh: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, 3 * hiddenSize).astype(defaultDType) if Wx is None else Wx;
+        weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, 3 * hiddenSize).astype(defaultDType) if Wh is None else Wh;
+        biasX = np.zeros(3 * hiddenSize, dtype = defaultDType) if bx is None else bx;
+        biasH = np.zeros(3 * hiddenSize, dtype = defaultDType) if bh is None else bh;
 
-
-    @property
-    def weightX(self) -> np.ndarray:
-        return self._weightX;
-
-
-    @property
-    def weightH(self) -> np.ndarray:
-        return self._weightH;
-
-
-    @property
-    def biasX(self) -> np.ndarray:
-        return self._biasX;
-
-
-    @property
-    def biasH(self) -> np.ndarray:
-        return self._biasH;
+        return weightX, weightH, biasX, biasH;
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
@@ -2066,51 +2052,23 @@ class GruCell(NetModuleBase):
         return dX, dH;
 
 
-class LstmCell(NetModuleBase):
+class LstmCell(RnnCellBase):
     def __init__(self, inputSize : int, hiddenSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
-        super().__init__();
-
-        self._inputSize = inputSize;
-        self._hiddenSize = hiddenSize;
-        self._name = f"LSTM Cell {inputSize}*{hiddenSize}";
+        super().__init__(inputSize, hiddenSize, Wx, Wh, bx, bh);
 
         self._X, self._W, self._C = None, None, None;
         self._F, self._I, self._O, self._G, self._S, self._tanhYC = None, None, None, None, None, None;
         self._xi, self._si, self._gi = [self._inputSize], [3 * self._hiddenSize], [self._hiddenSize, 2 * self._hiddenSize];
-
-        self._weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, 4 * hiddenSize).astype(defaultDType) if Wx is None else Wx;
-        self._weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, 4 * hiddenSize).astype(defaultDType) if Wh is None else Wh;
-        self._biasX = np.zeros(4 * hiddenSize, dtype = defaultDType) if bx is None else bx;
-        self._biasH = np.zeros(4 * hiddenSize, dtype = defaultDType) if bh is None else bh;
-
-        self._params.append(NetParamDefinition("weightX", self._weightX));
-        self._params.append(NetParamDefinition("weightH", self._weightH));
-        self._params.append(NetParamDefinition("biasX", self._biasX));
-        self._params.append(NetParamDefinition("biasH", self._biasH));
+        self._name = f"LSTM Cell {inputSize}*{hiddenSize}";
 
 
-    def _setParams(self, params: List[INetParamDefinition]):
-        self._weightX, self._weightH, self._biasX, self._biasH = params[0].value, params[1].value, params[2].value, params[3].value;
+    def _initParams(self, inputSize : int, hiddenSize : int, Wx : np.ndarray, Wh : np.ndarray, bx : np.ndarray, bh : np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, 4 * hiddenSize).astype(defaultDType) if Wx is None else Wx;
+        weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, 4 * hiddenSize).astype(defaultDType) if Wh is None else Wh;
+        biasX = np.zeros(4 * hiddenSize, dtype = defaultDType) if bx is None else bx;
+        biasH = np.zeros(4 * hiddenSize, dtype = defaultDType) if bh is None else bh;
 
-
-    @property
-    def weightX(self) -> np.ndarray:
-        return self._weightX;
-
-
-    @property
-    def weightH(self) -> np.ndarray:
-        return self._weightH;
-
-
-    @property
-    def biasX(self) -> np.ndarray:
-        return self._biasX;
-
-
-    @property
-    def biasH(self) -> np.ndarray:
-        return self._biasH;
+        return weightX, weightH, biasX, biasH;
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
