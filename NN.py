@@ -2173,6 +2173,7 @@ class RnnLayer(RnnLayerBase):
         self._H = None;
         self._dH = None;
         self._sequenceLength = 0;
+        self._foreignState = False;
         self._activationFuncSelector = activationFuncSelector if activationFuncSelector is not None else (lambda: TanhLayer());
         self._name = f"RNN {inputSize}*{hiddenSize}";
 
@@ -2205,13 +2206,18 @@ class RnnLayer(RnnLayerBase):
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         Xs = data[0];
+        self._foreignState = len(data) > 1;
         self._sequenceLength, N = Xs.shape[: 2];
 
         if len(self._activationFuncs) != self._sequenceLength:
             self._activationFuncs = [self._activationFuncSelector() for _ in range(self._sequenceLength)];
 
-        if self.context.isTrainingMode and not self._stateful or self._H is None:
-            self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
+        if self._foreignState:
+            self._H = data[1];
+        else:
+            if self.context.isTrainingMode and not self._stateful or self._H is None:
+                self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
+
 
         self._Xs, Ys = [], [];
         self._W = np.concatenate((self._weightX, self._weightH), axis = 0);
@@ -2264,12 +2270,13 @@ class RnnLayer(RnnLayerBase):
         dWx, dWh = tuple(np.split(dW, [self._inputSize], axis = 0));
 
         self._dH = dH;
+        dXs = np.array(dXs);
         self._params[0].grad[...] = dWx;
         self._params[1].grad[...] = dWh;
         self._params[2].grad[...] = db;
         self._params[3].grad[...] = db;
 
-        return np.array(dXs), ;
+        return (dXs, self._dH) if self._foreignState else (dXs, );
 
 
     def setState(self, H : np.ndarray):
@@ -2283,6 +2290,7 @@ class GruLayer(RnnLayerBase):
         self._H = None;
         self._dH = None;
         self._sequenceLength = 0;
+        self._foreignState = False;
         self._name = f"GRU {inputSize}*{hiddenSize}";
 
         self._Xgs, self._Xas = [], [];
@@ -2311,10 +2319,14 @@ class GruLayer(RnnLayerBase):
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         Xs = data[0];
+        self._foreignState = len(data) > 1;
         self._sequenceLength, N = Xs.shape[: 2];
 
-        if self.context.isTrainingMode and not self._stateful or self._H is None:
-            self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
+        if self._foreignState:
+            self._H = data[1];
+        else:
+            if self.context.isTrainingMode and not self._stateful or self._H is None:
+                self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
 
         W = np.concatenate((self._weightX, self._weightH), axis = 0);
         b = self._biasX + self._biasH;
@@ -2415,12 +2427,13 @@ class GruLayer(RnnLayerBase):
         dWx, dWh = tuple(np.split(dW, self._xi, axis = 0));
 
         self._dH = dH;
+        dXs = np.array(dXs);
         self._params[0].grad[...] = dWx;
         self._params[1].grad[...] = dWh;
         self._params[2].grad[...] = db;
         self._params[3].grad[...] = db;
 
-        return np.array(dXs), ;
+        return (dXs, self._dH) if self._foreignState else (dXs, );
 
 
     def setState(self, H : np.ndarray):
@@ -2434,6 +2447,7 @@ class LstmLayer(RnnLayerBase):
         self._H, self._C = None, None;
         self._dH, self._dC = None, None;
         self._sequenceLength = 0;
+        self._foreignState = False;
         self._name = f"LSTM {inputSize}*{hiddenSize}";
 
         self._Xs, self._W, self._Cs = [], None, [];
@@ -2466,11 +2480,15 @@ class LstmLayer(RnnLayerBase):
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         Xs = data[0];
+        self._foreignState = len(data) > 1;
         self._sequenceLength, N = Xs.shape[: 2];
 
-        if self.context.isTrainingMode and not self._stateful or self._H is None:
-            self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
-            self._C = np.zeros((N, self._hiddenSize), Xs.dtype);
+        if self._foreignState:
+            self._H, self._C = data[1], data[2];
+        else:
+            if self.context.isTrainingMode and not self._stateful or self._H is None:
+                self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
+                self._C = np.zeros((N, self._hiddenSize), Xs.dtype);
 
         self._W = np.concatenate((self._weightX, self._weightH), axis = 0);
         b = self._biasX + self._biasH;
@@ -2563,16 +2581,18 @@ class LstmLayer(RnnLayerBase):
 
         self._dH = dH;
         self._dC = dC;
+        dXs = np.array(dXs);
         self._params[0].grad[...] = dWx;
         self._params[1].grad[...] = dWh;
         self._params[2].grad[...] = db;
         self._params[3].grad[...] = db;
 
-        return np.array(dXs), ;
+        return (dXs, self._dH, self._dC) if self._foreignState else (dXs, );
 
 
     def setState(self, H : np.ndarray, C : np.ndarray):
         self._H, self._C = H, C;
+
 
 '''
 dropout mechanism: https://arxiv.org/abs/1603.05118 <Recurrent Dropout without Memory Loss>
