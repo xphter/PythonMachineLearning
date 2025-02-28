@@ -3086,6 +3086,84 @@ class BahdanauAttentionLstmLayer(LstmLayer):
         return np.array(self._attentionWeight).transpose(1, 0, 2);
 
 
+# rnnSelector(inputSize, hiddenSize, stateful, returnSequence, returnState) -> RnnLayerBase
+class StackRnnLayer(AggregateNetModule):
+    def __init__(self, inputSize : int, hiddenSize : int, rnnSelector : Callable, layersNum : int = 2, stateful : bool = True, returnSequence : bool = True, returnState : bool = False):
+        if not returnSequence and not returnState:
+            raise ValueError("returnSequence and returnState are both false");
+
+        super().__init__(*tuple(rnnSelector(inputSize if i == 0 else hiddenSize, hiddenSize, stateful, True, True) for i in range(layersNum)));
+
+        self._inputSize = inputSize;
+        self._hiddenSize = hiddenSize;
+        self._layersNum = layersNum;
+        self._stateful = stateful;
+        self._returnSequence = returnSequence;
+        self._returnState = returnState;
+
+        self._hiddenStates = None;
+        self._dStates = None;
+        self._sequenceLength = 0;
+        self._foreignState = False;
+        self._name = f"StackRnnLayer {inputSize}*{'*'.join([str(hiddenSize)] * layersNum)}";
+
+
+    # input X, states: [L, N, H]
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
+        Xs = data[0];
+        self._sequenceLength = len(Xs);
+        self._foreignState = len(data) > 1;
+
+        outputStates = [];
+        inputStates = data[1: ] if self._foreignState else None;
+
+        for l in range(self._layersNum):
+            layer = self._modules[l];
+
+            if inputStates is not None:
+                outputs = layer.forward(*((Xs, ) + tuple(item[l] for item in inputStates)));
+            else:
+                outputs = layer.forward(Xs);
+
+            Xs = outputs[0];
+            outputStates.extend(outputs[1: ]);
+
+        statesCount = len(outputStates) // self._layersNum;
+        self._hiddenStates = tuple(np.array(outputStates[i::statesCount]) for i in range(statesCount));
+
+        if self._returnSequence and self._returnState:
+            return Xs, *self._hiddenStates;
+        if self._returnSequence:
+            return Xs, ;
+        if self._returnState:
+            return self._hiddenStates ;
+
+
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
+        if self._returnSequence and self._returnState:
+            dXs, dOutputStates = dout[0], dout[1: ];
+        elif self._returnSequence:
+            dXs = dout[0];
+
+            # truncated BPTT
+            dOutputStates = tuple(np.zeros_like(item) for item in self._hiddenStates);
+        else:
+            dXs, dOutputStates = [0] * self._sequenceLength, dout;
+
+        dInputStates = [];
+        for l in reversed(range(self._layersNum)):
+            layer = self._modules[l];
+
+            dInputs = layer.backward(*((dXs, ) + tuple(item[l] for item in dOutputStates)));
+            dXs = dInputs[0];
+            dInputStates.extend(dInputs[1: ]);
+
+        statesCount = len(self._hiddenStates);
+        self._dStates = tuple(np.array(dInputStates[-statesCount + i::-statesCount]) for i in range(statesCount)) if self._foreignState else None;
+
+        return (dXs, ) + self._dStates if self._foreignState else (dXs, );
+
+
 class BiRnnLayer(AggregateNetModule):
     def __init__(self, forwardRnn : INetModule, backwardRnn : INetModule):
         super().__init__(forwardRnn, backwardRnn);

@@ -2164,11 +2164,11 @@ def unitTest():
     # testLstmCellGradient1();
     # testLstmCellGradient2();
     # testLstmCellGradient_Dropout();
-    testLstmLayer1();
-    testLstmLayerGradient1_Sequence();
-    testLstmLayerGradient2_State();
-    testLstmLayerGradient3_Sequence_State();
-    testLstmLayerGradient4_Foreign_Sequence_State();
+    # testLstmLayer1();
+    # testLstmLayerGradient1_Sequence();
+    # testLstmLayerGradient2_State();
+    # testLstmLayerGradient3_Sequence_State();
+    # testLstmLayerGradient4_Foreign_Sequence_State();
     # testLstmLayerGradient_State_Dropout(False);
     # testLstmLayerGradient_Stepwise(False);
     # testLstmLayerGradient_Stepwise_State(False);
@@ -2177,7 +2177,18 @@ def unitTest():
     # testBahdanauAttentionLstmLayerGradient_Stepwise(True);
     # testBahdanauAttentionLstmLayerGradient_Stepwise_State(True);
     # testBahdanauAttentionLstmLayerGradient_Stepwise_State_Dropout(True);
-    # testStackLstmLayerGradient(False);
+    # testStackLstmLayerGradient1_Gru_InnerState_Sequence();
+    # testStackLstmLayerGradient2_Gru_InnerState_State();
+    # testStackLstmLayerGradient3_Gru_InnerState_Sequence_State();
+    # testStackLstmLayerGradient4_Gru_ForeignState_Sequence();
+    # testStackLstmLayerGradient5_Gru_ForeignState_State();
+    # testStackLstmLayerGradient6_Gru_ForeignState_Sequence_State();
+    testStackLstmLayerGradient7_Lstm_InnerState_Sequence();
+    testStackLstmLayerGradient8_Lstm_InnerState_State();
+    testStackLstmLayerGradient9_Lstm_InnerState_Sequence_State();
+    testStackLstmLayerGradient10_Lstm_ForeignState_Sequence();
+    testStackLstmLayerGradient11_Lstm_ForeignState_State();
+    testStackLstmLayerGradient12_Lstm_ForeignState_Sequence_State();
     # testStackLstmLayerGradient_State(False);
     # testStackLstmLayerGradient_State_Dropout(False);
     # testBiRnnLayerGradient();
@@ -2368,9 +2379,10 @@ def testModuleGradient(m : INetModule, label: str, *data : np.ndarray):
     numGradients = [];
 
     for p in m.params:
-        numGradients.append(numericGradient(lambda x : sumAll(*m.copy(True).forward(*data)), p));
+        v = p.value;
+        numGradients.append(numericGradient(lambda x : sumAll(*m.copy(True).forward(*data)), v));
 
-    print(f"{label}, {', '.join([f'param {i}({m.params[i].shape}) error: {np.sum(np.abs(m.grads[i] - numGradients[i]))}' for i in range(len(m.grads))])}")
+    print(f"{label}, {', '.join([f'param {m.params[i].name}{i}{m.params[i].value.shape} error: {np.sum(np.abs(m.params[i].grad - numGradients[i]))}' for i in range(len(m.params))])}")
 
 
 def testMinMaxScaler():
@@ -4442,24 +4454,175 @@ def testBahdanauAttentionLstmLayerGradient_Stepwise_State_Dropout(returnSequence
     print("\n");
 
 
-def testStackLstmLayerGradient(returnSequences = False):
-    L, N, T, inputSize, outputSize = 1, 32, 10, 12, 16;
-    X, HS, CS = np.random.randn(N, T, inputSize), np.random.randn(L, N, outputSize), np.random.randn(L, N, outputSize);
-    m = StackLstmLayer(inputSize, outputSize, LstmLayer, layerNum = L, returnSequences = returnSequences, stateful = True);
-    Y1, = m.forward(X, HS, CS);
-    dX1, dHS1, dCS1 = m.backward(np.ones_like(Y1));
-    dXN = numericGradient(lambda x: sumAll(*m.forward(x, HS, CS)), X);
-    dHSN = numericGradient(lambda x: sumAll(*m.forward(X, x, CS)), HS);
-    dCSN = numericGradient(lambda x: sumAll(*m.forward(X, HS, x)), CS);
-    print(f"StackLstmLayer, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dHS error: {np.sum(np.abs(dHS1 - dHSN))}, dCS error: {np.sum(np.abs(dCS1 - dCSN))}");
-    testModuleGradient(m, "StackLstmLayer, numericGradient", X, HS, CS);
+def testStackLstmLayerGradient1_Gru_InnerState_Sequence():
+    L, T, N, inputSize, hiddenSize = 2, 4, 32, 24, 48;
+    X = np.random.randn(T, N, inputSize);
+    m = StackRnnLayer(inputSize, hiddenSize, GruLayer, layersNum = L, stateful = False, returnSequence = True, returnState = False);
+    m.context.isTrainingMode = True;
+    Y, = m.forward(X);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
+    print(f"StackRnnLayer, numericGradient1, Gru, InnerState, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "StackRnnLayer, numericGradient1, Gru, InnerState, Sequence", X);
+    print("\n");
+
+
+def testStackLstmLayerGradient2_Gru_InnerState_State():
+    L, T, N, inputSize, hiddenSize = 2, 4, 32, 24, 48;
+    X = np.random.randn(T, N, inputSize);
+    m = StackRnnLayer(inputSize, hiddenSize, GruLayer, layersNum = L, stateful = False, returnSequence = False, returnState = True);
+    m.context.isTrainingMode = True;
+    S, = m.forward(X);
+    dX1, = m.backward(np.ones_like(S));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
+    print(f"StackRnnLayer, numericGradient2, Gru, InnerState, State, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "StackRnnLayer, numericGradient2, Gru, InnerState, State", X);
+    print("\n");
+
+
+def testStackLstmLayerGradient3_Gru_InnerState_Sequence_State():
+    L, T, N, inputSize, hiddenSize = 2, 4, 32, 24, 48;
+    X = np.random.randn(T, N, inputSize);
+    m = StackRnnLayer(inputSize, hiddenSize, GruLayer, layersNum = L, stateful = False, returnSequence = True, returnState = True);
+    m.context.isTrainingMode = True;
+    Y, S = m.forward(X);
+    dX1, = m.backward(np.ones_like(Y), np.ones_like(S));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
+    print(f"StackRnnLayer, numericGradient3, Gru, InnerState, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "StackRnnLayer, numericGradient3, Gru, InnerState, Sequence and State", X);
+    print("\n");
+
+
+def testStackLstmLayerGradient4_Gru_ForeignState_Sequence():
+    L, T, N, inputSize, hiddenSize = 2, 4, 32, 24, 48;
+    X, H = np.random.randn(T, N, inputSize), np.random.randn(L, N, hiddenSize);
+    m = StackRnnLayer(inputSize, hiddenSize, GruLayer, layersNum = L, stateful = False, returnSequence = True, returnState = False);
+    m.context.isTrainingMode = True;
+    Y, = m.forward(X, H);
+    dX1, dH1 = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H)), X);
+    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x)), H);
+    print(f"StackRnnLayer, numericGradient4, Gru, ForeignState, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}");
+    testModuleGradient(m, "StackRnnLayer, numericGradient4, Gru, ForeignState, Sequence", X, H);
+    print("\n");
+
+
+def testStackLstmLayerGradient5_Gru_ForeignState_State():
+    L, T, N, inputSize, hiddenSize = 2, 4, 32, 24, 48;
+    X, H = np.random.randn(T, N, inputSize), np.random.randn(L, N, hiddenSize);
+    m = StackRnnLayer(inputSize, hiddenSize, GruLayer, layersNum = L, stateful = False, returnSequence = False, returnState = True);
+    m.context.isTrainingMode = True;
+    S, = m.forward(X, H);
+    dX1, dH1 = m.backward(np.ones_like(S));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H)), X);
+    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x)), H);
+    print(f"StackRnnLayer, numericGradient5, Gru, ForeignState, State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}");
+    testModuleGradient(m, "StackRnnLayer, numericGradient5, Gru, ForeignState, State", X, H);
+    print("\n");
+
+
+def testStackLstmLayerGradient6_Gru_ForeignState_Sequence_State():
+    L, T, N, inputSize, hiddenSize = 2, 4, 32, 24, 48;
+    X, H = np.random.randn(T, N, inputSize), np.random.randn(L, N, hiddenSize);
+    m = StackRnnLayer(inputSize, hiddenSize, GruLayer, layersNum = L, stateful = False, returnSequence = True, returnState = True);
+    m.context.isTrainingMode = True;
+    Y, S = m.forward(X, H);
+    dX1, dH1 = m.backward(np.ones_like(Y), np.ones_like(S));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H)), X);
+    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x)), H);
+    print(f"StackRnnLayer, numericGradient6, Gru, ForeignState, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}");
+    testModuleGradient(m, "StackRnnLayer, numericGradient6, Gru, ForeignState, Sequence and State", X, H);
+    print("\n");
+
+
+def testStackLstmLayerGradient7_Lstm_InnerState_Sequence():
+    L, T, N, inputSize, hiddenSize = 2, 4, 32, 24, 48;
+    X = np.random.randn(T, N, inputSize);
+    m = StackRnnLayer(inputSize, hiddenSize, LstmLayer, layersNum = L, stateful = False, returnSequence = True, returnState = False);
+    m.context.isTrainingMode = True;
+    Y, = m.forward(X);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
+    print(f"StackRnnLayer, numericGradient7, Lstm, InnerState, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "StackRnnLayer, numericGradient7, Lstm, InnerState, Sequence", X);
+    print("\n");
+
+
+def testStackLstmLayerGradient8_Lstm_InnerState_State():
+    L, T, N, inputSize, hiddenSize = 2, 4, 32, 24, 48;
+    X = np.random.randn(T, N, inputSize);
+    m = StackRnnLayer(inputSize, hiddenSize, LstmLayer, layersNum = L, stateful = False, returnSequence = False, returnState = True);
+    m.context.isTrainingMode = True;
+    S, C = m.forward(X);
+    dX1, = m.backward(np.ones_like(S), np.ones_like(C));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
+    print(f"StackRnnLayer, numericGradient8, Lstm, InnerState, State, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "StackRnnLayer, numericGradient8, Lstm, InnerState, State", X);
+    print("\n");
+
+
+def testStackLstmLayerGradient9_Lstm_InnerState_Sequence_State():
+    L, T, N, inputSize, hiddenSize = 2, 4, 32, 24, 48;
+    X = np.random.randn(T, N, inputSize);
+    m = StackRnnLayer(inputSize, hiddenSize, LstmLayer, layersNum = L, stateful = False, returnSequence = True, returnState = True);
+    m.context.isTrainingMode = True;
+    Y, S, C = m.forward(X);
+    dX1, = m.backward(np.ones_like(Y), np.ones_like(S), np.ones_like(C));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
+    print(f"StackRnnLayer, numericGradient9, Lstm, InnerState, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "StackRnnLayer, numericGradient9, Lstm, InnerState, Sequence and State", X);
+    print("\n");
+
+
+def testStackLstmLayerGradient10_Lstm_ForeignState_Sequence():
+    L, T, N, inputSize, hiddenSize = 2, 4, 32, 24, 48;
+    X, H, C = np.random.randn(T, N, inputSize), np.random.randn(L, N, hiddenSize), np.random.randn(L, N, hiddenSize);
+    m = StackRnnLayer(inputSize, hiddenSize, LstmLayer, layersNum = L, stateful = False, returnSequence = True, returnState = False);
+    m.context.isTrainingMode = True;
+    Y, = m.forward(X, H, C);
+    dX1, dH1, dC1 = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
+    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
+    dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
+    print(f"StackRnnLayer, numericGradient10, Lstm, ForeignState, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}");
+    testModuleGradient(m, "StackRnnLayer, numericGradient10, Lstm, ForeignState, Sequence", X, H, C);
+    print("\n");
+
+
+def testStackLstmLayerGradient11_Lstm_ForeignState_State():
+    L, T, N, inputSize, hiddenSize = 2, 4, 32, 24, 48;
+    X, H, C = np.random.randn(T, N, inputSize), np.random.randn(L, N, hiddenSize), np.random.randn(L, N, hiddenSize);
+    m = StackRnnLayer(inputSize, hiddenSize, LstmLayer, layersNum = L, stateful = False, returnSequence = False, returnState = True);
+    m.context.isTrainingMode = True;
+    OH, OC = m.forward(X, H, C);
+    dX1, dH1, dC1 = m.backward(np.ones_like(OH), np.ones_like(OC));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
+    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
+    dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
+    print(f"StackRnnLayer, numericGradient11, Lstm, ForeignState, State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}");
+    testModuleGradient(m, "StackRnnLayer, numericGradient11, Lstm, ForeignState, State", X, H, C);
+    print("\n");
+
+
+def testStackLstmLayerGradient12_Lstm_ForeignState_Sequence_State():
+    L, T, N, inputSize, hiddenSize = 2, 4, 32, 24, 48;
+    X, H, C = np.random.randn(T, N, inputSize), np.random.randn(L, N, hiddenSize), np.random.randn(L, N, hiddenSize);
+    m = StackRnnLayer(inputSize, hiddenSize, LstmLayer, layersNum = L, stateful = False, returnSequence = True, returnState = True);
+    m.context.isTrainingMode = True;
+    Y, OH, OC = m.forward(X, H, C);
+    dX1, dH1, dC1 = m.backward(np.ones_like(Y), np.ones_like(OH), np.ones_like(OC));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
+    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
+    dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
+    print(f"StackRnnLayer, numericGradient12, Lstm, ForeignState, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}");
+    testModuleGradient(m, "StackRnnLayer, numericGradient12, Lstm, ForeignState, Sequence and State", X, H, C);
     print("\n");
 
 
 def testStackLstmLayerGradient_State(returnSequences = False):
     L, N, T, inputSize, outputSize = 1, 32, 10, 12, 16;
     X, HS, CS = np.random.randn(N, T, inputSize), np.random.randn(L, N, outputSize), np.random.randn(L, N, outputSize);
-    m = StackLstmLayer(inputSize, outputSize, LstmLayer, layerNum = L, returnSequences = returnSequences, returnState = True, stateful = True);
+    m = StackRnnLayer(inputSize, outputSize, LstmLayer, layerNum = L, returnSequences = returnSequences, returnState = True, stateful = True);
     Y1, OHS1, OCS1 = m.forward(X, HS, CS);
     dX1, dHS1, dCS1 = m.backward(np.ones_like(Y1), np.ones_like(OHS1), np.ones_like(OCS1));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, HS, CS)), X);
@@ -4473,7 +4636,7 @@ def testStackLstmLayerGradient_State(returnSequences = False):
 def testStackLstmLayerGradient_State_Dropout(returnSequences = False):
     L, N, T, inputSize, outputSize = 1, 32, 10, 12, 16;
     X, HS, CS = np.random.randn(N, T, inputSize), np.random.randn(L, N, outputSize), np.random.randn(L, N, outputSize);
-    m = StackLstmLayer(inputSize, outputSize, LstmLayer, layerNum = L, returnSequences = returnSequences, returnState = True, stateful = True, inputDropout = 0.5, recurrentDropout = 0.5);
+    m = StackRnnLayer(inputSize, outputSize, LstmLayer, layerNum = L, returnSequences = returnSequences, returnState = True, stateful = True, inputDropout = 0.5, recurrentDropout = 0.5);
     m.context.isTrainingMode = True;
     Y1, OHS1, OCS1 = m.forward(X, HS, CS);
     dX1, dHS1, dCS1 = m.backward(np.ones_like(Y1), np.ones_like(OHS1), np.ones_like(OCS1));
