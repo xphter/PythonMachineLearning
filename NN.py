@@ -3413,101 +3413,114 @@ class ConcatenationLayer(NetModuleBase):
 
 
 class CrossEntropyLoss(NetLossBase):
-    def __init__(self):
+    def __init__(self, reductionType : LossReductionType = LossReductionType.Mean):
         super().__init__();
 
         self._Y = None;
         self._T = None;
+        self._M = None;
+        self._reductionType = reductionType;
 
 
     def forward(self, *data: np.ndarray) -> float:
-        self._Y, self._T = data;
-        self._loss = crossEntropyError(self._Y, self._T);
+        if len(data) > 2:
+            self._Y, self._M, self._T = data;
+        else:
+            self._Y, self._T = data;
+            self._M = None;
+
+        self._loss = crossEntropyError(self._Y, self._T, self._M, self._reductionType);
 
         return self._loss;
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
-        dY = -(self._T / self._Y).astype(self._Y.dtype) / self._T.shape[0];
-
-        return dY, ;
+        return crossEntropyErrorGradient(self._Y, self._T, self._M, self._reductionType), ;
 
 
 class SoftmaxWithCrossEntropyLoss(NetLossBase):
-    def __init__(self):
+    def __init__(self, reductionType : LossReductionType = LossReductionType.Mean):
         super().__init__();
 
         self._Y = None;
         self._T = None;
+        self._M = None;
+        self._reductionType = reductionType;
 
 
     def forward(self, *data: np.ndarray) -> float:
-        X, T = data;
-        self._T = T;
+        if len(data) > 2:
+            X, self._M, self._T = data;
+        else:
+            X, self._T = data;
+            self._M = None;
+
         self._Y = softmax(X);
-        self._loss = crossEntropyError(self._Y, self._T);
+        self._loss = crossEntropyError(self._Y, self._T, self._M, self._reductionType);
 
         return self._loss;
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
-        dX = (self._Y - self._T).astype(self._Y.dtype) / self._T.shape[0];
-
-        return dX, ;
+        return softmaxWithCrossEntropyErrorGradient(self._Y, self._T, self._M, self._reductionType), ;
 
 
 class SoftmaxWithCrossEntropy1DLoss(NetLossBase):
-    def __init__(self):
+    def __init__(self, reductionType : LossReductionType = LossReductionType.Mean):
         super().__init__();
 
         self._Y = None;
         self._T = None;
+        self._M = None;
+        self._reductionType = reductionType;
 
 
     def forward(self, *data: np.ndarray) -> float:
-        X, T = data;
-        self._T = T;
+        if len(data) > 2:
+            X, self._M, self._T = data;
+        else:
+            X, self._T = data;
+            self._M = None;
+
         self._Y = softmax(X);
-        self._loss = crossEntropyError1D(self._Y, self._T);
+        self._loss = crossEntropyError1D(self._Y, self._T, self._M, self._reductionType);
 
         return self._loss;
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
-        n = self._T.size;
-
-        dX = self._Y.reshape((n, -1));
-        dX[np.arange(n), self._T.flatten()] -= 1;
-        dX /= self._T.shape[0];
-
-        return dX.reshape(self._Y.shape), ;
+        return softmaxWithCrossEntropyErrorGradient1D(self._Y, self._T, self._M, self._reductionType), ;
 
 
 class SigmoidWithCrossEntropyLoss(NetLossBase):
-    def __init__(self):
+    def __init__(self, reductionType : LossReductionType = LossReductionType.Mean):
         super().__init__();
 
         self._Y = None;
         self._T = None;
+        self._M = None;
+        self._reductionType = reductionType;
 
 
     def forward(self, *data: np.ndarray) -> float:
-        X, T = data;
-        self._T = T;
+        if len(data) > 2:
+            X, self._M, self._T = data;
+        else:
+            X, self._T = data;
+            self._M = None;
+
         self._Y = sigmoid(X);
 
         Y2 = np.expand_dims(self._Y, axis = -1);
         T2 = np.expand_dims(self._T, axis = -1);
         self._loss = crossEntropyError(np.concatenate((Y2, 1 - Y2), axis = -1),
-                                       np.concatenate((T2, 1 - T2), axis = -1));
+                                       np.concatenate((T2, 1 - T2), axis = -1), self._M, self._reductionType);
 
         return self._loss;
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
-        dX = (self._Y - self._T).astype(self._Y.dtype) / self._T.shape[0];
-
-        return dX, ;
+        return sigmoidWithCrossEntropyErrorGradient(self._Y, self._T, self._M, self._reductionType), ;
 
 
 class IdentityWithMeanSquareLoss(NetLossBase):

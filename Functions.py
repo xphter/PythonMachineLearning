@@ -9,10 +9,18 @@
 ######################################################
 
 
+import enum;
 import math;
 
 from ImportNumpy import *;
 from typing import Callable, Union, Tuple, List;
+
+
+@enum.unique
+class LossReductionType(enum.Enum):
+    No = 0x00;
+    Mean = 0x10;
+    Sum = 0x20;
 
 
 def sigmoid(X : np.ndarray, threshold : float = -20) -> np.ndarray:
@@ -159,12 +167,60 @@ def meanAbsoluteError(Y : np.ndarray, T : np.ndarray):
     return float(np.sum(np.abs(Y - T))) / T.size;
 
 
-# Y and T has the same shape
-def crossEntropyError(Y : np.ndarray, T : np.ndarray, epsilon : float = 1e-8) -> float:
+# Y and T has the same shape, M is a 0-1 mask array
+def crossEntropyError(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean, epsilon : float = 1e-8) -> Union[float, np.ndarray]:
     if Y.shape != T.shape:
         raise ValueError("the shapes is not same.");
 
-    return float(np.sum(-(T * np.log(Y + epsilon)))) / T.shape[0];
+    L = -T * np.log(Y + epsilon);
+    if M is not None:
+        L *= np.expand_dims(M, axis = -1);
+
+    if reductionType == LossReductionType.Sum:
+        return float(np.sum(L));
+    elif reductionType == LossReductionType.Mean:
+        return float(np.sum(L)) / len(T);
+    else:
+        return L;
+
+
+# Y and T has the same shape, M is a 0-1 mask array
+def crossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
+    dY = -(T / Y).astype(Y.dtype);
+
+    if M is not None:
+        dY *= np.expand_dims(M, axis = -1);
+
+    if reductionType == LossReductionType.Mean:
+        dY /= len(T);
+
+    return dY;
+
+
+# Y and T has the same shape, M is a 0-1 mask array
+def softmaxWithCrossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
+    dX = (Y - T).astype(Y.dtype);
+
+    if M is not None:
+        dX *= np.expand_dims(M, axis = -1);
+
+    if reductionType == LossReductionType.Mean:
+        dX /= len(T);
+
+    return dX;
+
+
+# Y and T has the same shape, M is a 0-1 mask array
+def sigmoidWithCrossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
+    dX = (Y - T).astype(Y.dtype);
+
+    if M is not None:
+        dX *= M;
+
+    if reductionType == LossReductionType.Mean:
+        dX /= len(T);
+
+    return dX;
 
 
 # Y and T has the same shape
@@ -201,10 +257,36 @@ def getDropoutMask(inputs : np.ndarray, dropoutRatio : float):
         return (np.random.rand(*inputs.shape) > dropoutRatio).astype(inputs.dtype);
 
 
-# T was used as a 1-D index array
-def crossEntropyError1D(Y : np.ndarray, T : np.ndarray, epsilon : float = 1e-8) -> float:
+# T was a label index array
+def crossEntropyError1D(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean, epsilon : float = 1e-8) -> Union[float, np.ndarray]:
     n = T.size;
-    return float(np.sum(-np.log(Y.reshape((n, -1))[np.arange(n), T.flatten()] + epsilon))) / T.shape[0];
+    L = -np.log(Y.reshape(-1)[np.arange(n) * Y.shape[-1] + T.flatten()]).reshape(T.shape);
+
+    if M is not None:
+        L *= M;
+
+    if reductionType == LossReductionType.Sum:
+        return float(np.sum(L));
+    elif reductionType == LossReductionType.Mean:
+        return float(np.sum(L)) / n;
+    else:
+        return L;
+
+
+# T was a label index array, M is a 0-1 mask array
+def softmaxWithCrossEntropyErrorGradient1D(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
+    n = T.size;
+    dX = Y.flatten();
+    dX[np.arange(n) * Y.shape[-1] + T.flatten()] -= 1;
+    dX = dX.reshape(Y.shape);
+
+    if M is not None:
+        dX *= np.expand_dims(M, axis = -1);
+
+    if reductionType == LossReductionType.Mean:
+        dX /= n;
+
+    return dX;
 
 
 def labelSmoothing(T : np.ndarray, alpha : float = 0.1) -> np.ndarray:
