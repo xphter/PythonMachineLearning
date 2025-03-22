@@ -372,42 +372,42 @@ def testKeras():
 
 
 def test():
-    x0 = np.array([30, 34, 38, 42, 46, 50, 54, 58], dtype = np.float32);
-    # x0 = np.arange(0, 48, 4, dtype = np.float32);
-    y0 = np.array([11, 14, 19, 32, 42, 48, 50, 52], dtype = np.float32);
-    L = 60.0;
-    x = x0;
-    y = np.log((L - y0) / y0);
-    n = len(x);
-    xMean, yMean = np.mean(x), np.mean(y);
-    beta1 = np.dot(x - xMean, y) / np.sum((x - xMean) ** 2);
-    beta0 = yMean - beta1 * xMean;
-    yHat = beta0 + beta1 * x;
-    yHat0 = L / (1 + np.exp(beta0 + beta1 * x));
-
-    # beta1 = (np.sum(x * y) - 100 * np.sum(x)) / np.sum(x ** 2);
-    # yHat = 100 + beta1 * x;
-
-    # maskX, maskY = x < xMean, y < yMean;
-    # B = np.array([
-    #     [np.sum(maskX & maskY), np.sum(~maskX & maskY)],
-    #     [np.sum(maskX & ~maskY), np.sum(~maskX & ~maskY)],
-    # ]);
-    # E = n * np.array([np.sum(maskY) / n, 1 - np.sum(maskY) / n]).reshape(2, 1) * np.array([np.sum(maskX) / n, 1 - np.sum(maskX) / n]).reshape(1, 2);
-    # D = np.sum((B - E) ** 2 / E);
-    # pValue = 1 - scipy.stats.chi2.cdf(D, df = 1);
-
-    plt.figure();
-    # plt.scatter(x, y);
-    # plt.plot(x, yHat, "-r");
-    plt.scatter(x0, y0);
-    plt.plot(np.sort(x0), yHat0, "-r");
-    plt.show(block = True);
-
-    plt.figure();
-    # plt.scatter(x, y - yHat);
-    plt.scatter(x0, y0 - yHat0);
-    plt.show(block = True);
+    # x0 = np.array([30, 34, 38, 42, 46, 50, 54, 58], dtype = np.float32);
+    # # x0 = np.arange(0, 48, 4, dtype = np.float32);
+    # y0 = np.array([11, 14, 19, 32, 42, 48, 50, 52], dtype = np.float32);
+    # L = 60.0;
+    # x = x0;
+    # y = np.log((L - y0) / y0);
+    # n = len(x);
+    # xMean, yMean = np.mean(x), np.mean(y);
+    # beta1 = np.dot(x - xMean, y) / np.sum((x - xMean) ** 2);
+    # beta0 = yMean - beta1 * xMean;
+    # yHat = beta0 + beta1 * x;
+    # yHat0 = L / (1 + np.exp(beta0 + beta1 * x));
+    #
+    # # beta1 = (np.sum(x * y) - 100 * np.sum(x)) / np.sum(x ** 2);
+    # # yHat = 100 + beta1 * x;
+    #
+    # # maskX, maskY = x < xMean, y < yMean;
+    # # B = np.array([
+    # #     [np.sum(maskX & maskY), np.sum(~maskX & maskY)],
+    # #     [np.sum(maskX & ~maskY), np.sum(~maskX & ~maskY)],
+    # # ]);
+    # # E = n * np.array([np.sum(maskY) / n, 1 - np.sum(maskY) / n]).reshape(2, 1) * np.array([np.sum(maskX) / n, 1 - np.sum(maskX) / n]).reshape(1, 2);
+    # # D = np.sum((B - E) ** 2 / E);
+    # # pValue = 1 - scipy.stats.chi2.cdf(D, df = 1);
+    #
+    # plt.figure();
+    # # plt.scatter(x, y);
+    # # plt.plot(x, yHat, "-r");
+    # plt.scatter(x0, y0);
+    # plt.plot(np.sort(x0), yHat0, "-r");
+    # plt.show(block = True);
+    #
+    # plt.figure();
+    # # plt.scatter(x, y - yHat);
+    # plt.scatter(x0, y0 - yHat0);
+    # plt.show(block = True);
 
     print("go");
 
@@ -2121,11 +2121,11 @@ def unitTest():
     # testSigmoidWithCrossEntropyLossGradient4();
     # testSigmoidWithCrossEntropyLossGradient5();
     # testSigmoidWithCrossEntropyLossGradient6();
-    testSoftmaxWithCrossEntropy1DLossGradient1();
-    testSoftmaxWithCrossEntropy1DLossGradient2();
-    testSoftmaxWithCrossEntropy1DLossGradient3();
-    testSoftmaxWithCrossEntropy1DLossGradient4();
-    testSoftmaxWithCrossEntropy1DLossGradient5();
+    # testSoftmaxWithCrossEntropy1DLossGradient1();
+    # testSoftmaxWithCrossEntropy1DLossGradient2();
+    # testSoftmaxWithCrossEntropy1DLossGradient3();
+    # testSoftmaxWithCrossEntropy1DLossGradient4();
+    # testSoftmaxWithCrossEntropy1DLossGradient5();
     testSoftmaxWithCrossEntropy1DLossGradient6();
     # testIdentityWithMeanSquareLossGradient1();
     # testIdentityWithMeanSquareLossGradient2();
@@ -2299,7 +2299,7 @@ def testPerformance():
 def testFunctionalNetModuleGradient1():
     N, T, D = 32, 24, 16;
     X = np.fabs(np.random.randn(N, T, D)) + 1.0;
-    m = FunctionalNetModule("Log", lambda x: np.log(x), lambda x, y: 1 / x);
+    m = FunctionalNetModule("Log", lambda x: np.log(x), lambda x, y, dy: dy * (1 / x));
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
@@ -2311,7 +2311,7 @@ def testFunctionalNetModuleGradient2():
     N, T, D = 32, 24, 16;
     X1 = np.fabs(np.random.randn(N, T, D)) + 1.0;
     X2 = np.fabs(np.random.randn(N, T, D)) + 2.0;
-    m = FunctionalNetModule("Log", lambda x: np.log(x), lambda x, y: 1 / x);
+    m = FunctionalNetModule("Log", lambda x: np.log(x), lambda x, y, dy: dy * (1 / x));
     Y1, Y2 = m.forward(X1, X2);
     dX1, dX2 = m.backward(np.ones_like(Y1), np.ones_like(Y1));
     dX1N = numericGradient(lambda x: np.sum(np.add(*m.forward(x, X2))), X1);
@@ -2378,14 +2378,15 @@ def testlabelSmoothing():
     print(Y - np.concatenate((Y1, Y2)));
 
 
-def testModuleGradient(m : INetModule, label: str, *data : np.ndarray):
+def testModuleGradient(m : INetModule, title: str, *data : np.ndarray):
     numGradients = [];
 
     for p in m.params:
         v = p.value;
         numGradients.append(numericGradient(lambda x : sumAll(*m.copy(True).forward(*data)), v));
 
-    print(f"{label}, {', '.join([f'param {m.params[i].name}{i}{m.params[i].value.shape} error: {np.sum(np.abs(m.params[i].grad - numGradients[i]))}' for i in range(len(m.params))])}")
+    message = '\n'.join([f'param {m.params[i].name}{i}{m.params[i].value.shape} error value: {np.sum(np.fabs(m.params[i].grad - numGradients[i]))}, error ratio: {np.linalg.norm(m.params[i].grad - numGradients[i]) / (np.linalg.norm(m.params[i].grad) + np.linalg.norm(numGradients[i]))}' for i in range(len(m.params))]);
+    print(f"{title}\n{message}");
 
 
 def testMinMaxScaler():

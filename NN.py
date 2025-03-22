@@ -946,13 +946,13 @@ class FunctionalNetModule(NetModuleBase):
 
     def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
         self._X = data;
-        self._Y = tuple([self._forwardFunc(X) for X in data]);
+        self._Y = tuple(self._forwardFunc(X) for X in data);
 
         return self._Y;
 
 
     def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
-        dX = tuple([dL * self._backwardFunc(X, Y) for X, Y, dL in zip(self._X, self._Y, dout)]);
+        dX = tuple(self._backwardFunc(X, Y, dY) for X, Y, dY in zip(self._X, self._Y, dout));
 
         return dX;
 
