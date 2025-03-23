@@ -3112,9 +3112,9 @@ class StackRnnLayer(AggregateNetModule):
         self._returnSequence = returnSequence;
         self._returnState = returnState;
 
+        self._Ys = None;
         self._hiddenStates = None;
         self._dStates = None;
-        self._sequenceLength = 0;
         self._foreignState = False;
         self._name = f"StackRnnLayer {inputSize}*{'*'.join([str(hiddenSize)] * layersNum)}";
 
@@ -3122,7 +3122,6 @@ class StackRnnLayer(AggregateNetModule):
     # input X, states: [L, N, H]
     def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
         Xs = data[0];
-        self._sequenceLength = len(Xs);
         self._foreignState = len(data) > 1;
 
         outputStates = [];
@@ -3142,6 +3141,7 @@ class StackRnnLayer(AggregateNetModule):
             if l < self._dropoutsNum:
                 Xs, = self._dropoutModules[l].forward(Xs);
 
+        self._Ys = Xs;
         statesCount = len(outputStates) // self._layersNum;
         self._hiddenStates = tuple(np.array(outputStates[i::statesCount]) for i in range(statesCount));
 
@@ -3162,7 +3162,7 @@ class StackRnnLayer(AggregateNetModule):
             # truncated BPTT
             dOutputStates = tuple(np.zeros_like(item) for item in self._hiddenStates);
         else:
-            dXs, dOutputStates = [0] * self._sequenceLength, dout;
+            dXs, dOutputStates = np.zeros_like(self._Ys), dout;
 
         dInputStates = [];
         for l in reversed(range(self._layersNum)):
@@ -3181,11 +3181,25 @@ class StackRnnLayer(AggregateNetModule):
         return (dXs, ) + self._dStates if self._foreignState else (dXs, );
 
 
+# rnnSelector(inputSize, hiddenSize, stateful, returnSequence, returnState) -> RnnLayerBase
 class BiRnnLayer(AggregateNetModule):
-    def __init__(self, forwardRnn : INetModule, backwardRnn : INetModule):
-        super().__init__(forwardRnn, backwardRnn);
-        self._forwardRnn = forwardRnn;
-        self._backwardRnn = backwardRnn;
+    def __init__(self, inputSize : int, hiddenSize : int, rnnSelector : Callable, stateful : bool = True, returnSequence : bool = True, returnState : bool = False):
+        self._forwardRnn : INetModule = rnnSelector(inputSize, hiddenSize, stateful, True, True);
+        self._backwardRnn : INetModule = rnnSelector(inputSize, hiddenSize, stateful, True, True);
+
+        super().__init__(self._forwardRnn, self._backwardRnn);
+
+        self._inputSize = inputSize;
+        self._hiddenSize = hiddenSize;
+        self._stateful = stateful;
+        self._returnSequence = returnSequence;
+        self._returnState = returnState;
+
+        self._Ys = None;
+        self._hiddenStates = None;
+        self._dStates = None;
+        self._foreignState = False;
+        self._name = f"BiRNN {inputSize}*{2 * hiddenSize}";
 
 
     @property
@@ -3198,19 +3212,47 @@ class BiRnnLayer(AggregateNetModule):
         return self._backwardRnn;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        X = data[0];
-        Y1 = self._forwardRnn.forward(X)[0];
-        Y2 = self._backwardRnn.forward(X[..., ::-1, :])[0];
-        return Y1, Y2[..., ::-1, :];
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        Xs = data[0];
+        self._foreignState = len(data) > 1;
+        inputStates = data[1:] if self._foreignState else None;
+
+        if inputStates is not None:
+            forwardOutputs = self._forwardRnn.forward(*((Xs, ) + tuple(item[..., : self._hiddenSize] for item in inputStates)));
+            backwardOutputs = self._backwardRnn.forward(*((Xs[::-1], ) + tuple(item[..., self._hiddenSize: ] for item in inputStates)));
+        else:
+            forwardOutputs = self._forwardRnn.forward(Xs);
+            backwardOutputs = self._backwardRnn.forward(Xs[::-1]);
+
+        self._Ys = np.concatenate((forwardOutputs[0], backwardOutputs[0][::-1]), axis = -1);
+        self._hiddenStates = tuple(np.concatenate((fs, bs), axis = -1) for fs, bs in zip(forwardOutputs[1: ], backwardOutputs[1: ]));
+
+        if self._returnSequence and self._returnState:
+            return self._Ys, *self._hiddenStates;
+        if self._returnSequence:
+            return self._Ys, ;
+        if self._returnState:
+            return self._hiddenStates;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dY1, dY2 = dout;
-        dX1 = self._forwardRnn.backward(dY1)[0];
-        dX2 = self._backwardRnn.backward(dY2[..., ::-1, :])[0];
-        dX = dX1 + dX2[..., ::-1, :];
-        return dX, ;
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        if self._returnSequence and self._returnState:
+            dYs, dOutputStates = dout[0], dout[1:];
+        elif self._returnSequence:
+            dYs = dout[0];
+
+            # truncated BPTT
+            dOutputStates = tuple(np.zeros_like(item) for item in self._hiddenStates);
+        else:
+            dYs, dOutputStates = np.zeros_like(self._Ys), dout;
+
+        dForwardInputs = self._forwardRnn.backward(dYs[..., : self._hiddenSize], *tuple(item[..., : self._hiddenSize] for item in dOutputStates));
+        dBackwardInputs = self._backwardRnn.backward(dYs[..., self._hiddenSize: ][::-1], *tuple(item[..., self._hiddenSize: ] for item in dOutputStates));
+
+        dXs = dForwardInputs[0] + dBackwardInputs[0][::-1];
+        self._dStates = tuple(np.concatenate((fs, bs), axis = -1) for fs, bs in zip(dForwardInputs[1: ], dBackwardInputs[1: ])) if self._foreignState else None;
+
+        return (dXs, ) + self._dStates if self._foreignState else (dXs, );
 
 
 class CorpusNegativeSampler:
