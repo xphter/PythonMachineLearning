@@ -1214,6 +1214,7 @@ class DropoutLayer(NetModuleBase):
 
             if self._mask is None or not self._reuseMask:
                 self._mask = self._getMask(X.shape, X.dtype);
+
             return X * self._mask, ;
         else:
             return X, ;
@@ -1235,7 +1236,7 @@ class DropoutLayer(NetModuleBase):
         self._mask = None;
 
 
-# the index of time dimension is 1
+# the index of time dimension is 0
 class VariationalDropoutLayer(DropoutLayer):
     def __init__(self, dropoutRatio = 0.5):
         super().__init__(dropoutRatio);
@@ -1247,8 +1248,8 @@ class VariationalDropoutLayer(DropoutLayer):
         if len(shape) <= 2:
             return super()._getMask(shape, dtype);
 
-        mask = super()._getMask((shape[0], ) + shape[2:], dtype);
-        mask = np.repeat(np.expand_dims(mask, axis = 1), shape[1], axis = 1);
+        mask = super()._getMask(shape[1: ], dtype);
+        mask = np.repeat(np.expand_dims(mask, axis = 0), shape[0], axis = 0);
 
         return mask;
 
@@ -3088,15 +3089,25 @@ class BahdanauAttentionLstmLayer(LstmLayer):
 
 # rnnSelector(inputSize, hiddenSize, stateful, returnSequence, returnState) -> RnnLayerBase
 class StackRnnLayer(AggregateNetModule):
-    def __init__(self, inputSize : int, hiddenSize : int, rnnSelector : Callable, layersNum : int = 2, stateful : bool = True, returnSequence : bool = True, returnState : bool = False):
+    def __init__(self, inputSize : int, hiddenSize : int, rnnSelector : Callable, layersNum : int = 2, dropoutRatio : float = 0.0, stateful : bool = True, returnSequence : bool = True, returnState : bool = False):
         if not returnSequence and not returnState:
             raise ValueError("returnSequence and returnState are both false");
 
-        super().__init__(*tuple(rnnSelector(inputSize if i == 0 else hiddenSize, hiddenSize, stateful, True, True) for i in range(layersNum)));
+        modules, self._rnnModules, self._dropoutModules = [], [], [];
+        for l in range(layersNum):
+            modules.append(rnnSelector(inputSize if l == 0 else hiddenSize, hiddenSize, stateful, True, True));
+            self._rnnModules.append(modules[-1]);
+
+            if dropoutRatio > 0 and l < layersNum - 1:
+                modules.append(VariationalDropoutLayer(dropoutRatio));
+                self._dropoutModules.append(modules[-1]);
+
+        super().__init__(*tuple(modules));
 
         self._inputSize = inputSize;
         self._hiddenSize = hiddenSize;
         self._layersNum = layersNum;
+        self._dropoutsNum = len(self._dropoutModules);
         self._stateful = stateful;
         self._returnSequence = returnSequence;
         self._returnState = returnState;
@@ -3118,7 +3129,7 @@ class StackRnnLayer(AggregateNetModule):
         inputStates = data[1: ] if self._foreignState else None;
 
         for l in range(self._layersNum):
-            layer = self._modules[l];
+            layer = self._rnnModules[l];
 
             if inputStates is not None:
                 outputs = layer.forward(*((Xs, ) + tuple(item[l] for item in inputStates)));
@@ -3127,6 +3138,9 @@ class StackRnnLayer(AggregateNetModule):
 
             Xs = outputs[0];
             outputStates.extend(outputs[1: ]);
+
+            if l < self._dropoutsNum:
+                Xs, = self._dropoutModules[l].forward(Xs);
 
         statesCount = len(outputStates) // self._layersNum;
         self._hiddenStates = tuple(np.array(outputStates[i::statesCount]) for i in range(statesCount));
@@ -3152,7 +3166,10 @@ class StackRnnLayer(AggregateNetModule):
 
         dInputStates = [];
         for l in reversed(range(self._layersNum)):
-            layer = self._modules[l];
+            layer = self._rnnModules[l];
+
+            if l < self._dropoutsNum:
+                dXs, = self._dropoutModules[l].backward(dXs);
 
             dInputs = layer.backward(*((dXs, ) + tuple(item[l] for item in dOutputStates)));
             dXs = dInputs[0];
