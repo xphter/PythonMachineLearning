@@ -149,6 +149,14 @@ def softmax(X : np.ndarray) -> np.ndarray:
     return Y / np.sum(Y, -1, keepdims = True);
 
 
+# Y = softmax(X), dX = Y * (dY - ∑(dY * Y))
+def softmaxGradient(Y : np.ndarray, dY : np.ndarray) -> np.ndarray:
+    Z = dY * Y;
+    dX = Z - Y * np.sum(Z, axis = -1, keepdims = True);
+
+    return dX;
+
+
 def lengthExceptLastDimension(X : np.ndarray):
     return X.size // X.shape[-1] if X.ndim > 2 else len(X);
 

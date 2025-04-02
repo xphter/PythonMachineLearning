@@ -3442,8 +3442,7 @@ class SoftmaxLayer(NetModuleBase):
     # dX = Y * (dY - ∑(dY * Y))
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
-        Z = dY * self._Y;
-        dX = Z - self._Y * np.sum(Z, -1, keepdims = True);
+        dX = softmaxGradient(self._Y, dY);
 
         return dX, ;
 

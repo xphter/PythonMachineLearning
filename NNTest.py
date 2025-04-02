@@ -2100,6 +2100,7 @@ def unitTest():
     # testSigmoidGradient2();
     # testMinMaxScaler();
 
+    testSoftmaxLayerGradient1();
     # testIdentityWithMeanAbsoluteLossGradient1();
     # testIdentityWithMeanAbsoluteLossGradient2();
     # testIdentityWithMeanAbsoluteLossGradient3();
@@ -2271,6 +2272,8 @@ def unitTest():
     # testSeq2SeqTSModel2();
     # testSeq2SeqTSModel_Dropout();
 
+    print("unit text exit.");
+
 
 def sumAll(*X : np.ndarray) -> float:
     return sum([float(np.sum(x)) for x in X]);
@@ -2414,6 +2417,18 @@ def testMinMaxScaler():
     X_test_2, Y_test_2 = scaler.inverse(scaler.transform(X_test_1)), scaler.inverse(scaler.transform(Y_test_1));
 
     print(f"MinMaxScaler, transform-inverse, {np.sum(np.abs(X_train_1 - X_train_2))}, {np.sum(np.abs(Y_train_1 - Y_train_2))}, {np.sum(np.abs(X_test_1 - X_test_2))}, {np.sum(np.abs(Y_test_1 - Y_test_2))}");
+    print("\n");
+
+
+def testSoftmaxLayerGradient1():
+    N, C = 32, 24;
+    X = np.random.randn(N, C);
+    dY = np.random.randn(N, C);
+    m = SoftmaxLayer();
+    Y, = m.forward(X);
+    dX1, = m.backward(dY);
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0] * dY), X);
+    print(f"SoftmaxLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 
