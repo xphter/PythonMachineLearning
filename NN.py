@@ -2216,7 +2216,7 @@ class RnnLayer(RnnLayerBase):
         if self._foreignState:
             self._H = data[1];
         else:
-            if self.context.isTrainingMode and not self._stateful or self._H is None:
+            if not self._stateful or self._H is None:
                 self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
 
 
@@ -2326,7 +2326,7 @@ class GruLayer(RnnLayerBase):
         if self._foreignState:
             self._H = data[1];
         else:
-            if self.context.isTrainingMode and not self._stateful or self._H is None:
+            if not self._stateful or self._H is None:
                 self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
 
         W = np.concatenate((self._weightX, self._weightH), axis = 0);
@@ -2487,7 +2487,7 @@ class LstmLayer(RnnLayerBase):
         if self._foreignState:
             self._H, self._C = data[1], data[2];
         else:
-            if self.context.isTrainingMode and not self._stateful or self._H is None:
+            if not self._stateful or self._H is None:
                 self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
                 self._C = np.zeros((N, self._hiddenSize), Xs.dtype);
 
