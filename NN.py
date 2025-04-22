@@ -3429,12 +3429,17 @@ class SoftmaxLayer(NetModuleBase):
         super().__init__();
 
         self._Y = None;
+        self._M = None;
         self._name = "Softmax";
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
-        X = data[0];
-        self._Y = softmax(X);
+        if len(data) > 1:
+            X, self._M = data[: 2];
+        else:
+            X, self._M = data[0], None;
+
+        self._Y = softmax(X, self._M);
 
         return self._Y, ;
 

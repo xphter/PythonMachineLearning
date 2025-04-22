@@ -2101,6 +2101,8 @@ def unitTest():
     # testMinMaxScaler();
 
     # testSoftmaxLayerGradient1();
+    # testSoftmaxLayerGradient2();
+    testSoftmaxLayerGradient3();
     # testIdentityWithMeanAbsoluteLossGradient1();
     # testIdentityWithMeanAbsoluteLossGradient2();
     # testIdentityWithMeanAbsoluteLossGradient3();
@@ -2191,28 +2193,28 @@ def unitTest():
     # testRepeatedWrapperOfAffineLayerGradient();
     # testRnnCell1();
     # testRnnCellGradient1();
-    testRnnLayer1();
-    testRnnLayerGradient1_Sequence();
-    testRnnLayerGradient2_Sequence();
-    testRnnLayerGradient3_State();
-    testRnnLayerGradient4_Sequence_State();
-    testRnnLayerGradient5_Foreign_Sequence_State();
+    # testRnnLayer1();
+    # testRnnLayerGradient1_Sequence();
+    # testRnnLayerGradient2_Sequence();
+    # testRnnLayerGradient3_State();
+    # testRnnLayerGradient4_Sequence_State();
+    # testRnnLayerGradient5_Foreign_Sequence_State();
     # testGruCell1();
     # testGruCellGradient1();
-    testGruLayer1();
-    testGruLayerGradient1_Sequence();
-    testGruLayerGradient2_State();
-    testGruLayerGradient3_Sequence_State();
-    testGruLayerGradient4_Foreign_Sequence_State();
+    # testGruLayer1();
+    # testGruLayerGradient1_Sequence();
+    # testGruLayerGradient2_State();
+    # testGruLayerGradient3_Sequence_State();
+    # testGruLayerGradient4_Foreign_Sequence_State();
     # testLstmCell1();
     # testLstmCellGradient1();
     # testLstmCellGradient2();
     # testLstmCellGradient_Dropout();
-    testLstmLayer1();
-    testLstmLayerGradient1_Sequence();
-    testLstmLayerGradient2_State();
-    testLstmLayerGradient3_Sequence_State();
-    testLstmLayerGradient4_Foreign_Sequence_State();
+    # testLstmLayer1();
+    # testLstmLayerGradient1_Sequence();
+    # testLstmLayerGradient2_State();
+    # testLstmLayerGradient3_Sequence_State();
+    # testLstmLayerGradient4_Foreign_Sequence_State();
     # testLstmLayerGradient_State_Dropout(False);
     # testLstmLayerGradient_Stepwise(False);
     # testLstmLayerGradient_Stepwise_State(False);
@@ -2429,6 +2431,32 @@ def testSoftmaxLayerGradient1():
     dX1, = m.backward(dY);
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0] * dY), X);
     print(f"SoftmaxLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSoftmaxLayerGradient2():
+    N, C = 32, 24;
+    X = np.random.randn(N, C);
+    M = np.random.randint(0, 2, (N, C));
+    dY = np.random.randn(N, C);
+    m = SoftmaxLayer();
+    Y, = m.forward(X, M);
+    dX1, = m.backward(dY);
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0] * dY), X);
+    print(f"SoftmaxLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSoftmaxLayerGradient3():
+    N, Q, C = 32, 64, 24;
+    X = np.random.randn(N, Q, C);
+    M = np.random.randint(0, 2, (N, Q, C));
+    dY = np.random.randn(N, Q, C);
+    m = SoftmaxLayer();
+    Y, = m.forward(X, M);
+    dX1, = m.backward(dY);
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0] * dY), X);
+    print(f"SoftmaxLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 

@@ -143,8 +143,18 @@ def swishGradient(Y : np.ndarray, S : np.ndarray, X : np.ndarray, beta : Union[f
     return dX, dBeta;
 
 
-def softmax(X : np.ndarray) -> np.ndarray:
-    Y = np.exp(X - np.amax(X, -1, keepdims = True));
+# M is a 0-1 or True-False mask array which has the same shape of X
+def softmax(X : np.ndarray, M : np.ndarray = None) -> np.ndarray:
+    if M is not None:
+        if X.shape != M.shape:
+            raise ValueError("the shape of X and M are not same.");
+
+        A = X * M;
+        A += ~M.astype(bool) * -1e6;
+    else:
+        A = X;
+
+    Y = np.exp(A - np.amax(A, -1, keepdims = True));
 
     return Y / np.sum(Y, -1, keepdims = True);
 
@@ -175,10 +185,11 @@ def meanAbsoluteError(Y : np.ndarray, T : np.ndarray):
     return float(np.sum(np.abs(Y - T))) / T.size;
 
 
-# Y and T has the same shape, M is a 0-1 mask array
+# Y and T has the same shape
+# M is a 0-1 or True-False mask array represents whether each samples in Y are valid
 def crossEntropyError(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean, epsilon : float = 1e-8) -> Union[float, np.ndarray]:
     if Y.shape != T.shape:
-        raise ValueError("the shapes is not same.");
+        raise ValueError("the shape of Y and T are not same.");
 
     L = -T * np.log(Y + epsilon);
     if M is not None:
@@ -192,7 +203,8 @@ def crossEntropyError(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, red
         return L;
 
 
-# Y and T has the same shape, M is a 0-1 mask array
+# Y and T has the same shape
+# M is a 0-1 or True-False mask array represents whether each samples in Y are valid
 def crossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
     dY = -(T / Y).astype(Y.dtype);
 
