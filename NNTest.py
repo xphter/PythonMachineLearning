@@ -409,7 +409,7 @@ def test():
     # plt.scatter(x0, y0 - yHat0);
     # plt.show(block = True);
 
-    print("go");
+    print("go\n");
 
     # testSpiral();
     # testWord2VecPTB();
@@ -2102,7 +2102,7 @@ def unitTest():
 
     # testSoftmaxLayerGradient1();
     # testSoftmaxLayerGradient2();
-    testSoftmaxLayerGradient3();
+    # testSoftmaxLayerGradient3();
     # testIdentityWithMeanAbsoluteLossGradient1();
     # testIdentityWithMeanAbsoluteLossGradient2();
     # testIdentityWithMeanAbsoluteLossGradient3();
@@ -2249,6 +2249,13 @@ def unitTest():
     # testStackRnnLayerGradient12_Lstm_ForeignState_Sequence_State();
     # testStackLstmLayerGradient_State(False);
     # testStackLstmLayerGradient_State_Dropout(False);
+
+    testAdditiveAttentionModuleGradient1();
+    testAdditiveAttentionModuleGradient2();
+    testAdditiveAttentionModuleGradient3();
+    testDotProductAttentionModuleGradient1();
+    testDotProductAttentionModuleGradient2();
+    testDotProductAttentionModuleGradient3();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -5067,6 +5074,155 @@ def testStackRnnLayerGradient12_Lstm_ForeignState_Sequence_State():
 #     print(f"StackLstmLayer, state dropout, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dHS error: {np.sum(np.abs(dHS1 - dHSN))}, dCS error: {np.sum(np.abs(dCS1 - dCSN))}");
 #     testModuleGradient(m, "StackLstmLayer state dropout, numericGradient", X, HS, CS);
 #     print("\n");
+
+
+def testAdditiveAttentionModuleGradient1():
+    batchSize, queryNum, keyNum = 32, 20, 21;
+    querySize, keySize, valueSize, hiddenSize = 22, 23, 24, 25;
+    Q = np.random.randn(batchSize, queryNum, querySize);
+    K = np.random.randn(batchSize, keyNum, keySize);
+    V = np.random.randn(batchSize, keyNum, valueSize);
+    m = AdditiveAttentionModule(querySize, keySize, hiddenSize);
+    Wq, Wk, wv = tuple([p.value for p in m.params]);
+
+    Y, = m.forward(Q, K, V);
+    dQ1, dK1, dV1 = m.backward(np.ones_like(Y));
+    dWq1, dWk1, dwv1 = tuple([p.grad for p in m.params]);
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x)[0]), V);
+    dWqN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = x, Wk = Wk, wv = wv).forward(Q, K, V)[0]), Wq);
+    dWkN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = x, wv = wv).forward(Q, K, V)[0]), Wk);
+    dwvN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = Wk, wv = x).forward(Q, K, V)[0]), wv);
+    print(f"AdditiveAttentionModule, numericGradient1, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dWq error: {np.sum(np.abs(dWq1 - dWqN))}, dWk error: {np.sum(np.abs(dWk1 - dWkN))}, dwv error: {np.sum(np.abs(dwv1 - dwvN))}");
+    print("\n");
+
+
+def testAdditiveAttentionModuleGradient2():
+    def getLenMask(queryNum : int, keyNum, validLen : np.ndarray) -> np.ndarray:
+        if len(validLen.shape) == 1:
+            validLen = np.repeat(np.expand_dims(validLen, axis = -1), queryNum, axis = -1);
+        validLen = np.expand_dims(validLen, axis = -1);
+
+        return np.arange(keyNum, dtype = np.int32) < validLen;
+
+    batchSize, queryNum, keyNum = 32, 20, 21;
+    querySize, keySize, valueSize, hiddenSize = 22, 23, 24, 25;
+    Q = np.random.randn(batchSize, queryNum, querySize);
+    K = np.random.randn(batchSize, keyNum, keySize);
+    V = np.random.randn(batchSize, keyNum, valueSize);
+    M = getLenMask(queryNum, keyNum, np.random.randint(1, keyNum + 1, batchSize));
+    m = AdditiveAttentionModule(querySize, keySize, hiddenSize);
+    Wq, Wk, wv = tuple([p.value for p in m.params]);
+
+    Y, = m.forward(Q, K, V, M);
+    dQ1, dK1, dV1 = m.backward(np.ones_like(Y));
+    dWq1, dWk1, dwv1 = tuple([p.grad for p in m.params]);
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
+    dWqN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = x, Wk = Wk, wv = wv).forward(Q, K, V, M)[0]), Wq);
+    dWkN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = x, wv = wv).forward(Q, K, V, M)[0]), Wk);
+    dwvN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = Wk, wv = x).forward(Q, K, V, M)[0]), wv);
+    print(f"AdditiveAttentionModule, numericGradient2, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dWq error: {np.sum(np.abs(dWq1 - dWqN))}, dWk error: {np.sum(np.abs(dWk1 - dWkN))}, dwv error: {np.sum(np.abs(dwv1 - dwvN))}");
+    print("\n");
+
+
+def testAdditiveAttentionModuleGradient3():
+    def getLenMask(queryNum : int, keyNum, validLen : np.ndarray) -> np.ndarray:
+        if len(validLen.shape) == 1:
+            validLen = np.repeat(np.expand_dims(validLen, axis = -1), queryNum, axis = -1);
+        validLen = np.expand_dims(validLen, axis = -1);
+
+        return np.arange(keyNum, dtype = np.int32) < validLen;
+
+    batchSize, queryNum, keyNum = 32, 20, 21;
+    querySize, keySize, valueSize, hiddenSize = 22, 23, 24, 25;
+    Q = np.random.randn(batchSize, queryNum, querySize);
+    K = np.random.randn(batchSize, keyNum, keySize);
+    V = np.random.randn(batchSize, keyNum, valueSize);
+    M = getLenMask(queryNum, keyNum, np.random.randint(1, keyNum + 1, (batchSize, queryNum)));
+    m = AdditiveAttentionModule(querySize, keySize, hiddenSize);
+    Wq, Wk, wv = tuple([p.value for p in m.params]);
+
+    Y, = m.forward(Q, K, V, M);
+    dQ1, dK1, dV1 = m.backward(np.ones_like(Y));
+    dWq1, dWk1, dwv1 = tuple([p.grad for p in m.params]);
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
+    dWqN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = x, Wk = Wk, wv = wv).forward(Q, K, V, M)[0]), Wq);
+    dWkN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = x, wv = wv).forward(Q, K, V, M)[0]), Wk);
+    dwvN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = Wk, wv = x).forward(Q, K, V, M)[0]), wv);
+    print(f"AdditiveAttentionModule, numericGradient3, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dWq error: {np.sum(np.abs(dWq1 - dWqN))}, dWk error: {np.sum(np.abs(dWk1 - dWkN))}, dwv error: {np.sum(np.abs(dwv1 - dwvN))}");
+    print("\n");
+
+
+def testDotProductAttentionModuleGradient1():
+    batchSize, queryNum, keyNum = 32, 20, 21;
+    querySize, keySize, valueSize = 22, 22, 23;
+    Q = np.random.randn(batchSize, queryNum, querySize);
+    K = np.random.randn(batchSize, keyNum, keySize);
+    V = np.random.randn(batchSize, keyNum, valueSize);
+    m = DotProductAttentionModule();
+
+    Y, = m.forward(Q, K, V);
+    dQ1, dK1, dV1 = m.backward(np.ones_like(Y));
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x)[0]), V);
+    print(f"DotProductAttentionModule, numericGradient1, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    print("\n");
+
+
+def testDotProductAttentionModuleGradient2():
+    def getLenMask(queryNum : int, keyNum, validLen : np.ndarray) -> np.ndarray:
+        if len(validLen.shape) == 1:
+            validLen = np.repeat(np.expand_dims(validLen, axis = -1), queryNum, axis = -1);
+        validLen = np.expand_dims(validLen, axis = -1);
+
+        return np.arange(keyNum, dtype = np.int32) < validLen;
+
+    batchSize, queryNum, keyNum = 32, 20, 21;
+    querySize, keySize, valueSize = 22, 22, 23;
+    Q = np.random.randn(batchSize, queryNum, querySize);
+    K = np.random.randn(batchSize, keyNum, keySize);
+    V = np.random.randn(batchSize, keyNum, valueSize);
+    M = getLenMask(queryNum, keyNum, np.random.randint(1, keyNum + 1, (batchSize, queryNum)));
+    m = DotProductAttentionModule();
+
+    Y, = m.forward(Q, K, V, M);
+    dQ1, dK1, dV1 = m.backward(np.ones_like(Y));
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
+    print(f"DotProductAttentionModule, numericGradient2, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    print("\n");
+
+
+def testDotProductAttentionModuleGradient3():
+    def getLenMask(queryNum : int, keyNum, validLen : np.ndarray) -> np.ndarray:
+        if len(validLen.shape) == 1:
+            validLen = np.repeat(np.expand_dims(validLen, axis = -1), queryNum, axis = -1);
+        validLen = np.expand_dims(validLen, axis = -1);
+
+        return np.arange(keyNum, dtype = np.int32) < validLen;
+
+    batchSize, queryNum, keyNum = 32, 20, 21;
+    querySize, keySize, valueSize = 22, 22, 23;
+    Q = np.random.randn(batchSize, queryNum, querySize);
+    K = np.random.randn(batchSize, keyNum, keySize);
+    V = np.random.randn(batchSize, keyNum, valueSize);
+    M = getLenMask(queryNum, keyNum, np.random.randint(1, keyNum + 1, (batchSize, queryNum)));
+    m = DotProductAttentionModule();
+
+    Y, = m.forward(Q, K, V, M);
+    dQ1, dK1, dV1 = m.backward(np.ones_like(Y));
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
+    print(f"DotProductAttentionModule, numericGradient3, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    print("\n");
 
 
 def testSelectByWeightModuleGradient():

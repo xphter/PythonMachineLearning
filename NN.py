@@ -4209,6 +4209,120 @@ class SequentialContainer(NetModelBase):
             func(m);
 
 
+class AdditiveAttentionModule(AggregateNetModule):
+    def __init__(self, querySize : int, keySize : int, hiddenSize : int, dropoutRatio : float = 0.0, Wq : np.ndarray = None, Wk : np.ndarray = None, wv : np.ndarray = None):
+        self._dropoutLayer = DropoutLayer(dropoutRatio);
+        super().__init__(self._dropoutLayer);
+
+        self._Q, self._K, self._V, self._A = None, None, None, None;
+        self._attentionWeight, self._dropoutWeight = None, None;
+        self._name = f"AdditiveAttention {hiddenSize}";
+
+        self._weightQ = math.sqrt(2.0 / querySize) * np.random.randn(querySize, hiddenSize).astype(defaultDType) if Wq is None else Wq;
+        self._weightK = math.sqrt(2.0 / keySize) * np.random.randn(keySize, hiddenSize).astype(defaultDType) if Wk is None else Wk;
+        self._weightV = math.sqrt(2.0 / hiddenSize) * np.random.randn(hiddenSize, 1).astype(defaultDType) if wv is None else wv;
+
+        self._params.append(NetParamDefinition("weightQ", self._weightQ));
+        self._params.append(NetParamDefinition("weightK", self._weightK));
+        self._params.append(NetParamDefinition("weightV", self._weightV));
+
+
+    def _setParams(self, params: List[INetParamDefinition]):
+        self._weightQ, self._weightK, self._weightV = params[0].value, params[1].value, params[2].value;
+
+
+    @property
+    def attentionWeight(self) -> np.ndarray:
+        return self._attentionWeight;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        Q, K, V = data[: 3];
+        M = data[3] if len(data) > 3 else None; # softmax mask
+        queryNum, keyNum =  Q.shape[-2], K.shape[-2];
+
+        self._Q = np.repeat(np.expand_dims(Q, axis = -2), keyNum, axis = -2);
+        self._K = np.repeat(np.expand_dims(K, axis = -3), queryNum, axis = -3);
+        self._V = V;
+
+        self._A = tanh(self._Q @ self._weightQ + self._K @ self._weightK);
+        S = self._A @ self._weightV;
+
+        self._attentionWeight = softmax(np.squeeze(S, axis = -1), M);
+        self._dropoutWeight, = self._dropoutLayer.forward(self._attentionWeight);
+        Y = self._dropoutWeight @ self._V;
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+
+        dDropoutWeight = dY @ np.swapaxes(self._V, -1, -2);
+        dV = np.swapaxes(self._dropoutWeight, -1, -2) @ dY;
+        dAttentionWeight, = self._dropoutLayer.backward(dDropoutWeight);
+        dS = np.expand_dims(softmaxGradient(self._attentionWeight, dAttentionWeight), axis = -1);
+
+        dA = dS @ self._weightV.T;
+        dWeightV = np.sum(np.swapaxes(self._A, -1, -2) @ dS, axis = tuple(range(self._A.ndim - 2)));
+        dA *= tanhGradient(self._A);
+        dQ = dA @ self._weightQ.T;
+        dWeightQ = np.sum(np.swapaxes(self._Q, -1, -2) @ dA, axis = tuple(range(self._Q.ndim - 2)));
+        dK = dA @ self._weightK.T;
+        dWeightK = np.sum(np.swapaxes(self._K, -1, -2) @ dA, axis = tuple(range(self._K.ndim - 2)));
+
+        dQ = np.sum(dQ, axis = -2);
+        dK = np.sum(dK, axis = -3);
+
+        self._params[0].grad[...] = dWeightQ;
+        self._params[1].grad[...] = dWeightK;
+        self._params[2].grad[...] = dWeightV;
+
+        return dQ, dK, dV;
+
+
+class DotProductAttentionModule(AggregateNetModule):
+    def __init__(self, dropoutRatio : float = 0.0):
+        self._dropoutLayer = DropoutLayer(dropoutRatio);
+        super().__init__(self._dropoutLayer);
+
+        self._Q, self._K, self._V, self._A, self._scale = None, None, None, None, 1;
+        self._attentionWeight, self._dropoutWeight = None, None;
+        self._name = f"DotProductAttention";
+
+
+    @property
+    def attentionWeight(self) -> np.ndarray:
+        return self._attentionWeight;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        self._Q, self._K, self._V = data[: 3];
+        M = data[3] if len(data) > 3 else None; # softmax mask
+        self._scale = 1.0 / math.sqrt(self._Q.shape[-1]);
+
+        self._A = (self._Q @ np.swapaxes(self._K, -1, -2)) * self._scale;
+        self._attentionWeight = softmax(self._A, M);
+        self._dropoutWeight, = self._dropoutLayer.forward(self._attentionWeight);
+        Y = self._dropoutWeight @ self._V;
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+
+        dDropoutWeight = dY @ np.swapaxes(self._V, -1, -2);
+        dV = np.swapaxes(self._dropoutWeight, -1, -2) @ dY;
+        dAttentionWeight, = self._dropoutLayer.backward(dDropoutWeight);
+        dA = softmaxGradient(self._attentionWeight, dAttentionWeight);
+        dA *= self._scale;
+        dQ = dA @ self._K;
+        dK = np.swapaxes(dA, -1, -2) @ self._Q;
+
+        return dQ, dK, dV;
+
+
 # select value by weights for 1 time step
 class SelectByWeight1TModule(NetModuleBase):
     def __init__(self):
