@@ -217,7 +217,8 @@ def crossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : np.ndarray = N
     return dY;
 
 
-# Y and T has the same shape, M is a 0-1 mask array
+# Y and T has the same shape
+# M is a 0-1 or True-False mask array represents whether each samples in Y are valid
 def softmaxWithCrossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
     dX = (Y - T).astype(Y.dtype);
 
@@ -230,7 +231,8 @@ def softmaxWithCrossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : np.
     return dX;
 
 
-# Y and T has the same shape, M is a 0-1 mask array
+# Y and T has the same shape
+# M is a 0-1 or True-False mask array represents whether each samples in Y are valid
 def sigmoidWithCrossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
     dX = (Y - T).astype(Y.dtype);
 
@@ -278,6 +280,7 @@ def getDropoutMask(inputs : np.ndarray, dropoutRatio : float):
 
 
 # T was a label index array
+# M is a 0-1 or True-False mask array represents whether each samples in Y are valid
 def crossEntropyError1D(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean, epsilon : float = 1e-8) -> Union[float, np.ndarray]:
     n = T.size;
     L = -np.log(Y.reshape(-1)[np.arange(n) * Y.shape[-1] + T.flatten()]).reshape(T.shape);
@@ -293,7 +296,8 @@ def crossEntropyError1D(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, r
         return L;
 
 
-# T was a label index array, M is a 0-1 mask array
+# T was a label index array
+# M is a 0-1 or True-False mask array represents whether each samples in Y are valid
 def softmaxWithCrossEntropyErrorGradient1D(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
     n = T.size;
     dX = Y.flatten();

@@ -3434,10 +3434,8 @@ class SoftmaxLayer(NetModuleBase):
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
-        if len(data) > 1:
-            X, self._M = data[: 2];
-        else:
-            X, self._M = data[0], None;
+        X = data[0];
+        M = data[1] if len(data) > 1 else None;  # softmax mask
 
         self._Y = softmax(X, self._M);
 
@@ -3487,9 +3485,9 @@ class CrossEntropyLoss(NetLossBase):
 
     def forward(self, *data: np.ndarray) -> float:
         if len(data) > 2:
-            self._Y, self._M, self._T = data;
+            self._Y, self._M, self._T = data[: 3];
         else:
-            self._Y, self._T = data;
+            self._Y, self._T = data[: 2];
             self._M = None;
 
         self._loss = crossEntropyError(self._Y, self._T, self._M, self._reductionType);
@@ -3513,9 +3511,9 @@ class SoftmaxWithCrossEntropyLoss(NetLossBase):
 
     def forward(self, *data: np.ndarray) -> float:
         if len(data) > 2:
-            X, self._M, self._T = data;
+            X, self._M, self._T = data[: 3];
         else:
-            X, self._T = data;
+            X, self._T = data[: 2];
             self._M = None;
 
         self._Y = softmax(X);
@@ -3540,9 +3538,9 @@ class SoftmaxWithCrossEntropy1DLoss(NetLossBase):
 
     def forward(self, *data: np.ndarray) -> float:
         if len(data) > 2:
-            X, self._M, self._T = data;
+            X, self._M, self._T = data[: 3];
         else:
-            X, self._T = data;
+            X, self._T = data[: 2];
             self._M = None;
 
         self._Y = softmax(X);
@@ -3567,9 +3565,9 @@ class SigmoidWithCrossEntropyLoss(NetLossBase):
 
     def forward(self, *data: np.ndarray) -> float:
         if len(data) > 2:
-            X, self._M, self._T = data;
+            X, self._M, self._T = data[: 3];
         else:
-            X, self._T = data;
+            X, self._T = data[: 2];
             self._M = None;
 
         self._Y = sigmoid(X);
@@ -4238,7 +4236,7 @@ class AdditiveAttentionModule(AggregateNetModule):
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         Q, K, V = data[: 3];
-        M = data[3] if len(data) > 3 else None; # softmax mask
+        M = data[3] if len(data) > 3 else None;  # softmax mask
         queryNum, keyNum =  Q.shape[-2], K.shape[-2];
 
         self._Q = np.repeat(np.expand_dims(Q, axis = -2), keyNum, axis = -2);
@@ -4298,7 +4296,7 @@ class DotProductAttentionModule(AggregateNetModule):
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         self._Q, self._K, self._V = data[: 3];
-        M = data[3] if len(data) > 3 else None; # softmax mask
+        M = data[3] if len(data) > 3 else None;  # softmax mask
         self._scale = 1.0 / math.sqrt(self._Q.shape[-1]);
 
         self._A = (self._Q @ np.swapaxes(self._K, -1, -2)) * self._scale;
