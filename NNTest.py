@@ -5,6 +5,7 @@ import os.path;
 import abc;
 import math;
 import time;
+import datetime;
 import pickle;
 import random;
 import collections;
@@ -2091,6 +2092,8 @@ def testSeq2Seq():
 
 
 def unitTest():
+    print(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} start to unit test\n");
+
     # testPerformance();
     # testFunctionalNetModuleGradient1();
     # testFunctionalNetModuleGradient2();
@@ -2250,12 +2253,17 @@ def unitTest():
     # testStackLstmLayerGradient_State(False);
     # testStackLstmLayerGradient_State_Dropout(False);
 
-    testAdditiveAttentionModuleGradient1();
-    testAdditiveAttentionModuleGradient2();
-    testAdditiveAttentionModuleGradient3();
-    testDotProductAttentionModuleGradient1();
-    testDotProductAttentionModuleGradient2();
-    testDotProductAttentionModuleGradient3();
+    # testAdditiveAttentionModule1();
+    # testAdditiveAttentionModuleGradient1();
+    # testAdditiveAttentionModuleGradient2();
+    # testAdditiveAttentionModuleGradient3();
+    # testDotProductAttentionModuleGradient1();
+    # testDotProductAttentionModuleGradient2();
+    # testDotProductAttentionModuleGradient3();
+    # testMultiHeadAttentionModule1();
+    # testMultiHeadAttentionModule2();
+    # testMultiHeadAttentionModule3();
+    testMultiHeadAttentionModuleGradient1();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -2281,7 +2289,7 @@ def unitTest():
     # testSeq2SeqTSModel2();
     # testSeq2SeqTSModel_Dropout();
 
-    print("unit text exit.");
+    print(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} end to unit test\n");
 
 
 def sumAll(*X : np.ndarray) -> float:
@@ -5074,6 +5082,32 @@ def testStackRnnLayerGradient12_Lstm_ForeignState_Sequence_State():
 #     print(f"StackLstmLayer, state dropout, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dHS error: {np.sum(np.abs(dHS1 - dHSN))}, dCS error: {np.sum(np.abs(dCS1 - dCSN))}");
 #     testModuleGradient(m, "StackLstmLayer state dropout, numericGradient", X, HS, CS);
 #     print("\n");
+
+
+def testAdditiveAttentionModule1():
+    batchSize, queryNum, keyNum = 32, 20, 21;
+    querySize, keySize, valueSize, hiddenSize = 22, 23, 24, 25;
+    Q = np.random.randn(batchSize, queryNum, querySize);
+    K = np.random.randn(batchSize, keyNum, keySize);
+    V = np.random.randn(batchSize, keyNum, valueSize);
+    m1 = AdditiveAttentionModule(querySize, keySize, hiddenSize);
+    Y1, = m1.forward(Q, K, V);
+
+    m2 = AdditiveAttentionModule(querySize, keySize, hiddenSize);
+    m2.params = m1.params;
+    Y2, = m2.forward(Q, K, V);
+    assert len(m1.params) == len(m2.params);
+    for p1, p2 in zip(m1.params, m2.params):
+        assert np.sum(p1.value - p2.value) < 1e-6;
+
+    m3 = m1.copy(False);
+    Y3, = m3.forward(Q, K, V);
+    assert len(m1.params) == len(m3.params);
+    for p1, p3 in zip(m1.params, m3.params):
+        assert np.sum(p1.value - p3.value) < 1e-6;
+
+    print(f"AdditiveAttentionModule, error1, Y2 error: {np.sum(np.abs(Y1 - Y2))}, Y3 error: {np.sum(np.abs(Y1 - Y3))}");
+    print("\n");
 
 
 def testAdditiveAttentionModuleGradient1():

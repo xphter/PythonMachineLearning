@@ -586,6 +586,8 @@ class AggregateNetModule(NetModuleBase):
             m.context = self._context;
             self._params.extend(m.params);
             self._states.extend(m.states);
+
+        self._selfParamsNum, self._selfStatesNum = 0, 0;
         self._name = "  -->  ".join([str(m) for m in modules]);
 
 
@@ -594,13 +596,41 @@ class AggregateNetModule(NetModuleBase):
         return self._modules;
 
 
+    def _initSelfParams(self, params : Optional[List[INetParamDefinition]]):
+        if params is None:
+            params = [];
+
+        modulesParamsNum = sum([len(m.params) for m in self._modules]);
+
+        self._selfParamsNum = len(params);
+        self._params = params + self._params[len(self._params) - modulesParamsNum: ];
+
+
+    def _initSelfStates(self, states : Optional[List[INetState]]):
+        if states is None:
+            states = [];
+
+        modulesStatesNum = sum([len(m.states) for m in self._modules]);
+
+        self._selfStatesNum = len(states);
+        self._states = states + self._states[len(self._states) - modulesStatesNum:];
+
+
     def _setContext(self, context : INetContext):
         for m in self._modules:
             m.context = context;
 
 
+    def _setSelfParams(self, params: List[INetParamDefinition]):
+        pass;
+
+
     def _setParams(self, params: List[INetParamDefinition]):
         i = 0;
+
+        if self._selfParamsNum > 0:
+            self._setSelfParams(params[i : i + self._selfParamsNum]);
+            i += self._selfParamsNum;
 
         for m in self._modules:
             if (n := len(m.params)) == 0:
@@ -610,8 +640,16 @@ class AggregateNetModule(NetModuleBase):
             i += n;
 
 
+    def _setSelfStates(self, states: List[INetState]):
+        pass;
+
+
     def _setStates(self, states: List[INetState]):
         i = 0;
+
+        if self._selfStatesNum > 0:
+            self._setSelfStates(states[i : i + self._selfStatesNum]);
+            i += self._selfStatesNum;
 
         for m in self._modules:
             if (n := len(m.states)) == 0:
@@ -637,12 +675,20 @@ class AggregateNetModule(NetModuleBase):
 
     def _copyParams(self, module : INetModule, shareParams : bool):
         module._params = [];
+
+        if self._selfParamsNum > 0:
+            module.params.extend([p.copy(shareParams) for p in self.params[: self._selfParamsNum]]);
+
         for m in module.modules:
             module.params.extend(m.params);
 
 
     def _copyStates(self, module : INetModule):
         module._states = [];
+
+        if self._selfStatesNum > 0:
+            module.states.extend([s.copy() for s in self.states[: self._selfStatesNum]]);
+
         for m in module.modules:
             module.states.extend(m.states);
 
@@ -4220,12 +4266,14 @@ class AdditiveAttentionModule(AggregateNetModule):
         self._weightK = math.sqrt(2.0 / keySize) * np.random.randn(keySize, hiddenSize).astype(defaultDType) if Wk is None else Wk;
         self._weightV = math.sqrt(2.0 / hiddenSize) * np.random.randn(hiddenSize, 1).astype(defaultDType) if wv is None else wv;
 
-        self._params.append(NetParamDefinition("weightQ", self._weightQ));
-        self._params.append(NetParamDefinition("weightK", self._weightK));
-        self._params.append(NetParamDefinition("weightV", self._weightV));
+        self._initSelfParams([
+            NetParamDefinition("weightQ", self._weightQ),
+            NetParamDefinition("weightK", self._weightK),
+            NetParamDefinition("weightV", self._weightV)
+        ]);
 
 
-    def _setParams(self, params: List[INetParamDefinition]):
+    def _setSelfParams(self, params: List[INetParamDefinition]):
         self._weightQ, self._weightK, self._weightV = params[0].value, params[1].value, params[2].value;
 
 
