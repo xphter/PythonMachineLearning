@@ -4282,6 +4282,10 @@ class AdditiveAttentionModule(AggregateNetModule):
         return self._attentionWeight;
 
 
+    # Q shape: (batch_size, query_num, query_size)
+    # K shape: (batch_size, pair_num, key_size)
+    # V shape: (batch_size, pair_num, value_size)
+    # M shape: (batch_size, query_num, pair_num)
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         Q, K, V = data[: 3];
         M = data[3] if len(data) > 3 else None;  # softmax mask
@@ -4342,6 +4346,10 @@ class DotProductAttentionModule(AggregateNetModule):
         return self._attentionWeight;
 
 
+    # Q shape: (batch_size, query_num, query_size)
+    # K shape: (batch_size, pair_num, key_size)
+    # V shape: (batch_size, pair_num, value_size)
+    # M shape: (batch_size, query_num, pair_num)
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         self._Q, self._K, self._V = data[: 3];
         M = data[3] if len(data) > 3 else None;  # softmax mask
@@ -4365,6 +4373,97 @@ class DotProductAttentionModule(AggregateNetModule):
         dA *= self._scale;
         dQ = dA @ self._K;
         dK = np.swapaxes(dA, -1, -2) @ self._Q;
+
+        return dQ, dK, dV;
+
+
+class MultiHeadAttentionModule(AggregateNetModule):
+    def __init__(self, attentionModule : INetModule, querySize : int, keySize : int, valueSize : int, hiddenSize : Union[int, Tuple[int, int, int, int]], headNum : int = 2, Wq : np.ndarray = None, Wk : np.ndarray = None, Wv : np.ndarray = None, Wo : np.ndarray = None):
+        self._attentionModule = attentionModule;
+        super().__init__(self._attentionModule);
+
+        if isinstance(hiddenSize, tuple):
+            queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize = hiddenSize;
+        else:
+            queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize = (hiddenSize, ) * 4;
+
+        self._headNum = headNum;
+        self._headShape = (headNum, -1);
+        self._Q, self._K, self._V, self._C = None, None, None, None;
+        self._name = f"MultiHeadAttention({headNum} {attentionModule})";
+
+        self._weightQ = math.sqrt(2.0 / querySize) * np.random.randn(querySize, headNum * queryHiddenSize).astype(defaultDType) if Wq is None else Wq;
+        self._weightK = math.sqrt(2.0 / keySize) * np.random.randn(keySize, headNum * keyHiddenSize).astype(defaultDType) if Wk is None else Wk;
+        self._weightV = math.sqrt(2.0 / valueSize) * np.random.randn(valueSize, headNum * valueHiddenSize).astype(defaultDType) if Wv is None else Wv;
+        self._weightO = math.sqrt(2.0 / (headNum * valueHiddenSize)) * np.random.randn(headNum * valueHiddenSize, outputHiddenSize).astype(defaultDType) if Wo is None else Wo;
+
+        self._initSelfParams([NetParamDefinition("weightQ", self._weightQ),
+                              NetParamDefinition("weightK", self._weightK),
+                              NetParamDefinition("weightV", self._weightV),
+                              NetParamDefinition("weightO", self._weightO)]);
+
+
+    def _setSelfParams(self, params: List[INetParamDefinition]):
+        self._weightQ, self._weightK, self._weightV, self._weightO = params[0].value, params[1].value, params[2].value , params[3].value;
+
+
+    def _reshapeInput(self, X : np.ndarray) -> np.ndarray:
+        Y = X.reshape(X.shape[: -1] + self._headShape);
+        return np.swapaxes(Y, -2, -3);
+
+
+    def _restoreInput(self, X : np.ndarray) -> np.ndarray:
+        Y = np.swapaxes(X, -2, -3);
+        return Y.reshape(Y.shape[: -2] + (-1, ));
+
+
+    # Q shape: (batch_size, query_num, query_size)
+    # K shape: (batch_size, pair_num, key_size)
+    # V shape: (batch_size, pair_num, value_size)
+    # M shape: (batch_size, query_num, pair_num)
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        self._Q, self._K, self._V = data[: 3];
+        M = np.repeat(np.expand_dims(data[3], axis = -3), self._headNum, axis = -3) if len(data) > 3 else None;  # softmax mask
+
+        QH = self._Q @ self._weightQ;
+        KH = self._K @ self._weightK;
+        VH = self._V @ self._weightV;
+
+        QH = self._reshapeInput(QH);
+        KH = self._reshapeInput(KH);
+        VH = self._reshapeInput(VH);
+
+        self._C, = self._attentionModule.forward(QH, KH, VH, M);
+        self._C = np.swapaxes(self._C, -2, -3);
+        self._C = self._C.reshape(self._C.shape[: -2] + (-1, ));
+        Y = self._C @ self._weightO;
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+
+        dC = dY @ self._weightO.T;
+        dWeightO = np.sum(np.swapaxes(self._C, -1, -2) @ dY, axis = tuple(range(self._C.ndim - 2)));
+        dC = np.swapaxes(dC.reshape(self._C.shape[: -1] + self._headShape), -2, -3);
+        dQH, dKH, dVH = self._attentionModule.backward(dC);
+
+        dQH = self._restoreInput(dQH);
+        dKH = self._restoreInput(dKH);
+        dVH = self._restoreInput(dVH);
+
+        dQ = dQH @ self._weightQ.T;
+        dWeightQ = np.sum(np.swapaxes(self._Q, -1, -2) @ dQH, axis = tuple(range(self._Q.ndim - 2)));
+        dK = dKH @ self._weightK.T;
+        dWeightK = np.sum(np.swapaxes(self._K, -1, -2) @ dKH, axis = tuple(range(self._K.ndim - 2)));
+        dV = dVH @ self._weightV.T;
+        dWeightV = np.sum(np.swapaxes(self._V, -1, -2) @ dVH, axis = tuple(range(self._V.ndim - 2)));
+
+        self._params[0].grad[...] = dWeightQ;
+        self._params[1].grad[...] = dWeightK;
+        self._params[2].grad[...] = dWeightV;
+        self._params[3].grad[...] = dWeightO;
 
         return dQ, dK, dV;
 

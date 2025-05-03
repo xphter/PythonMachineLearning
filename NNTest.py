@@ -2263,7 +2263,9 @@ def unitTest():
     # testMultiHeadAttentionModule1();
     # testMultiHeadAttentionModule2();
     # testMultiHeadAttentionModule3();
-    testMultiHeadAttentionModuleGradient1();
+    # testMultiHeadAttentionModule4();
+    # testMultiHeadAttentionModuleGradient1();
+    # testMultiHeadAttentionModuleGradient2();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -5256,6 +5258,162 @@ def testDotProductAttentionModuleGradient3():
     dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
     dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
     print(f"DotProductAttentionModule, numericGradient3, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    print("\n");
+
+
+def testMultiHeadAttentionModule1():
+    batchSize, headNum, queryNum, keyNum = 32, 8, 16, 17;
+    querySize, keySize, valueSize = 21, 22, 23;
+    queryHiddenSize, keyHiddenSize, valueHiddenSize, additiveHiddenSize, outputHiddenSize = 24, 25, 26, 33, 44;
+    Q = np.random.randn(batchSize, queryNum, querySize);
+    K = np.random.randn(batchSize, keyNum, keySize);
+    V = np.random.randn(batchSize, keyNum, valueSize);
+    attentionModule = AdditiveAttentionModule(queryHiddenSize, keyHiddenSize, additiveHiddenSize);
+    m1 = MultiHeadAttentionModule(attentionModule, querySize, keySize, valueSize, (queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize), headNum = headNum);
+    Y1, = m1.forward(Q, K, V);
+
+    attentionModule = AdditiveAttentionModule(queryHiddenSize, keyHiddenSize, additiveHiddenSize);
+    m2 = MultiHeadAttentionModule(attentionModule, querySize, keySize, valueSize, (queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize), headNum = headNum);
+    m2.params = m1.params;
+    Y2, = m2.forward(Q, K, V);
+    assert len(m1.params) == len(m2.params);
+    for p1, p2 in zip(m1.params, m2.params):
+        assert np.sum(p1.value - p2.value) < 1e-6;
+
+    m3 = m1.copy(False);
+    Y3, = m3.forward(Q, K, V);
+    assert len(m1.params) == len(m3.params);
+    for p1, p3 in zip(m1.params, m3.params):
+        assert np.sum(p1.value - p3.value) < 1e-6;
+
+    print(f"MultiHeadAttentionModule, error1, Y2 error: {np.sum(np.abs(Y1 - Y2))}, Y3 error: {np.sum(np.abs(Y1 - Y3))}");
+    print("\n");
+
+
+def testMultiHeadAttentionModule2():
+    batchSize, headNum, queryNum, keyNum = 32, 8, 16, 17;
+    querySize, keySize, valueSize = 21, 22, 23;
+    queryHiddenSize, keyHiddenSize, valueHiddenSize, additiveHiddenSize, outputHiddenSize = 24, 24, 25, 33, 44;
+    Q = np.random.randn(batchSize, queryNum, querySize);
+    K = np.random.randn(batchSize, keyNum, keySize);
+    V = np.random.randn(batchSize, keyNum, valueSize);
+    attentionModule = DotProductAttentionModule();
+    m1 = MultiHeadAttentionModule(attentionModule, querySize, keySize, valueSize, (queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize), headNum = headNum);
+    Y1, = m1.forward(Q, K, V);
+
+    attentionModule = DotProductAttentionModule();
+    m2 = MultiHeadAttentionModule(attentionModule, querySize, keySize, valueSize, (queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize), headNum = headNum);
+    m2.params = m1.params;
+    Y2, = m2.forward(Q, K, V);
+    assert len(m1.params) == len(m2.params);
+    for p1, p2 in zip(m1.params, m2.params):
+        assert np.sum(p1.value - p2.value) < 1e-6;
+
+    m3 = m1.copy(False);
+    Y3, = m3.forward(Q, K, V);
+    assert len(m1.params) == len(m3.params);
+    for p1, p3 in zip(m1.params, m3.params):
+        assert np.sum(p1.value - p3.value) < 1e-6;
+
+    print(f"MultiHeadAttentionModule, error2, Y2 error: {np.sum(np.abs(Y1 - Y2))}, Y3 error: {np.sum(np.abs(Y1 - Y3))}");
+    print("\n");
+
+
+def testMultiHeadAttentionModule3():
+    batchSize, headNum, queryNum, keyNum = 32, 8, 16, 17;
+    querySize, keySize, valueSize = 21, 22, 23;
+    queryHiddenSize, keyHiddenSize, valueHiddenSize, additiveHiddenSize, outputHiddenSize = 24, 25, 26, 33, 44;
+    Q = np.random.randn(batchSize, queryNum, querySize);
+    K = np.random.randn(batchSize, keyNum, keySize);
+    V = np.random.randn(batchSize, keyNum, valueSize);
+    attentionModule = AdditiveAttentionModule(queryHiddenSize, keyHiddenSize, additiveHiddenSize);
+
+    Wqs, Wks, Wvs, Cs = [], [], [], [];
+    for _ in range(headNum):
+        Wqs.append(Wq := np.random.randn(querySize, queryHiddenSize));
+        Wks.append(Wk := np.random.randn(keySize, keyHiddenSize));
+        Wvs.append(Wv := np.random.randn(valueSize, valueHiddenSize));
+
+        QH, KH, VH = Q @ Wq, K @ Wk, V @ Wv;
+        Cs.append(attentionModule.forward(QH, KH, VH)[0]);
+    Wo = np.random.randn(headNum * valueHiddenSize, outputHiddenSize);
+    Y1 = np.concatenate(Cs, axis = -1) @ Wo;
+
+    m = MultiHeadAttentionModule(attentionModule, querySize, keySize, valueSize, (queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize), headNum = headNum,
+                                 Wq = np.concatenate(Wqs, axis = -1), Wk = np.concatenate(Wks, axis = -1), Wv = np.concatenate(Wvs, axis = -1), Wo = Wo);
+    Y2, = m.forward(Q, K, V);
+
+    print(f"MultiHeadAttentionModule, value3, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print("\n");
+
+
+def testMultiHeadAttentionModule4():
+    batchSize, headNum, queryNum, keyNum = 32, 8, 16, 17;
+    querySize, keySize, valueSize = 21, 22, 23;
+    queryHiddenSize, keyHiddenSize, valueHiddenSize, additiveHiddenSize, outputHiddenSize = 24, 25, 26, 33, 44;
+    Q = np.random.randn(batchSize, queryNum, querySize);
+    K = np.random.randn(batchSize, keyNum, keySize);
+    V = np.random.randn(batchSize, keyNum, valueSize);
+    M = np.random.randint(0, 2, (batchSize, queryNum, keyNum));
+    attentionModule = AdditiveAttentionModule(queryHiddenSize, keyHiddenSize, additiveHiddenSize);
+
+    Wqs, Wks, Wvs, Cs = [], [], [], [];
+    for _ in range(headNum):
+        Wqs.append(Wq := np.random.randn(querySize, queryHiddenSize));
+        Wks.append(Wk := np.random.randn(keySize, keyHiddenSize));
+        Wvs.append(Wv := np.random.randn(valueSize, valueHiddenSize));
+
+        QH, KH, VH = Q @ Wq, K @ Wk, V @ Wv;
+        Cs.append(attentionModule.forward(QH, KH, VH, M)[0]);
+    Wo = np.random.randn(headNum * valueHiddenSize, outputHiddenSize);
+    Y1 = np.concatenate(Cs, axis = -1) @ Wo;
+
+    m = MultiHeadAttentionModule(attentionModule, querySize, keySize, valueSize, (queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize), headNum = headNum,
+                                 Wq = np.concatenate(Wqs, axis = -1), Wk = np.concatenate(Wks, axis = -1), Wv = np.concatenate(Wvs, axis = -1), Wo = Wo);
+    Y2, = m.forward(Q, K, V, M);
+
+    print(f"MultiHeadAttentionModule, value4, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print("\n");
+
+
+def testMultiHeadAttentionModuleGradient1():
+    batchSize, headNum, queryNum, keyNum = 6, 8, 16, 17;
+    querySize, keySize, valueSize = 21, 22, 23;
+    queryHiddenSize, keyHiddenSize, valueHiddenSize, additiveHiddenSize, outputHiddenSize = 24, 25, 26, 33, 44;
+    Q = np.random.randn(batchSize, queryNum, querySize);
+    K = np.random.randn(batchSize, keyNum, keySize);
+    V = np.random.randn(batchSize, keyNum, valueSize);
+    attentionModule = AdditiveAttentionModule(queryHiddenSize, keyHiddenSize, additiveHiddenSize);
+    m = MultiHeadAttentionModule(attentionModule, querySize, keySize, valueSize, (queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize), headNum = headNum);
+
+    Y, = m.forward(Q, K, V);
+    dQ1, dK1, dV1 = m.backward(np.ones_like(Y));
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x)[0]), V);
+    print(f"MultiHeadAttentionModule, numericGradient1, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    testModuleGradient(m, "MultiHeadAttentionModule, numericGradient1", Q, K, V);
+    print("\n");
+
+
+def testMultiHeadAttentionModuleGradient2():
+    batchSize, headNum, queryNum, keyNum = 6, 8, 16, 17;
+    querySize, keySize, valueSize = 21, 22, 23;
+    queryHiddenSize, keyHiddenSize, valueHiddenSize, additiveHiddenSize, outputHiddenSize = 24, 25, 26, 33, 44;
+    Q = np.random.randn(batchSize, queryNum, querySize);
+    K = np.random.randn(batchSize, keyNum, keySize);
+    V = np.random.randn(batchSize, keyNum, valueSize);
+    M = np.random.randint(0, 2, (batchSize, queryNum, keyNum));
+    attentionModule = AdditiveAttentionModule(queryHiddenSize, keyHiddenSize, additiveHiddenSize);
+    m = MultiHeadAttentionModule(attentionModule, querySize, keySize, valueSize, (queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize), headNum = headNum);
+
+    Y, = m.forward(Q, K, V, M);
+    dQ1, dK1, dV1 = m.backward(np.ones_like(Y));
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
+    print(f"MultiHeadAttentionModule, numericGradient2, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    testModuleGradient(m, "MultiHeadAttentionModule, numericGradient2", Q, K, V, M);
     print("\n");
 
 
