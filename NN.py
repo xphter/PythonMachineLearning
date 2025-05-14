@@ -4480,6 +4480,38 @@ class MultiHeadAttentionModule(AggregateNetModule, INetAttentionModule):
         return dQ, dK, dV;
 
 
+class SelfAttentionModule(AggregateNetModule, INetAttentionModule):
+    def __init__(self, attentionModule : INetAttentionModule):
+        self._attentionModule = attentionModule;
+        super().__init__(self._attentionModule);
+
+        self._name = f"SelfAttention({attentionModule})";
+
+
+    @property
+    def attentionWeight(self) -> np.ndarray:
+        return self._attentionModule.attentionWeight;
+
+
+    # X shape: (batch_size, sequence_length, sequence_dimension)
+    # M shape: (batch_size, sequence_length, sequence_length)
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X = data[0];
+        M = data[1] if len(data) > 1 else None;  # softmax mask
+
+        Y, = self._attentionModule.forward(X, X, X, M);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+        dQ, dK, dV = self._attentionModule.backward(dY);
+        dX = dQ + dK + dV;
+
+        return dX, ;
+
+
 # select value by weights for 1 time step
 class SelectByWeight1TModule(NetModuleBase):
     def __init__(self):

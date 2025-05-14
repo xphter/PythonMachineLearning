@@ -2266,6 +2266,9 @@ def unitTest():
     # testMultiHeadAttentionModule4();
     # testMultiHeadAttentionModuleGradient1();
     # testMultiHeadAttentionModuleGradient2();
+    testSelfAttentionModuleGradient1();
+    testSelfAttentionModuleGradient2();
+    testSelfAttentionModuleGradient3();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -5414,6 +5417,61 @@ def testMultiHeadAttentionModuleGradient2():
     dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
     print(f"MultiHeadAttentionModule, numericGradient2, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
     testModuleGradient(m, "MultiHeadAttentionModule, numericGradient2", Q, K, V, M);
+    print("\n");
+
+
+def testSelfAttentionModuleGradient1():
+    def getLenMask(queryNum : int, keyNum, validLen : np.ndarray) -> np.ndarray:
+        if len(validLen.shape) == 1:
+            validLen = np.repeat(np.expand_dims(validLen, axis = -1), queryNum, axis = -1);
+        validLen = np.expand_dims(validLen, axis = -1);
+
+        return np.arange(keyNum, dtype = np.int32) < validLen;
+
+    batchSize, sequenceLength, sequenceDimension, hiddenSize = 32, 10, 11, 12;
+    X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    M = getLenMask(sequenceLength, sequenceLength, np.random.randint(1, sequenceLength + 1, batchSize));
+    m = SelfAttentionModule(AdditiveAttentionModule(sequenceDimension, sequenceDimension, hiddenSize));
+
+    Y, = m.forward(X, M);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
+    print(f"SelfAttentionModule, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSelfAttentionModuleGradient2():
+    def getLenMask(queryNum: int, keyNum, validLen: np.ndarray) -> np.ndarray:
+        if len(validLen.shape) == 1:
+            validLen = np.repeat(np.expand_dims(validLen, axis = -1), queryNum, axis = -1);
+        validLen = np.expand_dims(validLen, axis = -1);
+
+        return np.arange(keyNum, dtype = np.int32) < validLen;
+
+
+    batchSize, sequenceLength, sequenceDimension = 32, 10, 11;
+    X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    M = getLenMask(sequenceLength, sequenceLength, np.random.randint(1, sequenceLength + 1, (batchSize, sequenceLength)));
+    m = SelfAttentionModule(DotProductAttentionModule());
+
+    Y, = m.forward(X, M);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
+    print(f"SelfAttentionModule, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSelfAttentionModuleGradient3():
+    batchSize, sequenceLength, sequenceDimension = 32, 10, 11;
+    headNum, queryHiddenSize, keyHiddenSize, valueHiddenSize, additiveHiddenSize = 8, 12, 13, 14, 15;
+    X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    M = np.random.randint(0, 2, (batchSize, sequenceLength, sequenceLength));
+    m = SelfAttentionModule(MultiHeadAttentionModule(AdditiveAttentionModule(queryHiddenSize, keyHiddenSize, additiveHiddenSize), sequenceDimension, sequenceDimension, sequenceDimension, (queryHiddenSize, keyHiddenSize, valueHiddenSize, sequenceDimension), headNum = headNum));
+
+    Y, = m.forward(X, M);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
+    print(f"SelfAttentionModule, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 
