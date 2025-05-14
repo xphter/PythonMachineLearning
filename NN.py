@@ -366,6 +366,13 @@ class INetModel(INetModule, metaclass = abc.ABCMeta):
         pass;
 
 
+class INetAttentionModule(INetModule, metaclass = abc.ABCMeta):
+    @property
+    @abc.abstractmethod
+    def attentionWeight(self) -> np.ndarray:
+        pass;
+
+
 class NetContext(INetContext):
     def __init__(self):
         self._isTrainingMode = False;
@@ -4253,7 +4260,7 @@ class SequentialContainer(NetModelBase):
             func(m);
 
 
-class AdditiveAttentionModule(AggregateNetModule):
+class AdditiveAttentionModule(AggregateNetModule, INetAttentionModule):
     def __init__(self, querySize : int, keySize : int, hiddenSize : int, dropoutRatio : float = 0.0, Wq : np.ndarray = None, Wk : np.ndarray = None, wv : np.ndarray = None):
         self._dropoutLayer = DropoutLayer(dropoutRatio);
         super().__init__(self._dropoutLayer);
@@ -4331,7 +4338,7 @@ class AdditiveAttentionModule(AggregateNetModule):
         return dQ, dK, dV;
 
 
-class DotProductAttentionModule(AggregateNetModule):
+class DotProductAttentionModule(AggregateNetModule, INetAttentionModule):
     def __init__(self, dropoutRatio : float = 0.0):
         self._dropoutLayer = DropoutLayer(dropoutRatio);
         super().__init__(self._dropoutLayer);
@@ -4377,8 +4384,8 @@ class DotProductAttentionModule(AggregateNetModule):
         return dQ, dK, dV;
 
 
-class MultiHeadAttentionModule(AggregateNetModule):
-    def __init__(self, attentionModule : INetModule, querySize : int, keySize : int, valueSize : int, hiddenSize : Union[int, Tuple[int, int, int, int]], headNum : int = 2, Wq : np.ndarray = None, Wk : np.ndarray = None, Wv : np.ndarray = None, Wo : np.ndarray = None):
+class MultiHeadAttentionModule(AggregateNetModule, INetAttentionModule):
+    def __init__(self, attentionModule : INetAttentionModule, querySize : int, keySize : int, valueSize : int, hiddenSize : Union[int, Tuple[int, int, int, int]], headNum : int = 2, Wq : np.ndarray = None, Wk : np.ndarray = None, Wv : np.ndarray = None, Wo : np.ndarray = None):
         self._attentionModule = attentionModule;
         super().__init__(self._attentionModule);
 
@@ -4401,6 +4408,11 @@ class MultiHeadAttentionModule(AggregateNetModule):
                               NetParamDefinition("weightK", self._weightK),
                               NetParamDefinition("weightV", self._weightV),
                               NetParamDefinition("weightO", self._weightO)]);
+
+
+    @property
+    def attentionWeight(self) -> np.ndarray:
+        return self._attentionModule.attentionWeight;
 
 
     def _setSelfParams(self, params: List[INetParamDefinition]):
