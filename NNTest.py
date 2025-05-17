@@ -2266,9 +2266,11 @@ def unitTest():
     # testMultiHeadAttentionModule4();
     # testMultiHeadAttentionModuleGradient1();
     # testMultiHeadAttentionModuleGradient2();
-    testSelfAttentionModuleGradient1();
-    testSelfAttentionModuleGradient2();
-    testSelfAttentionModuleGradient3();
+    # testSelfAttentionModuleGradient1();
+    # testSelfAttentionModuleGradient2();
+    # testSelfAttentionModuleGradient3();
+    testSinePositionalEncodingModuleGradient1();
+    testSinePositionalEncodingModuleGradient2();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -5472,6 +5474,30 @@ def testSelfAttentionModuleGradient3():
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
     print(f"SelfAttentionModule, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSinePositionalEncodingModuleGradient1():
+    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    m = SinePositionalEncodingModule(sequenceDimension);
+
+    Y, = m.forward(X);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"SinePositionalEncodingModule, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSinePositionalEncodingModuleGradient2():
+    batchSize, headNum, sequenceLength, sequenceDimension = 32, 8, 10, 21;
+    X = np.random.randn(batchSize, headNum, sequenceLength, sequenceDimension);
+    m = SinePositionalEncodingModule(sequenceDimension);
+
+    Y, = m.forward(X);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"SinePositionalEncodingModule, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 

@@ -4512,6 +4512,46 @@ class SelfAttentionModule(AggregateNetModule, INetAttentionModule):
         return dX, ;
 
 
+class SinePositionalEncodingModule(AggregateNetModule):
+    def __init__(self, dimensionSize : int, maxLength : int = 10000, dropoutRatio : float = 0.0):
+        self._dropoutLayer = DropoutLayer(dropoutRatio);
+        super().__init__(self._dropoutLayer);
+
+        self._encoding = self._createEncoding(dimensionSize, maxLength);
+        self._name = "SinePositionEncoding";
+
+
+    @property
+    def positionalEncoding(self) -> np.ndarray:
+        return self._encoding;
+
+
+    def _createEncoding(self, dimensionSize : int, maxLength : int) -> np.ndarray:
+        m = dimensionSize if dimensionSize % 2 == 0 else dimensionSize + 1;
+        idx = np.arange(maxLength, dtype = np.float32).reshape(-1, 1) / np.power(10000, np.arange(0, m, 2, dtype = np.float32) / dimensionSize).reshape(1, -1);
+        E = np.zeros((maxLength, m));
+        E[:, 0::2] = np.sin(idx);
+        E[:, 1::2] = np.cos(idx);
+
+        return E[:, : dimensionSize].astype(defaultDType);
+
+
+    # the dimension -2 is position
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
+        X = data[0];
+        X = X + self._encoding[: X.shape[-2], :];
+        Y, = self._dropoutLayer.forward(X);
+
+        return Y, ;
+
+
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+        dX, = self._dropoutLayer.backward(dY);
+
+        return dX, ;
+
+
 # select value by weights for 1 time step
 class SelectByWeight1TModule(NetModuleBase):
     def __init__(self):
