@@ -14,6 +14,7 @@ import copy;
 import math;
 import time;
 import datetime;
+import functools;
 import collections;
 
 import matplotlib.pyplot as plt;
@@ -1567,6 +1568,74 @@ class BatchNormalization1DLayer(NetModuleBase):
 
         if shape is not None:
             dX = dX.reshape(*shape);
+
+        return dX, ;
+
+
+class LayerNormalizationLayer(NetModuleBase):
+    def __init__(self, layerShape : Union[int, Tuple[int, ...]], gamma : np.ndarray = None, beta : np.ndarray = None, epsilon = 1e-8):
+        super().__init__();
+
+        self._epsilon = epsilon;
+        if isinstance(layerShape, int):
+            layerShape = (layerShape, );
+        self._name = "LayerNormalization";
+
+        self._XC = None;
+        self._std = None;
+        self._XHat = None;
+        self._layerNdim = len(layerShape);
+        self._layerAxis = tuple(-i for i in range(1, self._layerNdim + 1));
+        self._layerSize = functools.reduce(lambda i, j: i * j, layerShape, 1);
+
+        self._gamma = np.ones(layerShape, dtype = defaultDType) if gamma is None else gamma;
+        self._beta = np.zeros(layerShape, dtype = defaultDType) if beta is None else beta;
+
+        self._params.append(NetParamDefinition("weight", self._gamma));
+        self._params.append(NetParamDefinition("bias", self._beta));
+
+
+    def _setParams(self, params: List[NetParamDefinition]):
+        self._gamma, self._beta = params[0].value, params[1].value;
+
+
+    @property
+    def weight(self) -> np.ndarray:
+        return self._gamma;
+
+
+    @property
+    def bias(self) -> np.ndarray:
+        return self._beta;
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X = data[0];
+
+        mu = X.mean(axis = self._layerAxis, keepdims = True);
+        self._XC = X - mu;
+        var = np.square(self._XC).mean(axis = self._layerAxis, keepdims = True);
+
+        self._std = np.sqrt(var + self._epsilon);
+        self._XHat = self._XC / self._std;
+        Y = self._gamma * self._XHat + self._beta;
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+        batchShape = tuple(range(len(dY.shape) - self._layerNdim));
+
+        dXHat = dY * self._gamma;
+        dXC = dXHat / self._std - np.sum(dXHat * self._XC, axis = self._layerAxis, keepdims = True) / np.power(self._std, 3) * self._XC / self._layerSize;
+
+        dGamma = np.sum(dY * self._XHat, axis = batchShape);
+        dBeta = np.sum(dY, axis = batchShape);
+        dX = dXC - np.sum(dXC, axis = self._layerAxis, keepdims = True) / self._layerSize;
+
+        self._params[0].grad[...] = dGamma;
+        self._params[1].grad[...] = dBeta;
 
         return dX, ;
 

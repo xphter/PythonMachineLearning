@@ -2180,6 +2180,10 @@ def unitTest():
     # testBatchNormalization1DLayer2();
     # testBatchNormalization1DLayerGradient1();
     # testBatchNormalizationLayer1DGradient2();
+    # testLayerNormalizationLayer1();
+    testLayerNormalizationLayerGradient1();
+    testLayerNormalizationLayerGradient2();
+    testLayerNormalizationLayerGradient3();
     # testMinMaxLayerGradient1();
     # testMinMaxLayerGradient2();
     # testMinMaxLayerGradient3();
@@ -2269,8 +2273,8 @@ def unitTest():
     # testSelfAttentionModuleGradient1();
     # testSelfAttentionModuleGradient2();
     # testSelfAttentionModuleGradient3();
-    testSinePositionalEncodingModuleGradient1();
-    testSinePositionalEncodingModuleGradient2();
+    # testSinePositionalEncodingModuleGradient1();
+    # testSinePositionalEncodingModuleGradient2();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -3631,6 +3635,81 @@ def testBatchNormalizationLayer1DGradient2():
     dGammaN = numericGradient(lambda x: np.sum(createModel(D, x, beta).forward(X)[0]), gamma);
     dBetaN = numericGradient(lambda x: np.sum(createModel(D, gamma, x).forward(X)[0]), beta);
     print(f"BatchNormalization1DLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dGamma error: {np.sum(np.abs(dGamma1 - dGammaN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print("\n");
+
+
+def testLayerNormalizationLayer1():
+    N, L, C, H, W = 32, 24, 8, 64, 128;
+
+    X = np.random.randn(N, C);
+    m1 = LayerNormalizationLayer(C);
+    Y1, = m1.forward(X);
+    m2 = torch.nn.LayerNorm(C, eps = 1e-8, dtype = torch.float64);
+    Y2 = m2.forward(torch.tensor(X));
+    Y2 = Y2.detach().numpy();
+    print(f"LayerNormalizationLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+
+    X = np.random.randn(N, L, C);
+    m1 = LayerNormalizationLayer(C);
+    Y1, = m1.forward(X);
+    m2 = torch.nn.LayerNorm(C, eps = 1e-8, dtype = torch.float64);
+    Y2 = m2.forward(torch.tensor(X));
+    Y2 = Y2.detach().numpy();
+    print(f"LayerNormalizationLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+
+    X = np.random.randn(N, C, H, W);
+    m1 = LayerNormalizationLayer((C, H, W));
+    Y1, = m1.forward(X);
+    m2 = torch.nn.LayerNorm((C, H, W), eps = 1e-8, dtype = torch.float64);
+    Y2 = m2.forward(torch.tensor(X));
+    Y2 = Y2.detach().numpy();
+    print(f"LayerNormalizationLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+
+    print("\n");
+
+
+def testLayerNormalizationLayerGradient1():
+    N, C = 32, 16;
+    X = np.random.randn(N, C);
+    gamma, beta = np.random.randn(C), np.random.randn(C);
+    m = LayerNormalizationLayer(C, gamma = gamma, beta = beta);
+    Y, = m.forward(X);
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dGamma1, dBeta1 = m.params[0].grad, m.params[1].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dGammaN = numericGradient(lambda x: np.sum(LayerNormalizationLayer(C, gamma = x, beta = beta).forward(X)[0]), gamma);
+    dBetaN = numericGradient(lambda x: np.sum(LayerNormalizationLayer(C, gamma = gamma, beta = x).forward(X)[0]), beta);
+    print(f"LayerNormalizationLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dGamma error: {np.sum(np.abs(dGamma1 - dGammaN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print("\n");
+
+
+def testLayerNormalizationLayerGradient2():
+    N, L, C = 32, 16, 24;
+    X = np.random.randn(N, L, C);
+    gamma, beta = np.random.randn(C), np.random.randn(C);
+    m = LayerNormalizationLayer(C, gamma = gamma, beta = beta);
+    Y, = m.forward(X);
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dGamma1, dBeta1 = m.params[0].grad, m.params[1].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dGammaN = numericGradient(lambda x: np.sum(LayerNormalizationLayer(C, gamma = x, beta = beta).forward(X)[0]), gamma);
+    dBetaN = numericGradient(lambda x: np.sum(LayerNormalizationLayer(C, gamma = gamma, beta = x).forward(X)[0]), beta);
+    print(f"LayerNormalizationLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dGamma error: {np.sum(np.abs(dGamma1 - dGammaN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print("\n");
+
+
+def testLayerNormalizationLayerGradient3():
+    N, C, H, W = 32, 16, 24, 48;
+    X = np.random.randn(N, C, H, W);
+    gamma, beta = np.random.randn(C, H, W), np.random.randn(C, H, W);
+    m = LayerNormalizationLayer((C, H, W), gamma = gamma, beta = beta);
+    Y, = m.forward(X);
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dGamma1, dBeta1 = m.params[0].grad, m.params[1].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dGammaN = numericGradient(lambda x: np.sum(LayerNormalizationLayer((C, H, W), gamma = x, beta = beta).forward(X)[0]), gamma);
+    dBetaN = numericGradient(lambda x: np.sum(LayerNormalizationLayer((C, H, W), gamma = gamma, beta = x).forward(X)[0]), beta);
+    print(f"LayerNormalizationLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dGamma error: {np.sum(np.abs(dGamma1 - dGammaN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
     print("\n");
 
 
