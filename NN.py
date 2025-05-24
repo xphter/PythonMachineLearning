@@ -1489,12 +1489,12 @@ class BatchNormalization1DLayer(NetModuleBase):
 
 
     @property
-    def gamma(self) -> np.ndarray:
+    def weight(self) -> np.ndarray:
         return self._gamma;
 
 
     @property
-    def beta(self) -> np.ndarray:
+    def bias(self) -> np.ndarray:
         return self._beta;
 
 
