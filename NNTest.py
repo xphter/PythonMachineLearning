@@ -2181,9 +2181,9 @@ def unitTest():
     # testBatchNormalization1DLayerGradient1();
     # testBatchNormalizationLayer1DGradient2();
     # testLayerNormalizationLayer1();
-    testLayerNormalizationLayerGradient1();
-    testLayerNormalizationLayerGradient2();
-    testLayerNormalizationLayerGradient3();
+    # testLayerNormalizationLayerGradient1();
+    # testLayerNormalizationLayerGradient2();
+    # testLayerNormalizationLayerGradient3();
     # testMinMaxLayerGradient1();
     # testMinMaxLayerGradient2();
     # testMinMaxLayerGradient3();
@@ -2270,11 +2270,14 @@ def unitTest():
     # testMultiHeadAttentionModule4();
     # testMultiHeadAttentionModuleGradient1();
     # testMultiHeadAttentionModuleGradient2();
+    # testMultiHeadAttentionModuleGradient3();
     # testSelfAttentionModuleGradient1();
     # testSelfAttentionModuleGradient2();
     # testSelfAttentionModuleGradient3();
+    # testSelfAttentionModuleGradient4();
     # testSinePositionalEncodingModuleGradient1();
     # testSinePositionalEncodingModuleGradient2();
+    testTransformerAddNormalizationModuleGradient1();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -5501,6 +5504,27 @@ def testMultiHeadAttentionModuleGradient2():
     print("\n");
 
 
+def testMultiHeadAttentionModuleGradient3():
+    batchSize, headNum, queryNum, keyNum = 6, 8, 16, 17;
+    querySize, keySize, valueSize = 21, 22, 23;
+    queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize = 24, 24, 24, 33;
+    Q = np.random.randn(batchSize, queryNum, querySize);
+    K = np.random.randn(batchSize, keyNum, keySize);
+    V = np.random.randn(batchSize, keyNum, valueSize);
+    M = np.random.randint(0, 2, (batchSize, queryNum, keyNum));
+    attentionModule = DotProductAttentionModule();
+    m = MultiHeadAttentionModule(attentionModule, querySize, keySize, valueSize, (queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize), headNum = headNum);
+
+    Y, = m.forward(Q, K, V, M);
+    dQ1, dK1, dV1 = m.backward(np.ones_like(Y));
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
+    print(f"MultiHeadAttentionModule, numericGradient3, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    testModuleGradient(m, "MultiHeadAttentionModule, numericGradient3", Q, K, V, M);
+    print("\n");
+
+
 def testSelfAttentionModuleGradient1():
     def getLenMask(queryNum : int, keyNum, validLen : np.ndarray) -> np.ndarray:
         if len(validLen.shape) == 1:
@@ -5556,6 +5580,21 @@ def testSelfAttentionModuleGradient3():
     print("\n");
 
 
+def testSelfAttentionModuleGradient4():
+    batchSize, sequenceLength, sequenceDimension = 32, 10, 11;
+    headNum, queryHiddenSize, keyHiddenSize, valueHiddenSize = 8, 12, 12, 12;
+    X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    M = np.random.randint(0, 2, (batchSize, sequenceLength, sequenceLength));
+    m = SelfAttentionModule(MultiHeadAttentionModule(DotProductAttentionModule(), sequenceDimension, sequenceDimension, sequenceDimension, (queryHiddenSize, keyHiddenSize, valueHiddenSize, sequenceDimension), headNum = headNum));
+
+    Y, = m.forward(X, M);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
+    print(f"SelfAttentionModule, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "SelfAttentionModule, numericGradient4", X, M);
+    print("\n");
+
+
 def testSinePositionalEncodingModuleGradient1():
     batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
@@ -5577,6 +5616,25 @@ def testSinePositionalEncodingModuleGradient2():
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"SinePositionalEncodingModule, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testTransformerAddNormalizationModuleGradient1():
+    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    F = np.random.randn(*X.shape);
+    C = np.random.randn(*X.shape); # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerAddNormalizationModule(sequenceDimension),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+
+    Y, = m.forward(X, F);
+    dX1, dF1 = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, F)[0]), X);
+    dFN = numericGradient(lambda x: np.sum(m.forward(X, x)[0]), F);
+    print(f"TransformerAddNormalizationModule, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dF error: {np.sum(np.abs(dF1 - dFN))}");
+    testModuleGradient(m, "TransformerAddNormalizationModule, numericGradient1", X, F);
     print("\n");
 
 

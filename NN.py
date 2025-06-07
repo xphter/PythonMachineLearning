@@ -4504,7 +4504,7 @@ class MultiHeadAttentionModule(AggregateNetModule, INetAttentionModule):
     # M shape: (batch_size, query_num, pair_num)
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         self._Q, self._K, self._V = data[: 3];
-        M = np.repeat(np.expand_dims(data[3], axis = -3), self._headNum, axis = -3) if len(data) > 3 else None;  # softmax mask
+        M = np.repeat(np.expand_dims(data[3], axis = -3), self._headNum, axis = -3) if len(data) > 3 and data[3] is not None else None;  # softmax mask
 
         QH = self._Q @ self._weightQ;
         KH = self._K @ self._weightK;
@@ -4619,6 +4619,34 @@ class SinePositionalEncodingModule(AggregateNetModule):
         dX, = self._dropoutLayer.backward(dY);
 
         return dX, ;
+
+
+class TransformerAddNormalizationModule(AggregateNetModule):
+    def __init__(self, normalizedShape : Union[int, Tuple[int, ...]], dropoutRatio : float = 0.0):
+        self._dropoutLayer = DropoutLayer(dropoutRatio);
+        self._normalLayer = LayerNormalizationLayer(normalizedShape);
+
+        super().__init__(self._dropoutLayer, self._normalLayer);
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X, F = data[: 2];
+
+        Y1, = self._dropoutLayer.forward(F);
+        Y2 = Y1 + X;
+        Y, = self._normalLayer.forward(Y2);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+
+        dY2, = self._normalLayer.backward(dY);
+        dF, = self._dropoutLayer.backward(dY2);
+        dX = dY2;
+
+        return dX, dF;
 
 
 # select value by weights for 1 time step
