@@ -2103,9 +2103,10 @@ def unitTest():
     # testSigmoidGradient2();
     # testMinMaxScaler();
 
-    # testSoftmaxLayerGradient1();
-    # testSoftmaxLayerGradient2();
-    # testSoftmaxLayerGradient3();
+    testSoftmax1();
+    testSoftmaxLayerGradient1();
+    testSoftmaxLayerGradient2();
+    testSoftmaxLayerGradient3();
     # testIdentityWithMeanAbsoluteLossGradient1();
     # testIdentityWithMeanAbsoluteLossGradient2();
     # testIdentityWithMeanAbsoluteLossGradient3();
@@ -2277,7 +2278,10 @@ def unitTest():
     # testSelfAttentionModuleGradient4();
     # testSinePositionalEncodingModuleGradient1();
     # testSinePositionalEncodingModuleGradient2();
-    testTransformerAddNormalizationModuleGradient1();
+    # testTransformerAddNormalizationModuleGradient1();
+    # testTransformerEncoderBlockGradient1();
+    # testTransformerEncoderBlockGradient2();
+    # testTransformerEncoderGradient1();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -2451,8 +2455,24 @@ def testMinMaxScaler():
     print("\n");
 
 
+def testSoftmax1():
+    N, C = 32, 256;
+    X = np.random.randn(N, C);
+    M = np.random.randint(0, 2, (N, C));
+
+    X1 = X;
+    Y1 = softmax(X1, M);
+
+    X2 = X * M;
+    X2 += ~M.astype(bool) * -1e8;
+    Y2 = np.exp(X2) / np.sum(np.exp(X2), axis = -1, keepdims = True);
+
+    print(f"Softmax, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print("\n");
+
+
 def testSoftmaxLayerGradient1():
-    N, C = 32, 24;
+    N, C = 64, 24;
     X = np.random.randn(N, C);
     dY = np.random.randn(N, C);
     m = SoftmaxLayer();
@@ -2464,7 +2484,7 @@ def testSoftmaxLayerGradient1():
 
 
 def testSoftmaxLayerGradient2():
-    N, C = 32, 24;
+    N, C = 64, 24;
     X = np.random.randn(N, C);
     M = np.random.randint(0, 2, (N, C));
     dY = np.random.randn(N, C);

@@ -145,17 +145,15 @@ def swishGradient(Y : np.ndarray, S : np.ndarray, X : np.ndarray, beta : Union[f
 
 # M is a 0-1 or True-False mask array which has the same shape of X
 def softmax(X : np.ndarray, M : np.ndarray = None) -> np.ndarray:
+    if M is not None and X.shape != M.shape:
+        raise ValueError("the shape of X and M are not same.");
+
+    Y = np.exp(X - np.amax(X, -1, keepdims = True));
+
     if M is not None:
-        if X.shape != M.shape:
-            raise ValueError("the shape of X and M are not same.");
+        Y *= M;
 
-        A = X * M;
-        A += ~M.astype(bool) * -1e6;
-    else:
-        A = X;
-
-    Y = np.exp(A - np.amax(A, -1, keepdims = True));
-
+    # the row of M can not be all zero!
     return Y / np.sum(Y, -1, keepdims = True);
 
 
