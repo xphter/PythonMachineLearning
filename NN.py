@@ -4627,6 +4627,7 @@ class TransformerAddNormalizationModule(AggregateNetModule):
         self._normalLayer = LayerNormalizationLayer(normalizedShape);
 
         super().__init__(self._dropoutLayer, self._normalLayer);
+        self._name = "TransformerAddNormalization";
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
