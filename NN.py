@@ -3557,7 +3557,7 @@ class SoftmaxLayer(NetModuleBase):
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
-        M = data[1] if len(data) > 1 else None;  # softmax mask
+        self._M = data[1] if len(data) > 1 else None;  # softmax mask
 
         self._Y = softmax(X, self._M);
 
