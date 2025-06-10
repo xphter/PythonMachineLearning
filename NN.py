@@ -4650,6 +4650,94 @@ class TransformerAddNormalizationModule(AggregateNetModule):
         return dX, dF;
 
 
+class TransformerPositionwiseFFNModule(AggregateNetModule):
+    def __init__(self, inputSize : int, hiddenSize : int):
+        super().__init__(
+            AffineLayer(inputSize, hiddenSize),
+            ReluLayer(),
+            AffineLayer(hiddenSize, inputSize),
+        );
+        self._name = "TransformerPositionwiseFFN";
+
+
+class TransformerEncoderBlock(AggregateNetModule, INetAttentionModule):
+    def __init__(self, inputSize : int, attentionHiddenSize : int, ffnHiddenSize : int, normalizedShape : Union[int, Tuple[int, ...]], headNum : int = 2, dropoutRatio : float = 0.0):
+        self._attentionModule = SelfAttentionModule(MultiHeadAttentionModule(DotProductAttentionModule(dropoutRatio = dropoutRatio), inputSize, inputSize, inputSize, (attentionHiddenSize, attentionHiddenSize, attentionHiddenSize, inputSize), headNum = headNum));
+        self._addNormal1 = TransformerAddNormalizationModule(normalizedShape, dropoutRatio = dropoutRatio);
+        self._positionwiseFFN = TransformerPositionwiseFFNModule(inputSize, ffnHiddenSize);
+        self._addNormal2 = TransformerAddNormalizationModule(normalizedShape, dropoutRatio = dropoutRatio);
+
+        super().__init__(self._attentionModule, self._addNormal1, self._positionwiseFFN, self._addNormal2);
+        self._name = "TransformerEncoder";
+
+
+    @property
+    def attentionWeight(self) -> np.ndarray:
+        return self._attentionModule.attentionWeight;
+
+
+    # X shape: (batch_size, sequence_length, sequence_dimension)
+    # M shape: (batch_size, sequence_length, sequence_length)
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X = data[0];
+        M = data[1] if len(data) > 1 else None;  # softmax mask
+
+        F1, = self._attentionModule.forward(X, M);
+        Y1, = self._addNormal1.forward(X, F1);
+        F2, = self._positionwiseFFN.forward(Y1);
+        Y, = self._addNormal2.forward(Y1, F2);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+
+        dY1, dF2 = self._addNormal2.backward(dY);
+        dY1 += self._positionwiseFFN.backward(dF2)[0];
+        dX, dF1 = self._addNormal1.backward(dY1);
+        dX += self._attentionModule.backward(dF1)[0];
+
+        return dX, ;
+
+
+class TransformerEncoder(AggregateNetModule, INetAttentionModule):
+    def __init__(self, inputSize: int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0):
+        self._attentionWeight = None;
+        self._positionalEncoding = SinePositionalEncodingModule(inputSize, maxLength = maxSequenceLength, dropoutRatio = dropoutRatio);
+        self._blocks = [TransformerEncoderBlock(inputSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, dropoutRatio = dropoutRatio) for _ in range(blockNum)];
+
+        super().__init__(*tuple(self._blocks));
+        self._name = "TransformerEncoder";
+
+
+    @property
+    def attentionWeight(self) -> np.ndarray:
+        return self._attentionWeight;
+
+
+    # X shape: (batch_size, sequence_length, sequence_dimension)
+    # M shape: (batch_size, sequence_length, sequence_length)
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X = data[0];
+        M = data[1] if len(data) > 1 else None;  # softmax mask
+
+        PX, = self._positionalEncoding.forward(X);
+        Y, = super().forward(PX, M);
+
+        self._attentionWeight = np.array([item.attentionWeight for item in self._blocks]);
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+
+        dPX, = super().backward(dY);
+        dX, = self._positionalEncoding.backward(dPX);
+
+        return dX, ;
+
+
 # select value by weights for 1 time step
 class SelectByWeight1TModule(NetModuleBase):
     def __init__(self):
