@@ -4740,6 +4740,140 @@ class TransformerEncoder(AggregateNetModule, INetAttentionModule):
         return dX, ;
 
 
+class TransformerDecoderBlock(AggregateNetModule, INetAttentionModule):
+    def __init__(self, inputSize : int, encoderSize : int, attentionHiddenSize : int, ffnHiddenSize : int, normalizedShape : Union[int, Tuple[int, ...]], headNum : int = 2, dropoutRatio : float = 0.0):
+        self._innerAttentionModule = MultiHeadAttentionModule(DotProductAttentionModule(dropoutRatio = dropoutRatio), inputSize, inputSize, inputSize, (attentionHiddenSize, attentionHiddenSize, attentionHiddenSize, inputSize), headNum = headNum);
+        self._addNormal1 = TransformerAddNormalizationModule(normalizedShape, dropoutRatio = dropoutRatio);
+        self._crossAttentionModule = MultiHeadAttentionModule(DotProductAttentionModule(dropoutRatio = dropoutRatio), inputSize, encoderSize, encoderSize, (attentionHiddenSize, attentionHiddenSize, attentionHiddenSize, inputSize), headNum = headNum);
+        self._addNormal2 = TransformerAddNormalizationModule(normalizedShape, dropoutRatio = dropoutRatio);
+        self._positionwiseFFN = TransformerPositionwiseFFNModule(inputSize, ffnHiddenSize);
+        self._addNormal3 = TransformerAddNormalizationModule(normalizedShape, dropoutRatio = dropoutRatio);
+
+        super().__init__(self._innerAttentionModule, self._addNormal1, self._crossAttentionModule, self._addNormal2, self._positionwiseFFN, self._addNormal3);
+        self._name = "TransformerEncoderBlock";
+
+
+    @property
+    def attentionWeight(self) -> np.ndarray:
+        return self._crossAttentionModule.attentionWeight;
+
+
+    # Q shape: (batch_size, query_num, query_size)
+    # K shape: (batch_size, pair_num, key_size)
+    # V shape: (batch_size, pair_num, value_size)
+    # encoderY shape: (batch_size, sequence_length, sequence_dimension)
+    # encoderM shape: (batch_size, query_num, sequence_length)
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        Q, K, V, encoderY = data[: 4];
+        encoderM = data[4] if len(data) > 4 else None;  # softmax mask
+
+        if self.context.isTrainingMode:
+            queryNum, keyNum = Q.shape[-2], K.shape[-2];
+            validLength = np.tile(np.arange(1, queryNum + 1), Q.shape[: -2] + (1, ));
+            decoderM = getAttentionMaskByValidLength(queryNum, keyNum, validLength);
+        else:
+            decoderM = None;
+
+        F1, = self._innerAttentionModule.forward(Q, K, V, decoderM);
+        Y1, = self._addNormal1.forward(Q, F1);
+        F2, = self._crossAttentionModule.forward(Y1, encoderY, encoderY, encoderM);
+        Y2, = self._addNormal2.forward(Y1, F2);
+        F3, = self._positionwiseFFN.forward(Y2);
+        Y, = self._addNormal3.forward(Y2, F3);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+
+        dY2, dF3 = self._addNormal3.backward(dY);
+        dY2 += self._positionwiseFFN.backward(dF3)[0];
+
+        dY1, dF2 = self._addNormal2.backward(dY2);
+        dY1_, dEncoderY, dEncoderY_ = self._crossAttentionModule.backward(dF2);
+        dY1 += dY1_;
+        dEncoderY += dEncoderY_;
+
+        dQ, dF1 = self._addNormal1.backward(dY1);
+        dQ_, dK, dV = self._innerAttentionModule.backward(dF1);
+        dQ += dQ_;
+
+        return dQ, dK, dV, dEncoderY;
+
+
+class TransformerDecoder(AggregateNetModule, INetAttentionModule):
+    def __init__(self, inputSize: int, encoderSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0):
+        self._blockNum = blockNum;
+        self._attentionWeight = None;
+        self._blockInputs : List[Optional[np.ndarray]] = [None] * blockNum;
+        self._positionalEncoding = SinePositionalEncodingModule(inputSize, maxLength = maxSequenceLength, dropoutRatio = dropoutRatio);
+        self._blocks = [TransformerDecoderBlock(inputSize, encoderSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, dropoutRatio = dropoutRatio) for _ in range(blockNum)];
+
+        super().__init__(*tuple(self._blocks));
+        self._name = "TransformerDecoder";
+
+
+    @property
+    def attentionWeight(self) -> np.ndarray:
+        return self._attentionWeight;
+
+
+    def _reset(self):
+        self._blockInputs = [None] * self._blockNum;
+
+
+    # X shape: (batch_size, sequence_length, sequence_dimension)
+    # encoderM shape: (batch_size, sequence_length, encoder_length)
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X, encoderY = data[: 2];
+        encoderM = data[2] if len(data) > 2 else None;  # softmax mask
+
+        Y, = self._positionalEncoding.forward(X);
+        for block in self._blocks:
+            Y, = block.forward(Y, Y, Y, encoderY, encoderM);
+
+        self._attentionWeight = np.array([item.attentionWeight for item in self._blocks]);
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+
+        dEncoderY = None;
+        for block in reversed(self._blocks):
+            dQ, dK, dV, dEncoderY_ = block.backward(dY);
+            dY = dQ + dK + dV;
+            if dEncoderY is None:
+                dEncoderY = dEncoderY_;
+            else:
+                dEncoderY += dEncoderY_;
+
+        dX, = self._positionalEncoding.backward(dY);
+
+        return dX, dEncoderY;
+
+
+    def predict(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X, encoderY = data[: 2];
+        encoderM = data[2] if len(data) > 2 else None;  # softmax mask
+
+        startIndex = np.array(self._blockInputs[0].shape[-2] if self._blockInputs[0] is not None else 0);
+        Y, = self._positionalEncoding.forward(X, startIndex);
+
+        for i in range(len(self._blocks)):
+            K = self._blockInputs[i];
+            if K is None:
+                K = Y;
+            else:
+                K = np.concatenate((K, Y), axis = -2);
+            self._blockInputs[i] = K;
+
+            Y, = self._blocks[i].forward(Y, K, K, encoderY, encoderM);
+
+        return Y, ;
+
+
 # select value by weights for 1 time step
 class SelectByWeight1TModule(NetModuleBase):
     def __init__(self):

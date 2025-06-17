@@ -5753,6 +5753,137 @@ def testTransformerEncoderGradient2():
     print("\n");
 
 
+def testTransformerDecoderBlockGradient1():
+    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    attentionHiddenSize, ffnHiddenSize, headNum = 22, 23, 8;
+    Q = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    K = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    V = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    encoderY = np.random.randn(batchSize, sequenceLength + 1, sequenceDimension + 2);
+    C = np.random.randn(*Q.shape);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerDecoderBlock(sequenceDimension, sequenceDimension + 2, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+    m.context.isTrainingMode = True;
+
+    Y, = m.forward(Q, K, V, encoderY);
+    dQ1, dK1, dV1, dEncoderY1 = m.backward(np.ones_like(Y));
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, encoderY)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, encoderY)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, encoderY)[0]), V);
+    dEncoderYN = numericGradient(lambda x: np.sum(m.forward(Q, K, V, x)[0]), encoderY);
+    print(f"TransformerDecoderBlock, numericGradient1, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
+    testModuleGradient(m, "TransformerEncoderBlock, numericGradient1", Q, K, V, encoderY);
+    print("\n");
+
+
+def testTransformerDecoderBlockGradient2():
+    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    attentionHiddenSize, ffnHiddenSize, headNum = 22, 23, 8;
+    Q = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    K = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    V = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    encoderY = np.random.randn(batchSize, sequenceLength + 1, sequenceDimension + 2);
+    encoderM = np.random.randint(0, 2, (batchSize, sequenceLength, sequenceLength + 1));
+    C = np.random.randn(*Q.shape); # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerDecoderBlock(sequenceDimension, sequenceDimension + 2, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+    m.context.isTrainingMode = True;
+
+    Y, = m.forward(Q, K, V, encoderY, encoderM);
+    dQ1, dK1, dV1, dEncoderY1 = m.backward(np.ones_like(Y));
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, encoderY, encoderM)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, encoderY, encoderM)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, encoderY, encoderM)[0]), V);
+    dEncoderYN = numericGradient(lambda x: np.sum(m.forward(Q, K, V, x, encoderM)[0]), encoderY);
+    print(f"TransformerDecoderBlock, numericGradient2, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
+    testModuleGradient(m, "TransformerEncoderBlock, numericGradient2", Q, K, V, encoderY, encoderM);
+    print("\n");
+
+
+def testTransformerDecoder1():
+    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 22, 23, 8, 3;
+    X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    encoderY = np.random.randn(batchSize, sequenceLength + 1, sequenceDimension + 2);
+    m = TransformerDecoder(sequenceDimension, sequenceDimension + 2, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum, blockNum = blockNum);
+    m.context.isTrainingMode = True;
+
+    Y1, = m.forward(X, encoderY);
+
+    m.reset();
+    m.context.isTrainingMode = False;
+    Y2 = np.concatenate(tuple(m.predict(X[:, i: i + 1, :], encoderY)[0] for i in range(X.shape[-2])), axis = -2);
+
+    print(f"TransformerDecoder, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print("\n");
+
+
+def testTransformerDecoder2():
+    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 22, 23, 8, 3;
+    X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    encoderY = np.random.randn(batchSize, sequenceLength + 1, sequenceDimension + 2);
+    encoderM = np.random.randint(0, 2, (batchSize, sequenceLength, sequenceLength + 1));
+    m = TransformerDecoder(sequenceDimension, sequenceDimension + 2, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum, blockNum = blockNum);
+    m.context.isTrainingMode = True;
+
+    Y1, = m.forward(X, encoderY, encoderM);
+
+    m.reset();
+    m.context.isTrainingMode = False;
+    Y2 = np.concatenate(tuple(m.predict(X[:, i: i + 1, :], encoderY, encoderM[:, i: i + 1, :])[0] for i in range(X.shape[-2])), axis = -2);
+
+    print(f"TransformerDecoder, value2, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print("\n");
+
+
+def testTransformerDecoderGradient1():
+    batchSize, sequenceLength, sequenceDimension = 2, 10, 21;
+    attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 22, 23, 8, 3;
+    X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    encoderY = np.random.randn(batchSize, sequenceLength + 1, sequenceDimension + 2);
+    C = np.random.randn(*X.shape);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerDecoder(sequenceDimension, sequenceDimension + 2, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum, blockNum = blockNum),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+    m.context.isTrainingMode = True;
+
+    Y, = m.forward(X, encoderY);
+    dX1, dEncoderY1 = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, encoderY)[0]), X);
+    dEncoderYN = numericGradient(lambda x: np.sum(m.forward(X, x)[0]), encoderY);
+    print(f"TransformerDecoder, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
+    testModuleGradient(m, "TransformerDecoder, numericGradient1", X, encoderY);
+    print("\n");
+
+
+def testTransformerDecoderGradient2():
+    batchSize, sequenceLength, sequenceDimension = 2, 10, 21;
+    attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 22, 23, 8, 3;
+    X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    encoderY = np.random.randn(batchSize, sequenceLength + 1, sequenceDimension + 2);
+    encoderM = np.random.randint(0, 2, (batchSize, sequenceLength, sequenceLength + 1));
+    C = np.random.randn(*X.shape);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerDecoder(sequenceDimension, sequenceDimension + 2, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum, blockNum = blockNum),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+    m.context.isTrainingMode = True;
+
+    Y, = m.forward(X, encoderY, encoderM);
+    dX1, dEncoderY1 = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, encoderY, encoderM)[0]), X);
+    dEncoderYN = numericGradient(lambda x: np.sum(m.forward(X, x, encoderM)[0]), encoderY);
+    print(f"TransformerDecoder, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
+    testModuleGradient(m, "TransformerDecoder, numericGradient2", X, encoderY, encoderM);
+    print("\n");
+
+
 def testSelectByWeightModuleGradient():
     V, W = np.random.randn(2, 32, 11, 16), np.random.randn(2, 32, 12, 11);
     m1 = SelectByWeight1TModule();
