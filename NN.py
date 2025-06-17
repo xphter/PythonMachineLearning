@@ -4608,7 +4608,9 @@ class SinePositionalEncodingModule(AggregateNetModule):
     # the dimension -2 is position
     def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
-        X = X + self._encoding[: X.shape[-2], :];
+        startIndex = data[1] if len(data) > 1 else 0;
+
+        X = X + self._encoding[startIndex: startIndex + X.shape[-2], :];
         Y, = self._dropoutLayer.forward(X);
 
         return Y, ;
@@ -4668,7 +4670,7 @@ class TransformerEncoderBlock(AggregateNetModule, INetAttentionModule):
         self._addNormal2 = TransformerAddNormalizationModule(normalizedShape, dropoutRatio = dropoutRatio);
 
         super().__init__(self._attentionModule, self._addNormal1, self._positionwiseFFN, self._addNormal2);
-        self._name = "TransformerEncoder";
+        self._name = "TransformerEncoderBlock";
 
 
     @property

@@ -2278,11 +2278,18 @@ def unitTest():
     # testSelfAttentionModuleGradient4();
     # testSinePositionalEncodingModuleGradient1();
     # testSinePositionalEncodingModuleGradient2();
+    # testSinePositionalEncodingModuleGradient3();
     # testTransformerAddNormalizationModuleGradient1();
     # testTransformerEncoderBlockGradient1();
     # testTransformerEncoderBlockGradient2();
     # testTransformerEncoderGradient1();
-    testTransformerEncoderGradient2();
+    # testTransformerEncoderGradient2();
+    # testTransformerDecoderBlockGradient1();
+    # testTransformerDecoderBlockGradient2();
+    # testTransformerDecoder1();
+    # testTransformerDecoder2();
+    # testTransformerDecoderGradient1();
+    # testTransformerDecoderGradient2();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -5637,6 +5644,19 @@ def testSinePositionalEncodingModuleGradient2():
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"SinePositionalEncodingModule, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSinePositionalEncodingModuleGradient3():
+    batchSize, headNum, sequenceLength, sequenceDimension = 32, 8, 10, 21;
+    X = np.random.randn(batchSize, headNum, sequenceLength, sequenceDimension);
+    startIndex = np.array(13);
+    m = SinePositionalEncodingModule(sequenceDimension);
+
+    Y, = m.forward(X, startIndex);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, startIndex)[0]), X);
+    print(f"SinePositionalEncodingModule, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 
