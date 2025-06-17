@@ -472,6 +472,15 @@ def col2im(X : np.ndarray, imShape : Tuple[int, ...], FH : int, FW : int, stride
     return img[:, :, paddingTop: H + paddingTop, paddingLeft: W + paddingLeft];
 
 
+# validLength shape: (batch_size) or (batch_size, query_num)
+def getAttentionMaskByValidLength(queryNum: int, keyNum, validLength: np.ndarray) -> np.ndarray:
+    if len(validLength.shape) == 1:
+        validLength = np.repeat(np.expand_dims(validLength, axis = -1), queryNum, axis = -1);
+    validLength = np.expand_dims(validLength, axis = -1);
+
+    return (np.arange(keyNum) < validLength).astype(np.int32);
+
+
 def convOutputSize(inputSize : int, filterSize : int, stride : int = 1, pad : int = 0) -> int:
     return (inputSize + pad - filterSize) // stride + 1;
 
