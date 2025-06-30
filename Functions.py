@@ -23,6 +23,13 @@ class LossReductionType(enum.Enum):
     Sum = 0x20;
 
 
+# M is a 0-1 or True-False mask array which has the same shape of X
+def putArrayMask(X : np.ndarray, M : np.ndarray, value: Union[int, float, np.ndarray]):
+    X *= ~M.astype(bool);
+    X += (M * value);
+    return X;
+
+
 def sigmoid(X : np.ndarray, threshold : float = -20) -> np.ndarray:
     ML = X < threshold;
 
@@ -147,6 +154,9 @@ def swishGradient(Y : np.ndarray, S : np.ndarray, X : np.ndarray, beta : Union[f
 def softmax(X : np.ndarray, M : np.ndarray = None) -> np.ndarray:
     if M is not None and X.shape != M.shape:
         raise ValueError("the shape of X and M are not same.");
+
+    if M is not None:
+        putArrayMask(X, ~M.astype(bool), -1e10);
 
     Y = np.exp(X - np.amax(X, -1, keepdims = True));
 
