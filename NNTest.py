@@ -2282,14 +2282,18 @@ def unitTest():
     # testTransformerAddNormalizationModuleGradient1();
     # testTransformerEncoderBlockGradient1();
     # testTransformerEncoderBlockGradient2();
-    # testTransformerEncoderGradient1();
-    # testTransformerEncoderGradient2();
+    # testTransformerEncoderBlockGradient3();
+    testTransformerEncoderGradient1();
+    testTransformerEncoderGradient2();
+    testTransformerEncoderGradient3();
     # testTransformerDecoderBlockGradient1();
     # testTransformerDecoderBlockGradient2();
     # testTransformerDecoder1();
     # testTransformerDecoder2();
     # testTransformerDecoderGradient1();
     # testTransformerDecoderGradient2();
+    # testTransformerEmbeddingEncoderGradient1();
+    # testTransformerEmbeddingEncoderGradient2();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -2323,32 +2327,32 @@ def sumAll(*X : np.ndarray) -> float:
 
 
 def testPerformance():
-    N, D1, D2, C = 320, 12, 24, 10;
-    Y = np.abs(np.random.randn(N, D1, D2, C)) + 1.0;
-    T = np.random.choice(np.arange(C), (N, D1, D2), replace = True);
+    value = 999.99;
+    X = np.random.randn(32, 1024, 512);
+    Y, Z = X.copy(), X.copy();
+    M = np.random.randint(0, 2, X.shape);
 
-    n = T.size;
-    rows, columns = np.arange(n), T.flatten();
-    L1 = np.sum(np.log(Y.reshape(n, -1)[rows, columns]));
-
-    idx = np.arange(n) * C + T.flatten();
-    L2 = np.sum(np.log(Y.reshape(-1)[idx]));
-
-    times = 100000;
+    times = 100;
 
     now = time.time();
     for _ in range(times):
-        L1 = np.sum(np.log(Y.reshape(n, -1)[np.arange(n), T.flatten()]));
+        putArrayMask(X, M, value);
     t1 = time.time() - now;
     print(f"t1: {t1}");
 
     now = time.time();
     for _ in range(times):
-        L2 = np.sum(np.log(Y.reshape(-1)[np.arange(n) * C + T.flatten()]));
+        np.place(Y, M, value);
     t2 = time.time() - now;
-    print(f"t2: {t2}");
+    print(f"t2: {t2}, {np.all(X == Y)}");
 
-    print(f"t1/t2: {t1 / t2}");
+    now = time.time();
+    for _ in range(times):
+        np.putmask(Z, M, value);
+    t3 = time.time() - now;
+    print(f"t3: {t3}, {np.all(X == Z)}");
+
+    print([t1, t2, t3]);
 
     print("exit.");
 
@@ -5716,6 +5720,26 @@ def testTransformerEncoderBlockGradient2():
     print("\n");
 
 
+def testTransformerEncoderBlockGradient3():
+    batchSize, sequenceLength, sequenceDimension = 32, 20, 16;
+    attentionHiddenSize, ffnHiddenSize, headNum = 17, 18, 8;
+    X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    validLength = np.random.randint(1, sequenceLength + 1, batchSize);
+    M = getAttentionMaskByValidLength(sequenceLength, sequenceLength, validLength);
+    C = np.random.randn(*X.shape); # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerEncoderBlock(sequenceDimension, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+
+    Y, = m.forward(X, M);
+    dX1 = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
+    print(f"TransformerEncoderBlock, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "TransformerEncoderBlock, numericGradient3", X, M);
+    print("\n");
+
+
 def testTransformerEncoderGradient1():
     batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
     attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 22, 23, 8, 2;
@@ -5748,8 +5772,28 @@ def testTransformerEncoderGradient2():
     Y, = m.forward(X, M);
     dX1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"TransformerEncoder, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
-    testModuleGradient(m, "TransformerEncoder, numericGradient1", X, M);
+    print(f"TransformerEncoder, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "TransformerEncoder, numericGradient2", X, M);
+    print("\n");
+
+
+def testTransformerEncoderGradient3():
+    batchSize, sequenceLength, sequenceDimension = 32, 20, 16;
+    attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 17, 18, 8, 2;
+    X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    validLength = np.random.randint(1, sequenceLength + 1, batchSize);
+    M = getAttentionMaskByValidLength(sequenceLength, sequenceLength, validLength);
+    C = np.random.randn(*X.shape);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerEncoder(sequenceDimension, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum, blockNum = blockNum),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+
+    Y, = m.forward(X, M);
+    dX1 = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
+    print(f"TransformerEncoder, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "TransformerEncoder, numericGradient3", X, M);
     print("\n");
 
 

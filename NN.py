@@ -4725,7 +4725,10 @@ class TransformerEncoder(AggregateNetModule, INetAttentionModule):
         M = data[1] if len(data) > 1 else None;  # softmax mask
 
         PX, = self._positionalEncoding.forward(X);
-        Y, = super().forward(PX, M);
+
+        Y = PX;
+        for block in self._blocks:
+            Y, = block.forward(Y, M);
 
         self._attentionWeight = np.array([item.attentionWeight for item in self._blocks]);
         return Y, ;
