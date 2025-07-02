@@ -4849,7 +4849,6 @@ class TransformerDecoder(AggregateNetModule, INetAttentionModule):
     def __init__(self, inputSize: int, encoderSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0):
         self._blockNum = blockNum;
         self._attentionWeight = None;
-        self._blockInputs : List[Optional[np.ndarray]] = [None] * blockNum;
         self._positionalEncoding = SinePositionalEncodingModule(inputSize, maxLength = maxSequenceLength, dropoutRatio = dropoutRatio);
         self._blocks = [TransformerDecoderBlock(inputSize, encoderSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, dropoutRatio = dropoutRatio) for _ in range(blockNum)];
 
@@ -4860,10 +4859,6 @@ class TransformerDecoder(AggregateNetModule, INetAttentionModule):
     @property
     def attentionWeight(self) -> np.ndarray:
         return self._attentionWeight;
-
-
-    def _reset(self):
-        self._blockInputs = [None] * self._blockNum;
 
 
     # X shape: (batch_size, sequence_length, sequence_dimension)
@@ -4897,20 +4892,20 @@ class TransformerDecoder(AggregateNetModule, INetAttentionModule):
         return dX, dEncoderY;
 
 
-    def predict(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+    def predict(self, *data : np.ndarray, blockInputs : List[Optional[np.ndarray]]) -> Tuple[np.ndarray, ...]:
         X, encoderY = data[: 2];
         encoderM = data[2] if len(data) > 2 else None;  # softmax mask
 
-        startIndex = np.array(self._blockInputs[0].shape[-2] if self._blockInputs[0] is not None else 0);
+        startIndex = np.array(blockInputs[0].shape[-2] if blockInputs[0] is not None else 0);
         Y, = self._positionalEncoding.forward(X, startIndex);
 
         for i in range(len(self._blocks)):
-            K = self._blockInputs[i];
+            K = blockInputs[i];
             if K is None:
                 K = Y;
             else:
                 K = np.concatenate((K, Y), axis = -2);
-            self._blockInputs[i] = K;
+            blockInputs[i] = K;
 
             Y, = self._blocks[i].forward(Y, K, K, encoderY, encoderM);
 

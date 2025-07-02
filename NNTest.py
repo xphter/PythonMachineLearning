@@ -2283,17 +2283,18 @@ def unitTest():
     # testTransformerEncoderBlockGradient1();
     # testTransformerEncoderBlockGradient2();
     # testTransformerEncoderBlockGradient3();
-    testTransformerEncoderGradient1();
-    testTransformerEncoderGradient2();
-    testTransformerEncoderGradient3();
+    # testTransformerEncoderGradient1();
+    # testTransformerEncoderGradient2();
+    # testTransformerEncoderGradient3();
     # testTransformerDecoderBlockGradient1();
     # testTransformerDecoderBlockGradient2();
-    # testTransformerDecoder1();
-    # testTransformerDecoder2();
+    # testTransformerDecoderBlockGradient3();
+    testTransformerDecoder1();
+    testTransformerDecoder2();
     # testTransformerDecoderGradient1();
     # testTransformerDecoderGradient2();
-    testTransformerEmbeddingEncoderGradient1();
-    testTransformerEmbeddingEncoderGradient2();
+    # testTransformerEmbeddingEncoderGradient1();
+    # testTransformerEmbeddingEncoderGradient2();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -5848,6 +5849,33 @@ def testTransformerDecoderBlockGradient2():
     print("\n");
 
 
+def testTransformerDecoderBlockGradient3():
+    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    attentionHiddenSize, ffnHiddenSize, headNum = 22, 23, 8;
+    Q = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    K = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    V = np.random.randn(batchSize, sequenceLength, sequenceDimension);
+    encoderY = np.random.randn(batchSize, sequenceLength + 1, sequenceDimension + 2);
+    encoderValidLength = np.random.randint(1, sequenceLength + 2, batchSize);
+    encoderM = getAttentionMaskByValidLength(sequenceLength, sequenceLength + 1, encoderValidLength);
+    C = np.random.randn(*Q.shape); # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerDecoderBlock(sequenceDimension, sequenceDimension + 2, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+    m.context.isTrainingMode = True;
+
+    Y, = m.forward(Q, K, V, encoderY, encoderM);
+    dQ1, dK1, dV1, dEncoderY1 = m.backward(np.ones_like(Y));
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, encoderY, encoderM)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, encoderY, encoderM)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, encoderY, encoderM)[0]), V);
+    dEncoderYN = numericGradient(lambda x: np.sum(m.forward(Q, K, V, x, encoderM)[0]), encoderY);
+    print(f"TransformerDecoderBlock, numericGradient3, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
+    testModuleGradient(m, "TransformerEncoderBlock, numericGradient3", Q, K, V, encoderY, encoderM);
+    print("\n");
+
+
 def testTransformerDecoder1():
     batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
     attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 22, 23, 8, 3;
@@ -5860,7 +5888,8 @@ def testTransformerDecoder1():
 
     m.reset();
     m.context.isTrainingMode = False;
-    Y2 = np.concatenate(tuple(m.predict(X[:, i: i + 1, :], encoderY)[0] for i in range(X.shape[-2])), axis = -2);
+    blockInputs = [None] * blockNum;
+    Y2 = np.concatenate(tuple(m.predict(X[:, i: i + 1, :], encoderY, blockInputs = blockInputs)[0] for i in range(X.shape[-2])), axis = -2);
 
     print(f"TransformerDecoder, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
     print("\n");
@@ -5879,7 +5908,8 @@ def testTransformerDecoder2():
 
     m.reset();
     m.context.isTrainingMode = False;
-    Y2 = np.concatenate(tuple(m.predict(X[:, i: i + 1, :], encoderY, encoderM[:, i: i + 1, :])[0] for i in range(X.shape[-2])), axis = -2);
+    blockInputs = [None] * blockNum;
+    Y2 = np.concatenate(tuple(m.predict(X[:, i: i + 1, :], encoderY, encoderM[:, i: i + 1, :], blockInputs = blockInputs)[0] for i in range(X.shape[-2])), axis = -2);
 
     print(f"TransformerDecoder, value2, Y error: {np.sum(np.abs(Y1 - Y2))}");
     print("\n");
