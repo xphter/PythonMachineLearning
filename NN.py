@@ -4743,6 +4743,46 @@ class TransformerEncoder(AggregateNetModule, INetAttentionModule):
         return dX, ;
 
 
+class TransformerEmbeddingEncoder(AggregateNetModule, INetAttentionModule):
+    def __init__(self, embeddingNum : int, embeddingSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0):
+        self._embeddingScale = math.sqrt(embeddingSize);
+        self._embedding = EmbeddingLayer(embeddingNum, embeddingSize);
+        self._encoder = TransformerEncoder(embeddingSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, blockNum = blockNum, maxSequenceLength = maxSequenceLength, dropoutRatio = dropoutRatio);
+
+        super().__init__(self._embedding, self._encoder);
+        self._name = "TransformerEmbeddingEncoder";
+
+
+    @property
+    def attentionWeight(self) -> np.ndarray:
+        return self._encoder.attentionWeight;
+
+
+    # X shape: (batch_size, sequence_length)
+    # validLength shape: (batch_size)
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X = data[0];
+        validLength = data[1] if len(data) > 1 else None;
+
+        sequenceLength = X.shape[-1];
+        M = getAttentionMaskByValidLength(sequenceLength, sequenceLength, validLength) if validLength is not None else None;
+
+        EX, = self._embedding.forward(X);
+        Y, = self._encoder.forward(EX * self._embeddingScale, M);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+
+        dEX, = self._encoder.backward(dY);
+        dEX *= self._embeddingScale;
+        dX, = self._embedding.backward(dEX);
+
+        return dX, ;
+
+
 class TransformerDecoderBlock(AggregateNetModule, INetAttentionModule):
     def __init__(self, inputSize : int, encoderSize : int, attentionHiddenSize : int, ffnHiddenSize : int, normalizedShape : Union[int, Tuple[int, ...]], headNum : int = 2, dropoutRatio : float = 0.0):
         self._innerAttentionModule = MultiHeadAttentionModule(DotProductAttentionModule(dropoutRatio = dropoutRatio), inputSize, inputSize, inputSize, (attentionHiddenSize, attentionHiddenSize, attentionHiddenSize, inputSize), headNum = headNum);
