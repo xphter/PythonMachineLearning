@@ -2289,12 +2289,16 @@ def unitTest():
     # testTransformerDecoderBlockGradient1();
     # testTransformerDecoderBlockGradient2();
     # testTransformerDecoderBlockGradient3();
-    testTransformerDecoder1();
-    testTransformerDecoder2();
+    # testTransformerDecoder1();
+    # testTransformerDecoder2();
     # testTransformerDecoderGradient1();
     # testTransformerDecoderGradient2();
     # testTransformerEmbeddingEncoderGradient1();
     # testTransformerEmbeddingEncoderGradient2();
+    # testTransformerEmbeddingDecoder1();
+    # testTransformerEmbeddingDecoder2();
+    # testTransformerEmbeddingDecoderGradient1();
+    testTransformerEmbeddingDecoderGradient2();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -5988,6 +5992,84 @@ def testTransformerEmbeddingEncoderGradient2():
     Y, = m.forward(X, validLength);
     dX1 = m.backward(np.ones_like(Y));
     testModuleGradient(m, "TransformerEmbeddingEncoder, numericGradient2", X, validLength);
+    print("\n");
+
+
+def testTransformerEmbeddingDecoder1():
+    batchSize, sequenceLength = 32, 20;
+    vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 120, 16, 17, 18, 19, 8, 3;
+    X = np.random.randint(0, vocabSize, (batchSize, sequenceLength));
+    encoderY = np.random.randn(batchSize, sequenceLength + 1, encoderSize);
+    m = TransformerEmbeddingDecoder(vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum);
+    m.context.isTrainingMode = True;
+
+    Y1, = m.forward(X, encoderY);
+
+    m.reset();
+    m.context.isTrainingMode = False;
+    blockInputs = [None] * blockNum;
+    Y2 = np.concatenate(tuple(m.predict(X[:, i: i + 1], encoderY, blockInputs = blockInputs)[0] for i in range(X.shape[-1])), axis = -2);
+
+    print(f"TransformerEmbeddingDecoder, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print("\n");
+
+
+def testTransformerEmbeddingDecoder2():
+    batchSize, sequenceLength = 32, 20;
+    vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 120, 16, 17, 18, 19, 8, 3;
+    X = np.random.randint(0, vocabSize, (batchSize, sequenceLength));
+    encoderY = np.random.randn(batchSize, sequenceLength + 1, encoderSize);
+    encoderValidLength = np.random.randint(1, sequenceLength + 2, batchSize);
+    m = TransformerEmbeddingDecoder(vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum);
+    m.context.isTrainingMode = True;
+
+    Y1, = m.forward(X, encoderY, encoderValidLength);
+
+    m.reset();
+    m.context.isTrainingMode = False;
+    blockInputs = [None] * blockNum;
+    Y2 = np.concatenate(tuple(m.predict(X[:, i: i + 1], encoderY, encoderValidLength, blockInputs = blockInputs)[0] for i in range(X.shape[-1])), axis = -2);
+
+    print(f"TransformerEmbeddingDecoder, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print("\n");
+
+
+def testTransformerEmbeddingDecoderGradient1():
+    batchSize, sequenceLength = 32, 20;
+    vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 120, 16, 17, 18, 19, 8, 2;
+    X = np.random.randint(0, vocabSize, (batchSize, sequenceLength));
+    encoderY = np.random.randn(batchSize, sequenceLength + 1, encoderSize);
+    C = np.random.randn(batchSize, sequenceLength, embeddingSize);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerEmbeddingDecoder(vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+
+    Y, = m.forward(X, encoderY);
+    dX1, dEncoderY1 = m.backward(np.ones_like(Y));
+    dEncoderYN = numericGradient(lambda x: np.sum(m.forward(X, x)[0]), encoderY);
+    print(f"TransformerEmbeddingDecoder, numericGradient1, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
+    testModuleGradient(m, "TransformerEmbeddingDecoder, numericGradient1", X, encoderY);
+    print("\n");
+
+
+def testTransformerEmbeddingDecoderGradient2():
+    batchSize, sequenceLength = 32, 20;
+    vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 120, 16, 17, 18, 19, 8, 2;
+    X = np.random.randint(0, vocabSize, (batchSize, sequenceLength));
+    encoderY = np.random.randn(batchSize, sequenceLength + 1, encoderSize);
+    encoderValidLength = np.random.randint(1, sequenceLength + 2, batchSize);
+    C = np.random.randn(batchSize, sequenceLength, embeddingSize);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerEmbeddingDecoder(vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+
+    Y, = m.forward(X, encoderY, encoderValidLength);
+    dX1, dEncoderY1 = m.backward(np.ones_like(Y));
+    dEncoderYN = numericGradient(lambda x: np.sum(m.forward(X, x, encoderValidLength)[0]), encoderY);
+    print(f"TransformerEmbeddingDecoder, numericGradient2, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
+    testModuleGradient(m, "TransformerEmbeddingDecoder, numericGradient2", X, encoderY, encoderValidLength);
     print("\n");
 
 

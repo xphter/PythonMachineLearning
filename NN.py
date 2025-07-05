@@ -4912,6 +4912,60 @@ class TransformerDecoder(AggregateNetModule, INetAttentionModule):
         return Y, ;
 
 
+class TransformerEmbeddingDecoder(AggregateNetModule, INetAttentionModule):
+    def __init__(self, embeddingNum : int, embeddingSize : int, encoderSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0):
+        self._embeddingScale = math.sqrt(embeddingSize);
+        self._embedding = EmbeddingLayer(embeddingNum, embeddingSize);
+        self._decoder = TransformerDecoder(embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, blockNum = blockNum, maxSequenceLength = maxSequenceLength, dropoutRatio = dropoutRatio);
+
+        super().__init__(self._embedding, self._decoder);
+        self._name = "TransformerEmbeddingDecoder";
+
+
+    @property
+    def attentionWeight(self) -> np.ndarray:
+        return self._decoder.attentionWeight;
+
+
+    # X shape: (batch_size, sequence_length)
+    # encoderY shape: (batch_size, sequence_length, encoder_size)
+    # encoderValidLength shape: (batch_size)
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X, encoderY = data[: 2];
+        encoderValidLength = data[2] if len(data) > 2 else None;
+
+        decoderSequenceLength = X.shape[-1];
+        encoderSequenceLength = encoderY.shape[-2];
+        encoderM = getAttentionMaskByValidLength(decoderSequenceLength, encoderSequenceLength, encoderValidLength) if encoderValidLength is not None else None;
+
+        EX, = self._embedding.forward(X);
+        Y, = self._decoder.forward(EX * self._embeddingScale, encoderY, encoderM);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+
+        dEX, dEncoderY = self._decoder.backward(dY);
+        dEX *= self._embeddingScale;
+        dX, = self._embedding.backward(dEX);
+
+        return dX, dEncoderY;
+
+
+    def predict(self, *data : np.ndarray, blockInputs : List[Optional[np.ndarray]]) -> Tuple[np.ndarray, ...]:
+        X, encoderY = data[: 2];
+        encoderValidLength = data[2] if len(data) > 2 else None;
+
+        decoderSequenceLength = X.shape[-1];
+        encoderSequenceLength = encoderY.shape[-2];
+        encoderM = getAttentionMaskByValidLength(decoderSequenceLength, encoderSequenceLength, encoderValidLength) if encoderValidLength is not None else None;
+
+        EX, = self._embedding.forward(X);
+        return self._decoder.predict(EX * self._embeddingScale, encoderY, encoderM, blockInputs = blockInputs);
+
+
 # select value by weights for 1 time step
 class SelectByWeight1TModule(NetModuleBase):
     def __init__(self):
