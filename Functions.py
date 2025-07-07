@@ -491,6 +491,12 @@ def getAttentionMaskByValidLength(queryNum: int, keyNum, validLength: np.ndarray
     return (np.arange(keyNum) < validLength).astype(np.int32);
 
 
+# validLength shape: (batch_size)
+# the mask was used on each sample loss
+def getLossMaskByValidLength(maxLength : int, validLength: np.ndarray) -> np.ndarray:
+    return np.arange(maxLength) < np.expand_dims(validLength, axis = -1);
+
+
 def convOutputSize(inputSize : int, filterSize : int, stride : int = 1, pad : int = 0) -> int:
     return (inputSize + pad - filterSize) // stride + 1;
 

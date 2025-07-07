@@ -2103,6 +2103,7 @@ def unitTest():
     # testSigmoidGradient2();
     # testMinMaxScaler();
 
+    testGetLossMaskByValidLength1();
     # testSoftmax1();
     # testSoftmaxLayerGradient1();
     # testSoftmaxLayerGradient2();
@@ -2298,7 +2299,7 @@ def unitTest():
     # testTransformerEmbeddingDecoder1();
     # testTransformerEmbeddingDecoder2();
     # testTransformerEmbeddingDecoderGradient1();
-    testTransformerEmbeddingDecoderGradient2();
+    # testTransformerEmbeddingDecoderGradient2();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -2470,6 +2471,37 @@ def testMinMaxScaler():
 
     print(f"MinMaxScaler, transform-inverse, {np.sum(np.abs(X_train_1 - X_train_2))}, {np.sum(np.abs(Y_train_1 - Y_train_2))}, {np.sum(np.abs(X_test_1 - X_test_2))}, {np.sum(np.abs(Y_test_1 - Y_test_2))}");
     print("\n");
+
+
+def testGetLossMaskByValidLength1():
+    maxLength = 5;
+
+    validLen1 = np.array(2);
+    M11 = getLossMaskByValidLength(maxLength, validLen1);
+    M12 = np.array([True] * 2 + [False] * 3);
+    assert np.all(M11 == M12);
+
+    validLen2 = np.array([2, 3]);
+    M21 = getLossMaskByValidLength(maxLength, validLen2);
+    M22 = np.array([
+        [True] * 2 + [False] * 3,
+        [True] * 3 + [False] * 2,
+    ]);
+    assert np.all(M21 == M22);
+
+    validLen3 = np.array([[1, 2], [3, 4]]);
+    M31 = getLossMaskByValidLength(maxLength, validLen3);
+    M32 = np.array([
+        [
+            [True] * 1 + [False] * 4,
+            [True] * 2 + [False] * 3,
+        ],
+        [
+            [True] * 3 + [False] * 2,
+            [True] * 4 + [False] * 1,
+        ]
+    ]);
+    assert np.all(M31 == M32);
 
 
 def testSoftmax1():
