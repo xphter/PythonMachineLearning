@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2024 XphteR, Inc. All Rights Reserved
+# Copyright (C) 2025 XphteR, Inc. All Rights Reserved
 #
-# @Time    : 2024-11-10
+# @Time    : 2025-07-07
 # @Author  : Du Peng
 # @Email   : 278770518@qq.com
 # @File    : Functions.py
@@ -11,6 +11,7 @@
 
 import enum;
 import math;
+import collections;
 
 from ImportNumpy import *;
 from typing import Callable, Union, Tuple, List;
@@ -531,3 +532,25 @@ def auc(PS : np.ndarray, NS : np.ndarray):
     P, N = len(PS), len(NS);
     ranks = np.argsort(np.concatenate((NS, PS), axis = None), axis = None) + 1;
     return (float(np.sum(ranks[N:]))  - P * (P + 1) / 2) / (P * N);
+
+
+# BLEU: bilingual evaluation understudy
+# BLEU = exp(min{0, 1 - len(label) / len(prediction)}) * ∏ p_n^{1/2^n}
+def bleuNLP(prediction : List[str], label : List[str], gramNum : int = 2) -> float:
+    labelLength, predictionLength = len(label), len(prediction);
+    score = math.exp(min(0.0, 1.0 - labelLength / predictionLength));
+    for n in range(1, gramNum + 1):
+        matchCount, labelGrams = 0, collections.defaultdict(int);
+
+        for i in range(labelLength - n + 1):
+            labelGrams[" ".join(label[i: i + n])] += 1;
+
+        for i in range(predictionLength - n + 1):
+            gram = " ".join(prediction[i: i + n]);
+            if labelGrams[gram] > 0:
+                matchCount += 1;
+                labelGrams[gram] -= 1;
+
+        score *= math.pow(matchCount / (predictionLength - n + 1), math.pow(0.5, n));
+
+    return score;
