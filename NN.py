@@ -4709,7 +4709,7 @@ class TransformerEncoder(AggregateNetModule, INetAttentionModule):
         self._positionalEncoding = SinePositionalEncodingModule(inputSize, maxLength = maxSequenceLength, dropoutRatio = dropoutRatio);
         self._blocks = [TransformerEncoderBlock(inputSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, dropoutRatio = dropoutRatio) for _ in range(blockNum)];
 
-        super().__init__(*tuple(self._blocks));
+        super().__init__(*tuple([self._positionalEncoding] + self._blocks));
         self._name = "TransformerEncoder";
 
 
@@ -4852,7 +4852,7 @@ class TransformerDecoder(AggregateNetModule, INetAttentionModule):
         self._positionalEncoding = SinePositionalEncodingModule(inputSize, maxLength = maxSequenceLength, dropoutRatio = dropoutRatio);
         self._blocks = [TransformerDecoderBlock(inputSize, encoderSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, dropoutRatio = dropoutRatio) for _ in range(blockNum)];
 
-        super().__init__(*tuple(self._blocks));
+        super().__init__(*tuple([self._positionalEncoding] + self._blocks));
         self._name = "TransformerDecoder";
 
 
