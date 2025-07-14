@@ -538,8 +538,11 @@ def auc(PS : np.ndarray, NS : np.ndarray):
 # BLEU = exp(min{0, 1 - len(label) / len(prediction)}) * ∏ p_n^{1/2^n}
 def bleuNLP(prediction : List[str], label : List[str], gramNum : int = 2) -> float:
     labelLength, predictionLength = len(label), len(prediction);
+    if predictionLength == 0:
+        return 0.0;
+
     score = math.exp(min(0.0, 1.0 - labelLength / predictionLength));
-    for n in range(1, gramNum + 1):
+    for n in range(1, min(gramNum, predictionLength) + 1):
         matchCount, labelGrams = 0, collections.defaultdict(int);
 
         for i in range(labelLength - n + 1):
