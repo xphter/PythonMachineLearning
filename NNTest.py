@@ -2103,7 +2103,7 @@ def unitTest():
     # testSigmoidGradient2();
     # testMinMaxScaler();
 
-    testGetLossMaskByValidLength1();
+    # testGetLossMaskByValidLength1();
     # testSoftmax1();
     # testSoftmaxLayerGradient1();
     # testSoftmaxLayerGradient2();
@@ -2135,6 +2135,7 @@ def unitTest():
     # testSoftmaxWithCrossEntropy1DLossGradient4();
     # testSoftmaxWithCrossEntropy1DLossGradient5();
     # testSoftmaxWithCrossEntropy1DLossGradient6();
+    # testSequenceSoftmaxWithCrossEntropy1DLossGradient1();
     # testIdentityWithMeanSquareLossGradient1();
     # testIdentityWithMeanSquareLossGradient2();
     # testIdentityWithMeanSquareLossGradient3();
@@ -2893,6 +2894,17 @@ def testSoftmaxWithCrossEntropy1DLossGradient6():
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M, T)), X);
     print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient6, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+def testSequenceSoftmaxWithCrossEntropy1DLossGradient1():
+    N, D, C = 32, 24, 10;
+    X, T = np.random.randn(N, D, C), np.random.choice(np.arange(C), size = (N, D), replace = True);
+    validLen = np.random.choice(np.arange(D), size = N, replace = True);
+    m = SequenceSoftmaxWithCrossEntropy1DLoss();
+    loss = m.forward(X, validLen, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, validLen, T), X);
+    print(f"SequenceSoftmaxWithCrossEntropy1DLoss, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 
@@ -5815,7 +5827,7 @@ def testTransformerEncoderGradient2():
 
 
 def testTransformerEncoderGradient3():
-    batchSize, sequenceLength, sequenceDimension = 32, 20, 16;
+    batchSize, sequenceLength, sequenceDimension = 8, 20, 16;
     attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 17, 18, 8, 2;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     validLength = np.random.randint(1, sequenceLength + 1, batchSize);
@@ -5952,7 +5964,7 @@ def testTransformerDecoder2():
 
 
 def testTransformerDecoderGradient1():
-    batchSize, sequenceLength, sequenceDimension = 2, 10, 21;
+    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
     attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 22, 23, 8, 3;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     encoderY = np.random.randn(batchSize, sequenceLength + 1, sequenceDimension + 2);
@@ -5973,7 +5985,7 @@ def testTransformerDecoderGradient1():
 
 
 def testTransformerDecoderGradient2():
-    batchSize, sequenceLength, sequenceDimension = 2, 10, 21;
+    batchSize, sequenceLength, sequenceDimension = 6, 10, 21;
     attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 22, 23, 8, 3;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     encoderY = np.random.randn(batchSize, sequenceLength + 1, sequenceDimension + 2);

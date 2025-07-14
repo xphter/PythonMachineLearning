@@ -3675,6 +3675,32 @@ class SoftmaxWithCrossEntropy1DLoss(NetLossBase):
         return softmaxWithCrossEntropyErrorGradient1D(self._Y, self._T, self._M, self._reductionType), ;
 
 
+class SequenceSoftmaxWithCrossEntropy1DLoss(SoftmaxWithCrossEntropy1DLoss):
+    def __init__(self):
+        super().__init__(reductionType = LossReductionType.No);
+
+        self._n = 0;
+
+
+    def forward(self, *data: np.ndarray) -> float:
+        X, validLength, T = data;
+        M = getLossMaskByValidLength(T.shape[-1], validLength) if validLength is not None else None;
+        L = super().forward(X, M, T);
+
+        n = np.sum(M);
+        loss = float(np.sum(L) / n);
+
+        self._n = n;
+        return loss;
+
+
+    def backward(self) -> Tuple[np.ndarray, ...]:
+        dX, = super().backward();
+        dX /= self._n;
+
+        return dX, ;
+
+
 class SigmoidWithCrossEntropyLoss(NetLossBase):
     def __init__(self, reductionType : LossReductionType = LossReductionType.Mean):
         super().__init__();
