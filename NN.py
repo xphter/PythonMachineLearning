@@ -417,9 +417,9 @@ class NetContext(INetContext):
 
 
 class NetParam(INetParam):
-    def __init__(self, value : np.ndarray):
+    def __init__(self, value : np.ndarray, grad : np.ndarray = None):
         self._value = value;
-        self._grad = np.zeros_like(value, dtype = value.dtype);
+        self._grad = np.zeros_like(value, dtype = value.dtype) if grad is None else grad;
 
 
     @property
@@ -433,8 +433,8 @@ class NetParam(INetParam):
 
 
 class NetParamDefinition(NetParam, INetParamDefinition):
-    def __init__(self, name : str, value : np.ndarray, handler: Optional[INetParamHandler] = None):
-        super().__init__(value);
+    def __init__(self, name : str, value : np.ndarray, handler: Optional[INetParamHandler] = None, grad : np.ndarray = None):
+        super().__init__(value, grad);
 
         self._name = name;
         self._handler = handler;
