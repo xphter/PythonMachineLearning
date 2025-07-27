@@ -2301,6 +2301,8 @@ def unitTest():
     # testTransformerEmbeddingDecoder2();
     # testTransformerEmbeddingDecoderGradient1();
     # testTransformerEmbeddingDecoderGradient2();
+    testAttentionPoolingLayerGradient1();
+    testAttentionPoolingLayerGradient2();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -6114,6 +6116,33 @@ def testTransformerEmbeddingDecoderGradient2():
     dEncoderYN = numericGradient(lambda x: np.sum(m.forward(X, x, encoderValidLength)[0]), encoderY);
     print(f"TransformerEmbeddingDecoder, numericGradient2, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
     testModuleGradient(m, "TransformerEmbeddingDecoder, numericGradient2", X, encoderY, encoderValidLength);
+    print("\n");
+
+
+def testAttentionPoolingLayerGradient1():
+    batchSize, sequenceLength, inputSize, hiddenSize = 32, 20, 21, (22, 23);
+    X = np.random.randn(batchSize, sequenceLength, inputSize);
+    m = AttentionPoolingLayer(inputSize, hiddenSize);
+
+    Y, = m.forward(X);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"AttentionPoolingLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "AttentionPoolingLayer, numericGradient1", X);
+    print("\n");
+
+
+def testAttentionPoolingLayerGradient2():
+    batchSize, sequenceLength, inputSize, hiddenSize = 32, 20, 21, (22, 23);
+    X = np.random.randn(batchSize, sequenceLength, inputSize);
+    M = np.random.randint(0, 2, (batchSize, sequenceLength));
+    m = AttentionPoolingLayer(inputSize, hiddenSize);
+
+    Y, = m.forward(X, M);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
+    print(f"AttentionPoolingLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "AttentionPoolingLayer, numericGradient2", X, M);
     print("\n");
 
 

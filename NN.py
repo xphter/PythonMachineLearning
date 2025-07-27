@@ -4994,6 +4994,69 @@ class TransformerEmbeddingDecoder(AggregateNetModule, INetAttentionModule):
         return self._decoder.predict(EX * self._embeddingScale, encoderY, encoderM, blockInputs = blockInputs);
 
 
+# encode sequence to vector
+class AttentionPoolingLayer(AggregateNetModule, INetAttentionModule):
+    def __init__(self, inputSize : int, hiddenSize : Union[int, Tuple[int, ...], List[int]], activationFuncSelector : Callable = None):
+        self._X = None;
+        self._attentionWeight, self._innerWeight = None, None;
+        self._activationFuncSelector = activationFuncSelector if activationFuncSelector is not None else (lambda x: TanhLayer());
+
+        modules = [];
+        lastHiddenSize = 0;
+
+        if isinstance(hiddenSize, int):
+            modules.append(AffineLayer(inputSize, hiddenSize, includeBias = False));
+            modules.append(self._activationFuncSelector(hiddenSize));
+            lastHiddenSize = hiddenSize;
+        else:
+            preHiddenSize = inputSize;
+            for item in hiddenSize:
+                modules.append(AffineLayer(preHiddenSize, item, includeBias = False));
+                modules.append(self._activationFuncSelector(item));
+                preHiddenSize = item;
+            lastHiddenSize = hiddenSize[-1];
+        modules.append(AffineLayer(lastHiddenSize, 1, includeBias = False));
+
+        super().__init__(*tuple(modules));
+        self._name = "AttentionPoolingLayer";
+
+
+    @property
+    def attentionWeight(self) -> np.ndarray:
+        return self._attentionWeight;
+
+
+    # X shape: (batch_size, sequence_length, sequence_dimension)
+    # M shape: (batch_size, sequence_length)
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X = data[0];
+        M = data[1] if len(data) > 1 else None;  # softmax mask
+
+        attentionScore, = super().forward(X);
+        attentionScore = np.squeeze(attentionScore, axis = -1);
+
+        attentionWeight = softmax(attentionScore, M);
+        innerWeight = np.expand_dims(attentionWeight, axis = -1);
+        Y = np.sum(innerWeight * X, axis = -2);
+
+        self._X = X;
+        self._attentionWeight = attentionWeight;
+        self._innerWeight = innerWeight;
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+        dY = np.expand_dims(dY, axis = -2);
+
+        dAttentionWeight = np.sum(dY * self._X, axis = -1);
+        dAttentionScore = np.expand_dims(softmaxGradient(self._attentionWeight, dAttentionWeight), axis = -1);
+        dX, = super().backward(dAttentionScore);
+        dX += dY * self._innerWeight;
+
+        return dX, ;
+
+
 # select value by weights for 1 time step
 class SelectByWeight1TModule(NetModuleBase):
     def __init__(self):
