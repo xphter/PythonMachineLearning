@@ -4018,17 +4018,19 @@ class SGDM(NetOptimizerBase):
     def __init__(self, lr : float = 0.001, beta : float = 0.9):
         super().__init__(lr);
 
-        self._m = None;
         self._beta = beta;
+        self._momentum : Optional[List[np.ndarray]] = None;
 
 
-    def update(self, params: List[np.ndarray], grads: List[np.ndarray]):
-        if self._m is None:
-            self._m = [np.zeros_like(item) for item in params];
+    def _onUpdate(self, params : List[INetParamDefinition]):
+        if self._momentum is None:
+            self._momentum = [np.zeros_like(p.value) for p in params];
 
-        for i in range(len(params)):
-            self._m[i] = self._beta * self._m[i] + self._lr * grads[i];
-            params[i] -= self._m[i];
+        for m, p in zip(self._momentum, params):
+            m[...] = self._beta * m + p.grad;
+
+            paramValue = p.value;
+            paramValue -= self._lr * m;
 
 
 class Nesterov(NetOptimizerBase):
