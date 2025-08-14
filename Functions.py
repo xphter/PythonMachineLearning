@@ -292,7 +292,7 @@ def getDropoutMask(inputs : np.ndarray, dropoutRatio : float):
 # M is a 0-1 or True-False mask array represents whether each samples in Y are valid
 def crossEntropyError1D(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean, epsilon : float = 1e-8) -> Union[float, np.ndarray]:
     n = T.size;
-    L = -np.log(Y.reshape(-1)[np.arange(n) * Y.shape[-1] + T.flatten()]).reshape(T.shape);
+    L = -np.log(Y.reshape(-1)[np.arange(n) * Y.shape[-1] + T.flatten()] + epsilon).reshape(T.shape);
 
     if M is not None:
         L *= M;
