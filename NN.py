@@ -4090,6 +4090,30 @@ class RMSProp(NetOptimizerBase):
             paramValue -= self._lr * p.grad / (np.sqrt(v) + self._epsilon);
 
 
+class AdaDelta(NetOptimizerBase):
+    def __init__(self, lr : float = 1.0, beta : float = 0.9, epsilon : float = 1e-8):
+        super().__init__(lr);
+
+        self._v = None;
+        self._d = None;
+        self._beta = beta;
+        self._epsilon = epsilon;
+
+
+    def _onUpdate(self, params : List[INetParamDefinition]):
+        if self._v is None:
+            self._v = [np.zeros_like(p.value) for p in params];
+            self._d = [np.zeros_like(p.value) for p in params];
+
+        for v, d, p in zip(self._v, self._d, params):
+            v[...] = self._beta * v + (1 - self._beta) * p.grad ** 2;
+            g = (np.sqrt(d + self._epsilon) / np.sqrt(v + self._epsilon)) * p.grad;
+            d[...] = self._beta * d + (1 - self._beta) * g ** 2;
+
+            paramValue = p.value;
+            paramValue -= self._lr * g;
+
+
 class Adam(NetOptimizerBase):
     def __init__(self, lr : float = 0.001, beta1 : float = 0.9, beta2 : float = 0.999, epsilon : float = 1e-8):
         super().__init__(lr);
