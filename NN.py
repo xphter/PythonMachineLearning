@@ -4033,22 +4033,22 @@ class SGDM(NetOptimizerBase):
             paramValue -= self._lr * m;
 
 
-class Nesterov(NetOptimizerBase):
-    def __init__(self, lr : float = 0.001, beta : float = 0.9):
-        super().__init__(lr);
-
-        self._m = None;
-        self._beta = beta;
-
-
-    def update(self, params: List[np.ndarray], grads: List[np.ndarray]):
-        if self._m is None:
-            self._m = [np.zeros_like(item) for item in params];
-
-        for i in range(len(params)):
-            m = self._m[i];
-            self._m[i] = self._beta * self._m[i] + self._lr * grads[i];
-            params[i] -= (1 + self._beta) * self._m[i] - self._beta * m;
+# class Nesterov(NetOptimizerBase):
+#     def __init__(self, lr : float = 0.001, beta : float = 0.9):
+#         super().__init__(lr);
+#
+#         self._m = None;
+#         self._beta = beta;
+#
+#
+#     def update(self, params: List[np.ndarray], grads: List[np.ndarray]):
+#         if self._m is None:
+#             self._m = [np.zeros_like(item) for item in params];
+#
+#         for i in range(len(params)):
+#             m = self._m[i];
+#             self._m[i] = self._beta * self._m[i] + self._lr * grads[i];
+#             params[i] -= (1 + self._beta) * self._m[i] - self._beta * m;
 
 
 class AdaGrad(NetOptimizerBase):
@@ -4059,13 +4059,15 @@ class AdaGrad(NetOptimizerBase):
         self._epsilon = epsilon;
 
 
-    def update(self, params: List[np.ndarray], grads: List[np.ndarray]):
+    def _onUpdate(self, params : List[INetParamDefinition]):
         if self._v is None:
-            self._v = [np.zeros_like(item) for item in params];
+            self._v = [np.zeros_like(p.value) for p in params];
 
-        for i in range(len(params)):
-            self._v[i] += grads[i] ** 2;
-            params[i] -= self._lr * grads[i] / (np.sqrt(self._v[i]) + self._epsilon);
+        for v, p in zip(self._v, params):
+            v += p.grad ** 2;
+
+            paramValue = p.value;
+            paramValue -= self._lr * p.grad / (np.sqrt(v) + self._epsilon);
 
 
 class RMSProp(NetOptimizerBase):
@@ -4077,13 +4079,15 @@ class RMSProp(NetOptimizerBase):
         self._epsilon = epsilon;
 
 
-    def update(self, params: List[np.ndarray], grads: List[np.ndarray]):
+    def _onUpdate(self, params : List[INetParamDefinition]):
         if self._v is None:
-            self._v = [np.zeros_like(item) for item in params];
+            self._v = [np.zeros_like(p.value) for p in params];
 
-        for i in range(len(params)):
-            self._v[i] = self._beta * self._v[i] + (1 - self._beta) * grads[i] ** 2;
-            params[i] -= self._lr * grads[i] / (np.sqrt(self._v[i]) + self._epsilon);
+        for v, p in zip(self._v, params):
+            v[...] = self._beta * v + (1 - self._beta) * p.grad ** 2;
+
+            paramValue = p.value;
+            paramValue -= self._lr * p.grad / (np.sqrt(v) + self._epsilon);
 
 
 class Adam(NetOptimizerBase):
