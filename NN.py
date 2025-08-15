@@ -4115,13 +4115,14 @@ class AdaDelta(NetOptimizerBase):
 
 
 class Adam(NetOptimizerBase):
-    def __init__(self, lr : float = 0.001, beta1 : float = 0.9, beta2 : float = 0.999, epsilon : float = 1e-8):
+    def __init__(self, lr : float = 0.001, beta1 : float = 0.9, beta2 : float = 0.999, yogi : bool = False, epsilon : float = 1e-8):
         super().__init__(lr);
 
         self._m = None;
         self._v = None;
         self._beta1 = beta1;
         self._beta2 = beta2;
+        self._yogi = yogi;
         self._epsilon = epsilon;
         self._t = 0;
 
@@ -4134,15 +4135,21 @@ class Adam(NetOptimizerBase):
 
         self._t += 1;
 
-        for i in range(len(params)):
-            self._m[i] = self._beta1 * self._m[i] + (1 - self._beta1) * params[i].grad;
-            self._v[i] = self._beta2 * self._v[i] + (1 - self._beta2) * params[i].grad ** 2;
+        for m, v, p in zip(self._m, self._v, params):
+            g2 = p.grad ** 2;
 
-            m = self._m[i] / (1 - self._beta1 ** self._t);
-            v = self._v[i] / (1 - self._beta2 ** self._t);
+            m[...] = self._beta1 * m + (1 - self._beta1) * p.grad;
 
-            paramValue = params[i].value;
-            paramValue -= self._lr * m / (np.sqrt(v) + self._epsilon);
+            if self._yogi:
+                v[...] = v + (1 - self._beta2) * g2 * np.sign(g2 - v);
+            else:
+                v[...] = self._beta2 * v + (1 - self._beta2) * g2;
+
+            mc = m / (1 - self._beta1 ** self._t);
+            vc = v / (1 - self._beta2 ** self._t);
+
+            paramValue = p.value;
+            paramValue -= self._lr * mc / (np.sqrt(vc) + self._epsilon);
 
 
 class AggregateScaler(IDataScaler):
