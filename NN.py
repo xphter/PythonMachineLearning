@@ -339,6 +339,12 @@ class INetFitResult(metaclass = abc.ABCMeta):
         pass;
 
 
+    @property
+    @abc.abstractmethod
+    def accuracyName(self) -> str:
+        pass;
+
+
 class INetModel(INetModule, metaclass = abc.ABCMeta):
     @abc.abstractmethod
     def getFinalTag(self, T : np.ndarray) -> Optional[np.ndarray]:
@@ -372,6 +378,31 @@ class INetAttentionModule(INetModule, metaclass = abc.ABCMeta):
     @abc.abstractmethod
     def attentionWeight(self) -> np.ndarray:
         pass;
+
+
+class NetUtility:
+    @staticmethod
+    def plotFitResult(result : INetFitResult):
+        fig = plt.figure(1);
+
+        ax1 = fig.add_subplot(111);
+        ax1.set_xlabel("epoch");
+        ax1.set_ylabel('loss');
+        if result.trainingLossData is not None and len(result.trainingLossData) > 0:
+            ax1.plot(result.trainingLossData, "o-k", label = "training loss");
+        if result.testLossData is not None and len(result.testLossData) > 0:
+            ax1.plot(result.testLossData, "o-b", label = "test loss");
+
+        ax2 = ax1.twinx();
+        ax2.set_ylabel('accuracy');
+        if result.trainingAccuracyData is not None and  len(result.trainingAccuracyData) > 0:
+            ax2.plot(result.trainingAccuracyData, "D-m", label = f"training {result.accuracyName}");
+        if result.testAccuracyData is not None and len(result.testAccuracyData) > 0:
+            ax2.plot(result.testAccuracyData, "D-r", label = f"test {result.accuracyName}");
+
+        fig.legend(loc = "upper left", bbox_to_anchor = (0, 1), bbox_transform = ax1.transAxes)
+        plt.show(block = True);
+        plt.close();
 
 
 class NetContext(INetContext):
@@ -723,7 +754,8 @@ class NetFitResult(INetFitResult):
     def __init__(self, trainingLossData : List[float], trainingAccuracyData : List[float],
                  testLossData : List[float], testAccuracyData : List[float],
                  finalTrainingLoss : Optional[float] = None, finalTrainingAccuracy : Optional[float] = None,
-                 finalTestLoss : Optional[float] = None, finalTestAccuracy : Optional[float] = None):
+                 finalTestLoss : Optional[float] = None, finalTestAccuracy : Optional[float] = None,
+                 accuracyName : str = None):
         self._trainingLossData = trainingLossData;
         self._trainingAccuracyData = trainingAccuracyData;
         self._testLossData = testLossData;
@@ -732,6 +764,7 @@ class NetFitResult(INetFitResult):
         self._finalTrainingAccuracy = finalTrainingAccuracy;
         self._finalTestLoss = finalTestLoss;
         self._finalTestAccuracy = finalTestAccuracy;
+        self._accuracyName = accuracyName;
 
     @property
     def trainingLossData(self) -> List[float]:
@@ -771,6 +804,11 @@ class NetFitResult(INetFitResult):
     @property
     def finalTestAccuracy(self) -> Optional[float]:
         return self._finalTestAccuracy;
+
+
+    @property
+    def accuracyName(self) -> str:
+        return self._accuracyName;
 
 
 class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
@@ -898,29 +936,14 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         self.context.isTrainingMode = False;
         print(f"[{datetime.datetime.now()}] complete to train model, elapsed time: {int(time.time() - startTime)}s");
 
+        result = NetFitResult(trainingLossData, trainingAccuracyData, testLossData, testAccuracyData,
+                              finalTrainingLoss, finalTrainingAccuracy, finalTestLoss, finalTestAccuracy,
+                              evaluator.name if evaluator is not None else None);
+
         if plot:
-            fig = plt.figure(1);
+            NetUtility.plotFitResult(result);
 
-            ax1 = fig.add_subplot(111);
-            ax1.set_xlabel("epoch");
-            ax1.set_ylabel('loss');
-            ax1.plot(trainingLossData, "o-k", label = "training loss");
-            if len(testLossData) > 0:
-                ax1.plot(testLossData, "o-b", label = "test loss");
-
-            ax2 = ax1.twinx();
-            ax2.set_ylabel('accuracy');
-            if len(trainingAccuracyData) > 0:
-                ax2.plot(trainingAccuracyData, "D-m", label = f"training {evaluator.name}");
-            if len(testAccuracyData) > 0:
-                ax2.plot(testAccuracyData, "D-r", label = f"test {evaluator.name}");
-
-            fig.legend(loc = "upper left", bbox_to_anchor = (0, 1), bbox_transform = ax1.transAxes)
-            plt.show(block = True);
-            plt.close();
-
-        return NetFitResult(trainingLossData, trainingAccuracyData, testLossData, testAccuracyData,
-                            finalTrainingLoss, finalTrainingAccuracy, finalTestLoss, finalTestAccuracy);
+        return result;
 
 
     def predict(self, iterator : IDataIterator) -> Iterable:
