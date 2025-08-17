@@ -115,6 +115,12 @@ class INetParamDefinition(INetParam):
 
     @property
     @abc.abstractmethod
+    def canDecay(self) -> bool:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
     def handler(self) -> Optional[INetParamHandler]:
         pass;
 
@@ -464,16 +470,22 @@ class NetParam(INetParam):
 
 
 class NetParamDefinition(NetParam, INetParamDefinition):
-    def __init__(self, name : str, value : np.ndarray, handler: Optional[INetParamHandler] = None, grad : np.ndarray = None):
+    def __init__(self, name : str, value : np.ndarray, handler: Optional[INetParamHandler] = None, grad : np.ndarray = None, canDecay : bool = True):
         super().__init__(value, grad);
 
         self._name = name;
         self._handler = handler;
+        self._canDecay = canDecay;
 
 
     @property
     def name(self) -> str:
         return self._name;
+
+
+    @property
+    def canDecay(self) -> bool:
+        return self._canDecay;
 
 
     @property
@@ -483,9 +495,9 @@ class NetParamDefinition(NetParam, INetParamDefinition):
 
     def copy(self, share : bool) -> INetParamDefinition:
         if share:
-            return NetParamDefinition(self._name, self._value, self._handler);
+            return NetParamDefinition(self._name, self._value, self._handler, canDecay = self._canDecay);
         else:
-            return NetParamDefinition(self._name, np.copy(self._value), self._handler);
+            return NetParamDefinition(self._name, np.copy(self._value), self._handler, canDecay = self._canDecay);
 
 
 class NetValueState(INetState):
@@ -966,8 +978,12 @@ class NetLossBase(INetLoss, metaclass = abc.ABCMeta):
 
 
 class NetOptimizerBase(INetOptimizer, metaclass = abc.ABCMeta):
-    def __init__(self, lr : float):
+    def __init__(self, lr : float, weightDecay : float = 0.0, decoupledDecay : bool = False):
         self._lr = lr;
+
+        self._weightDecay = weightDecay;
+        self._decoupledDecay = decoupledDecay;
+        self._canDecay = weightDecay > 0.0;
 
 
     @property
@@ -984,10 +1000,16 @@ class NetOptimizerBase(INetOptimizer, metaclass = abc.ABCMeta):
         handler: Optinal[INetParamHandler] = None;
 
         for p in params:
-            if (handler := p.handler) is None:
-                continue;
+            if self._canDecay and p.canDecay:
+                value = p.value;
+                if self._decoupledDecay:
+                    value -= self._lr * self._weightDecay * value;
+                else:
+                    grad = p.grad;
+                    grad += self._weightDecay * value;
 
-            handler.onPreUpdate(p, self.learningRate);
+            if (handler := p.handler) is not None:
+                handler.onPreUpdate(p, self.learningRate);
 
 
     @abc.abstractmethod
@@ -1071,7 +1093,7 @@ class PReluLayer(NetModuleBase):
         else:
             self._beta = sigmoid(np.random.randn(outputSize if outputSize is not None else 1).astype(defaultDType));
 
-        self._params.append(NetParamDefinition("slope", self._beta));
+        self._params.append(NetParamDefinition("slope", self._beta, canDecay = False));
 
 
     @property
@@ -1145,7 +1167,7 @@ class SwishLayer(NetModuleBase):
         else:
             self._beta = sigmoid(np.random.randn(outputSize if outputSize is not None else 1).astype(defaultDType));
 
-        self._params.append(NetParamDefinition("slop", self._beta));
+        self._params.append(NetParamDefinition("slop", self._beta, canDecay = False));
 
 
     @property
@@ -1408,7 +1430,7 @@ class AffineLayer(NetModuleBase):
 
         self._params.append(NetParamDefinition("weight", self._weight, weightHandler));
         if self._bias is not None:
-            self._params.append(NetParamDefinition("bias", self._bias));
+            self._params.append(NetParamDefinition("bias", self._bias, canDecay = False));
 
 
     def _setParams(self, params: List[NetParamDefinition]):
@@ -1483,7 +1505,7 @@ class BatchNormalization1DLayer(NetModuleBase):
         self._beta = np.zeros(inputSize, dtype = defaultDType) if beta is None else beta;
 
         self._params.append(NetParamDefinition("weight", self._gamma));
-        self._params.append(NetParamDefinition("bias", self._beta));
+        self._params.append(NetParamDefinition("bias", self._beta, canDecay = False));
 
         self._evalMean = np.zeros_like(self._gamma);
         self._evalVar = np.ones_like(self._gamma);
@@ -1615,7 +1637,7 @@ class LayerNormalizationLayer(NetModuleBase):
         self._beta = np.zeros(layerShape, dtype = defaultDType) if beta is None else beta;
 
         self._params.append(NetParamDefinition("weight", self._gamma));
-        self._params.append(NetParamDefinition("bias", self._beta));
+        self._params.append(NetParamDefinition("bias", self._beta, canDecay = False));
 
 
     def _setParams(self, params: List[NetParamDefinition]):
@@ -1713,7 +1735,7 @@ class Convolution1DLayer(NetModuleBase):
         self._bias = np.zeros(FN, dtype = defaultDType) if b is None else b;
 
         self._params.append(NetParamDefinition("weight", self._weight));
-        self._params.append(NetParamDefinition("bias", self._bias));
+        self._params.append(NetParamDefinition("bias", self._bias, canDecay = False));
 
 
     def _setParams(self, params: List[INetParamDefinition]):
@@ -1778,7 +1800,7 @@ class Convolution2DLayer(NetModuleBase):
         self._bias = np.zeros(outputChannel, dtype = defaultDType) if b is None else b;
 
         self._params.append(NetParamDefinition("weight", self._weight));
-        self._params.append(NetParamDefinition("bias", self._bias));
+        self._params.append(NetParamDefinition("bias", self._bias, canDecay = False));
 
 
     def _setParams(self, params: List[INetParamDefinition]):
@@ -2040,8 +2062,8 @@ class RnnCellBase(NetModuleBase, metaclass = abc.ABCMeta):
         self._weightX, self._weightH, self._biasX, self._biasH = self._initParams(inputSize, hiddenSize, Wx, Wh, bx, bh);
         self._params.append(NetParamDefinition("weightX", self._weightX));
         self._params.append(NetParamDefinition("weightH", self._weightH));
-        self._params.append(NetParamDefinition("biasX", self._biasX));
-        self._params.append(NetParamDefinition("biasH", self._biasH));
+        self._params.append(NetParamDefinition("biasX", self._biasX, canDecay = False));
+        self._params.append(NetParamDefinition("biasH", self._biasH, canDecay = False));
 
 
     def _setParams(self, params: List[INetParamDefinition]):
@@ -2279,8 +2301,8 @@ class RnnLayerBase(NetModuleBase, metaclass = abc.ABCMeta):
         self._weightX, self._weightH, self._biasX, self._biasH = self._initParams(inputSize, hiddenSize, Wx, Wh, bx, bh);
         self._params.append(NetParamDefinition("weightX", self._weightX));
         self._params.append(NetParamDefinition("weightH", self._weightH));
-        self._params.append(NetParamDefinition("biasX", self._biasX));
-        self._params.append(NetParamDefinition("biasH", self._biasH));
+        self._params.append(NetParamDefinition("biasX", self._biasX, canDecay = False));
+        self._params.append(NetParamDefinition("biasH", self._biasH, canDecay = False));
 
 
     def _setParams(self, params: List[INetParamDefinition]):
@@ -2764,7 +2786,7 @@ class LstmCell2(NetModuleBase):
 
         self._params.append(NetParamDefinition("weightX", self._weightX));
         self._params.append(NetParamDefinition("weightH", self._weightH));
-        self._params.append(NetParamDefinition("bias", self._bias));
+        self._params.append(NetParamDefinition("bias", self._bias, canDecay = False));
 
 
     def _setParams(self, value: List[np.ndarray]):
@@ -2878,7 +2900,7 @@ class LstmLayer2(NetModuleBase):
 
         self._params.append(NetParamDefinition("weightX", self._weightX));
         self._params.append(NetParamDefinition("weightH", self._weightH));
-        self._params.append(NetParamDefinition("bias", self._bias));
+        self._params.append(NetParamDefinition("bias", self._bias, canDecay = False));
 
 
     def _setContext(self, context : INetContext):
@@ -4027,8 +4049,8 @@ class GradientsClipping(INetOptimizer):
 
 
 class SGD(NetOptimizerBase):
-    def __init__(self, lr : float = 0.001):
-        super().__init__(lr);
+    def __init__(self, lr : float = 0.001, weightDecay : float = 0.0, decoupledDecay : bool = False):
+        super().__init__(lr, weightDecay = weightDecay, decoupledDecay = decoupledDecay);
 
 
     def _onUpdate(self, params : List[INetParamDefinition]):
@@ -4038,8 +4060,8 @@ class SGD(NetOptimizerBase):
 
 
 class SGDM(NetOptimizerBase):
-    def __init__(self, lr : float = 0.001, beta : float = 0.9):
-        super().__init__(lr);
+    def __init__(self, lr : float = 0.001, beta : float = 0.9, weightDecay : float = 0.0, decoupledDecay : bool = False):
+        super().__init__(lr, weightDecay = weightDecay, decoupledDecay = decoupledDecay);
 
         self._beta = beta;
         self._momentum : Optional[List[np.ndarray]] = None;
@@ -4075,8 +4097,8 @@ class SGDM(NetOptimizerBase):
 
 
 class AdaGrad(NetOptimizerBase):
-    def __init__(self, lr : float = 0.001, epsilon : float = 1e-8):
-        super().__init__(lr);
+    def __init__(self, lr : float = 0.001, epsilon : float = 1e-8, weightDecay : float = 0.0, decoupledDecay : bool = False):
+        super().__init__(lr, weightDecay = weightDecay, decoupledDecay = decoupledDecay);
 
         self._v = None;
         self._epsilon = epsilon;
@@ -4094,8 +4116,8 @@ class AdaGrad(NetOptimizerBase):
 
 
 class RMSProp(NetOptimizerBase):
-    def __init__(self, lr : float = 0.001, beta : float = 0.9, epsilon : float = 1e-8):
-        super().__init__(lr);
+    def __init__(self, lr : float = 0.001, beta : float = 0.9, epsilon : float = 1e-8, weightDecay : float = 0.0, decoupledDecay : bool = False):
+        super().__init__(lr, weightDecay = weightDecay, decoupledDecay = decoupledDecay);
 
         self._v = None;
         self._beta = beta;
@@ -4114,8 +4136,8 @@ class RMSProp(NetOptimizerBase):
 
 
 class AdaDelta(NetOptimizerBase):
-    def __init__(self, lr : float = 1.0, beta : float = 0.9, epsilon : float = 1e-8):
-        super().__init__(lr);
+    def __init__(self, lr : float = 1.0, beta : float = 0.9, epsilon : float = 1e-8, weightDecay : float = 0.0, decoupledDecay : bool = False):
+        super().__init__(lr, weightDecay = weightDecay, decoupledDecay = decoupledDecay);
 
         self._v = None;
         self._d = None;
@@ -4138,8 +4160,8 @@ class AdaDelta(NetOptimizerBase):
 
 
 class Adam(NetOptimizerBase):
-    def __init__(self, lr : float = 0.001, beta1 : float = 0.9, beta2 : float = 0.999, yogi : bool = False, epsilon : float = 1e-8):
-        super().__init__(lr);
+    def __init__(self, lr : float = 0.001, beta1 : float = 0.9, beta2 : float = 0.999, yogi : bool = False, epsilon : float = 1e-8, weightDecay : float = 0.0, decoupledDecay : bool = False):
+        super().__init__(lr, weightDecay = weightDecay, decoupledDecay = decoupledDecay);
 
         self._m = None;
         self._v = None;
