@@ -4208,6 +4208,11 @@ class Adam(NetOptimizerBase):
             paramValue -= self._lr * mc / (np.sqrt(vc) + self._epsilon);
 
 
+class AdamW(Adam):
+    def __init__(self, lr : float = 0.001, beta1 : float = 0.9, beta2 : float = 0.999, yogi : bool = False, epsilon : float = 1e-8, weightDecay : float = 0.01):
+        super().__init__(lr, beta1, beta2, yogi, epsilon, weightDecay, True);
+
+
 class AggregateScaler(IDataScaler):
     def __init__(self, *scalers : IDataScaler):
         self._scalers = scalers;
