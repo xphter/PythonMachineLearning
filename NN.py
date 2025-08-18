@@ -156,7 +156,12 @@ class INetOptimizer(metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def update(self, params : List[INetParamDefinition]):
+    def epochStep(self, context: INetContext):
+        pass;
+
+
+    @abc.abstractmethod
+    def updateStep(self, params : List[INetParamDefinition], context : INetContext):
         pass;
 
 
@@ -883,6 +888,8 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
             self.context.isTrainingMode = True;
             self.context.trainingEpoch = epoch;
 
+            optimizer.epochStep(self.context);
+
             for data in trainingIterator:
                 self.context.trainingIterations += 1;
 
@@ -898,7 +905,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                     evaluator.update(loss, *Y, T);
 
                 self.backward(*lossFunc.backward());
-                optimizer.update(self.params);
+                optimizer.updateStep(self.params, self.context);
                 self.clearGrads();
 
                 if evaluator is not None and evalIterations is not None and len(lossValues) % evalIterations == 0:
@@ -1027,7 +1034,11 @@ class NetOptimizerBase(INetOptimizer, metaclass = abc.ABCMeta):
             handler.onPostUpdate(p, self.learningRate);
 
 
-    def update(self, params : List[INetParamDefinition]):
+    def epochStep(self, context: INetContext):
+        pass;
+
+
+    def updateStep(self, params : List[INetParamDefinition], context : INetContext):
         self._onPreUpdate(params);
         self._onUpdate(params);
         self._onPostUpdate(params);
@@ -4004,7 +4015,7 @@ class ParametersShare(INetOptimizer):
         self._sharesInfo = sorted(sharesInfo, key = lambda item: item.index, reverse = True);
 
 
-    def update(self, params : List[np.ndarray], grads : List[np.ndarray]):
+    def updateStep(self, params : List[np.ndarray], grads : List[np.ndarray]):
         L = len(params);
         params, grads = params[:], grads[:];
 
@@ -4016,7 +4027,7 @@ class ParametersShare(INetOptimizer):
             params.pop(info.index);
             grads.pop(info.index);
 
-        self._optimizer.update(params, grads);
+        self._optimizer.updateStep(params, grads);
 
 
 class GradientsClipping(INetOptimizer):
@@ -4036,7 +4047,7 @@ class GradientsClipping(INetOptimizer):
         self._optimizer.learningRate = value;
 
 
-    def update(self, params : List[INetParamDefinition]):
+    def updateStep(self, params : List[INetParamDefinition], context : INetContext):
         totalL2 = sum([float(np.sum(p.grad ** 2)) for p in params]);
         ratio = self._maxL2 / math.sqrt(totalL2 + self._epsilon);
 
@@ -4045,7 +4056,7 @@ class GradientsClipping(INetOptimizer):
                 grad = p.grad;
                 grad *= ratio;
 
-        self._optimizer.update(params);
+        self._optimizer.updateStep(params, context);
 
 
 class SGD(NetOptimizerBase):
