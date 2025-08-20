@@ -156,12 +156,30 @@ class INetOptimizer(metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def epochStep(self, context: INetContext):
+    def epochStep(self, epoch : int):
         pass;
 
 
     @abc.abstractmethod
     def updateStep(self, params : List[INetParamDefinition], context : INetContext):
+        pass;
+
+
+class INetLrScheduler(INetOptimizer):
+    @property
+    @abc.abstractmethod
+    def minEpoch(self) -> int:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
+    def maxEpoch(self) -> Optional[int]:
+        pass;
+
+
+    @abc.abstractmethod
+    def isAvailable(self, epoch : int) -> bool:
         pass;
 
 
@@ -888,7 +906,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
             self.context.isTrainingMode = True;
             self.context.trainingEpoch = epoch;
 
-            optimizer.epochStep(self.context);
+            optimizer.epochStep(epoch);
 
             for data in trainingIterator:
                 self.context.trainingIterations += 1;
@@ -1034,7 +1052,7 @@ class NetOptimizerBase(INetOptimizer, metaclass = abc.ABCMeta):
             handler.onPostUpdate(p, self.learningRate);
 
 
-    def epochStep(self, context: INetContext):
+    def epochStep(self, epoch : int):
         pass;
 
 
@@ -1042,6 +1060,42 @@ class NetOptimizerBase(INetOptimizer, metaclass = abc.ABCMeta):
         self._onPreUpdate(params);
         self._onUpdate(params);
         self._onPostUpdate(params);
+
+
+class NetLrSchedulerBase(INetLrScheduler, metaclass = abc.ABCMeta):
+    def __init__(self, baseLr : float, minEpoch : int = 0, maxEpoch : int = None):
+        self._baseLr = baseLr;
+        self._currentLr = baseLr;
+        self._minEpoch = minEpoch;
+        self._maxEpoch = maxEpoch;
+
+
+    @property
+    def learningRate(self) -> float:
+        return self._currentLr;
+
+
+    @learningRate.setter
+    def learningRate(self, value: float):
+        raise ValueError("not support to set lr");
+
+
+    @property
+    def minEpoch(self) -> int:
+        return self._minEpoch;
+
+
+    @property
+    def maxEpoch(self) -> Optional[int]:
+        return self._maxEpoch;
+
+
+    def isAvailable(self, epoch : int) -> bool:
+        return (self._minEpoch <= epoch <= self._maxEpoch) if self._maxEpoch is not None else (self._minEpoch <= epoch);
+
+
+    def updateStep(self, params: List[INetParamDefinition], context: INetContext):
+        pass;
 
 
 class FunctionalNetModule(NetModuleBase):
@@ -4211,6 +4265,158 @@ class Adam(NetOptimizerBase):
 class AdamW(Adam):
     def __init__(self, lr : float = 0.001, beta1 : float = 0.9, beta2 : float = 0.999, yogi : bool = False, epsilon : float = 1e-8, weightDecay : float = 0.01):
         super().__init__(lr, beta1, beta2, yogi, epsilon, weightDecay, True);
+
+
+class NetOptimizerWithLrScheduler(INetOptimizer):
+    def __init__(self, optimizer : INetOptimizer, scheduler : INetLrScheduler):
+        if optimizer is None:
+            raise ValueError("optimizer is None");
+        if scheduler is None:
+            raise ValueError("scheduler is None");
+
+        self._optimizer = optimizer;
+        self._scheduler = scheduler;
+
+
+    @property
+    def learningRate(self) -> float:
+        return self._scheduler.learningRate;
+
+
+    @learningRate.setter
+    def learningRate(self, value: float):
+        raise ValueError("not support to set lr");
+
+
+    def epochStep(self, epoch : int):
+        self._scheduler.epochStep(epoch);
+
+        if self._optimizer.learningRate != self._scheduler.learningRate:
+            self._optimizer.learningRate = self._scheduler.learningRate;
+
+        print(f"the learning rate of epoch {epoch} is {self._scheduler.learningRate}");
+
+
+    def updateStep(self, params: List[INetParamDefinition], context: INetContext):
+        self._optimizer.updateStep(params, context);
+
+
+class ConstantNetLrScheduler(NetLrSchedulerBase):
+    def __init__(self, baseLr : float, minEpoch : int = 0, maxEpoch : int = None):
+        super().__init__(baseLr, minEpoch = minEpoch, maxEpoch = maxEpoch);
+
+
+    def epochStep(self, epoch : int):
+        pass;
+
+
+class LinearNetLrScheduler(NetLrSchedulerBase):
+    def __init__(self, baseLr : float, startFactor : float = 0.2, endFactor = 1.0, minEpoch : int = 0, maxEpoch : int = 5):
+        if maxEpoch is None:
+            raise Value("maxEpoch is None");
+
+        super().__init__(baseLr, minEpoch = minEpoch, maxEpoch = maxEpoch);
+
+        self._startLr = self._baseLr * startFactor;
+        self._endLr = self._baseLr * endFactor;
+        self._lrDelta = self._baseLr * (endFactor - startFactor) / (maxEpoch - minEpoch);
+
+
+    def epochStep(self, epoch : int):
+        if epoch < self._minEpoch:
+            self._currentLr = self._startLr;
+        elif epoch <= self._maxEpoch:
+            self._currentLr = self._startLr + self._lrDelta * (epoch - self._minEpoch);
+        else:
+            self._currentLr = self._endLr;
+
+
+class MultiStepNetLrScheduler(NetLrSchedulerBase):
+    def __init__(self, baseLr : float, milestones : List[int], gamma : float = 0.5, minEpoch : int = 0, maxEpoch : int = None):
+        super().__init__(baseLr, minEpoch = minEpoch, maxEpoch = maxEpoch);
+
+        self._milestones = milestones;
+        self._gamma = gamma;
+        self._startLr = baseLr;
+        self._endLr = baseLr * gamma ** len(milestones);
+
+
+    def epochStep(self, epoch : int):
+        if epoch < self._minEpoch:
+            self._currentLr = self._startLr;
+        else:
+            if self._maxEpoch is None or epoch <= self._maxEpoch:
+                idx = [i for i, m in enumerate(self._milestones) if m > epoch];
+                self._currentLr = self._baseLr * math.pow(self._gamma, idx[0] if len(idx) > 0 else len(self._milestones));
+            else:
+                self._currentLr = self._endLr;
+
+
+class CosineNetLrScheduler(NetLrSchedulerBase):
+    def __init__(self, baseLr : float, minLr : float, minEpoch : int = 0, maxEpoch : int = 5):
+        if baseLr <= minLr:
+            raise Value("baseLr <= minLr");
+        if maxEpoch is None:
+            raise Value("maxEpoch is None");
+
+        super().__init__(baseLr, minEpoch = minEpoch, maxEpoch = maxEpoch);
+
+        self._minLr = minLr;
+
+
+    def epochStep(self, epoch : int):
+        if epoch < self._minEpoch:
+            self._currentLr = self._baseLr;
+        elif epoch <= self._maxEpoch:
+            self._currentLr = self._minLr + (self._baseLr - self._minLr) * 0.5 * (1 + math.cos(math.pi * (epoch - self._minEpoch) / (self._maxEpoch - self._minEpoch)));
+        else:
+            self._currentLr = self._minLr;
+
+
+class CyclicNetLrScheduler(NetLrSchedulerBase):
+    def __init__(self, scheduler : INetLrScheduler, cycleSize : int, baseLr : float = 0.0, minEpoch : int = 0, maxEpoch : int = None):
+        if scheduler is None:
+            raise ValueError("scheduler is None");
+        if cycleSize <= 0:
+            raise Value("cycleSize <= 0");
+
+        super().__init__(baseLr, minEpoch = minEpoch, maxEpoch = maxEpoch);
+
+        self._scheduler = scheduler;
+        self._cycleSize = cycleSize;
+
+
+    def epochStep(self, epoch : int):
+        if epoch < self._minEpoch:
+            self._currentLr = self._baseLr;
+        else:
+            if self._maxEpoch is None or epoch <= self._maxEpoch:
+                self._scheduler.epochStep((epoch - self._minEpoch) % self._cycleSize + self._scheduler.minEpoch);
+                self._currentLr = self._scheduler.learningRate;
+            else:
+                self._currentLr = self._baseLr;
+
+
+class AggregateNetLrScheduler(NetLrSchedulerBase):
+    def __init__(self, schedulers : List[INetLrScheduler], baseLr : float = 0.0, minEpoch : int = 0, maxEpoch : int = None):
+        super().__init__(baseLr, minEpoch = minEpoch, maxEpoch = maxEpoch);
+
+        self._schedulers = schedulers;
+
+
+    def epochStep(self,epoch : int):
+        scheduler = None;
+
+        for item in self._schedulers:
+            if item.isAvailable(epoch):
+                scheduler = item;
+                break;
+
+        if scheduler is not None:
+            scheduler.epochStep(epoch);
+            self._currentLr = scheduler.learningRate;
+        else:
+            self._currentLr = self._baseLr;
 
 
 class AggregateScaler(IDataScaler):

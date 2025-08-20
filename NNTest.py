@@ -2103,6 +2103,9 @@ def unitTest():
     # testSigmoidGradient2();
     # testMinMaxScaler();
 
+    # testAggregateNetLrScheduler();
+    testCyclicNetLrScheduler();
+
     # testGetLossMaskByValidLength1();
     # testSoftmax1();
     # testSoftmaxLayerGradient1();
@@ -2301,8 +2304,8 @@ def unitTest():
     # testTransformerEmbeddingDecoder2();
     # testTransformerEmbeddingDecoderGradient1();
     # testTransformerEmbeddingDecoderGradient2();
-    testAttentionPoolingLayerGradient1();
-    testAttentionPoolingLayerGradient2();
+    # testAttentionPoolingLayerGradient1();
+    # testAttentionPoolingLayerGradient2();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -2474,6 +2477,40 @@ def testMinMaxScaler():
 
     print(f"MinMaxScaler, transform-inverse, {np.sum(np.abs(X_train_1 - X_train_2))}, {np.sum(np.abs(Y_train_1 - Y_train_2))}, {np.sum(np.abs(X_test_1 - X_test_2))}, {np.sum(np.abs(Y_test_1 - Y_test_2))}");
     print("\n");
+
+
+def testAggregateNetLrScheduler():
+    lrs = [];
+    # scheduler = LinearNetLrScheduler(1.0, minEpoch = 2, maxEpoch = 18);
+    # scheduler = MultiStepNetLrScheduler(1.0, [5, 10, 15], minEpoch = 2, maxEpoch = 18);
+    # scheduler = CosineNetLrScheduler(1.0, minLr = 0.2, minEpoch = 5, maxEpoch = 15);
+    scheduler = AggregateNetLrScheduler([
+        LinearNetLrScheduler(1.0, minEpoch = 0, maxEpoch = 5),
+        MultiStepNetLrScheduler(1.0, [8, 12], gamma = math.sqrt(0.5), minEpoch = 5, maxEpoch = 15),
+        CosineNetLrScheduler(0.5, minLr = 0.05, minEpoch = 15, maxEpoch = 25),
+        ConstantNetLrScheduler(0.05, minEpoch = 25),
+    ]);
+
+    for i in range(0, 30):
+        scheduler.epochStep(i);
+        lrs.append(scheduler.learningRate);
+
+    plt.figure();
+    plt.plot(lrs);
+    plt.show(block = True);
+
+
+def testCyclicNetLrScheduler():
+    lrs = [];
+    scheduler = CyclicNetLrScheduler(CosineNetLrScheduler(1.0, minLr = 0.0, minEpoch = 0, maxEpoch = 9), cycleSize = 10, minEpoch = 5, maxEpoch = 34);
+
+    for i in range(0, 40):
+        scheduler.epochStep(i);
+        lrs.append(scheduler.learningRate);
+
+    plt.figure();
+    plt.plot(lrs);
+    plt.show(block = True);
 
 
 def testGetLossMaskByValidLength1():
