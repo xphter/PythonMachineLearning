@@ -2154,8 +2154,10 @@ def unitTest():
     # testSwishLayerGradient1();
     # testSwishLayerGradient2();
     # testSwishLayerGradient3();
-    testSiluLayerGradient1();
+    # testSiluLayerGradient1();
     # testSiluLayerGradient2();
+    testGeluLayerGradient1();
+    testGeluLayerGradient2();
     # testMaxoutLayer1();
     # testMaxoutLayer2();
     # testMaxoutLayerGradient1();
@@ -3156,6 +3158,32 @@ def testSiluLayerGradient2():
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"SiluLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testGeluLayerGradient1():
+    N, D = 256, 256;
+    X = np.random.randn(N, D);
+    m = GeluLayer();
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"GeluLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testGeluLayerGradient2():
+    N, D = 256, 256;
+    X = np.random.randn(N, D);
+    C = np.random.randn(N, D);
+    m = SequentialContainer(
+        GeluLayer(),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"GeluLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 

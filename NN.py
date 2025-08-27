@@ -1290,6 +1290,34 @@ class SiluLayer(NetModuleBase):
         return dX, ;
 
 
+# GELU(x) = 0.5 * x * ( 1 + tanh( sqrt(2/π) * (x + 0.044715 * x^3) ) )
+class GeluLayer(NetModuleBase):
+    def __init__(self):
+        super().__init__();
+
+        self._X = None;
+        self._G, self._F = None, None;
+        self._alpha, self._beta = math.sqrt(2.0 / math.pi), 0.044715;
+        self._3beta = 3 * self._beta;
+        self._name = "GELU";
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        self._X = data[0];
+        self._F = self._alpha * (self._X + self._beta * np.power(self._X, 3));
+        self._G = 1 + np.tanh(self._F);
+
+        return 0.5 * self._X * self._G, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+        dG = self._alpha * (1 + self._3beta * np.power(self._X, 2)) / np.square(np.cosh(self._F));
+        dX = dY * 0.5 * (self._G + self._X * dG);
+
+        return dX, ;
+
+
 class MaxoutLayer(NetModuleBase):
     def __init__(self, k : int = 2):
         super().__init__();
