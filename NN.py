@@ -1126,7 +1126,7 @@ class ReluLayer(NetModuleBase):
         super().__init__();
 
         self._mask = None;
-        self._name = "Relu";
+        self._name = "ReLU";
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
@@ -1148,7 +1148,7 @@ class PReluLayer(NetModuleBase):
         super().__init__();
 
         self._X = None;
-        self._name = "PRelu";
+        self._name = "PReLU";
 
         if beta is not None:
             if isinstance(beta, np.ndarray):
