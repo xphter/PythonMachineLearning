@@ -1267,6 +1267,29 @@ class SwishLayer(NetModuleBase):
         return dX, ;
 
 
+class SiluLayer(NetModuleBase):
+    def __init__(self):
+        super().__init__();
+
+        self._X = None;
+        self._S = None;
+        self._name = "SiLU";
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        self._X = data[0];
+        self._S = sigmoid(self._X);
+
+        return self._X * self._S, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+        dX = dY * self._S * (1 + self._X * (1 - self._S));
+
+        return dX, ;
+
+
 class MaxoutLayer(NetModuleBase):
     def __init__(self, k : int = 2):
         super().__init__();

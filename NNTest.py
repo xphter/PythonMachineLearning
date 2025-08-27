@@ -2104,7 +2104,7 @@ def unitTest():
     # testMinMaxScaler();
 
     # testAggregateNetLrScheduler();
-    testCyclicNetLrScheduler();
+    # testCyclicNetLrScheduler();
 
     # testGetLossMaskByValidLength1();
     # testSoftmax1();
@@ -2154,6 +2154,8 @@ def unitTest():
     # testSwishLayerGradient1();
     # testSwishLayerGradient2();
     # testSwishLayerGradient3();
+    testSiluLayerGradient1();
+    # testSiluLayerGradient2();
     # testMaxoutLayer1();
     # testMaxoutLayer2();
     # testMaxoutLayerGradient1();
@@ -3128,6 +3130,32 @@ def testSwishLayerGradient3():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = x).forward(X)[0]), beta);
     print(f"SwishLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print("\n");
+
+
+def testSiluLayerGradient1():
+    N, D = 256, 256;
+    X = np.random.randn(N, D);
+    m = SiluLayer();
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"SiluLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
+def testSiluLayerGradient2():
+    N, D = 256, 256;
+    X = np.random.randn(N, D);
+    C = np.random.randn(N, D);
+    m = SequentialContainer(
+        SiluLayer(),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"SiluLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
     print("\n");
 
 
