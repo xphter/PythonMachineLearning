@@ -2156,8 +2156,8 @@ def unitTest():
     # testSwishLayerGradient3();
     # testSiluLayerGradient1();
     # testSiluLayerGradient2();
-    testGeluLayerGradient1();
-    testGeluLayerGradient2();
+    # testGeluLayerGradient1();
+    # testGeluLayerGradient2();
     # testMaxoutLayer1();
     # testMaxoutLayer2();
     # testMaxoutLayerGradient1();
