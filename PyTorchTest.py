@@ -17,11 +17,10 @@ import scipy;
 import scipy.stats;
 import matplotlib;
 import matplotlib.pyplot as plt
-import scipy.stats;
 import torch;
 import DeviceConfig;
 
-DeviceConfig.enableGPU = False;
+# DeviceConfig.enableGPU = True;
 # DeviceConfig.floatLength = 64;
 
 import torch.nn.functional as F;
@@ -36,8 +35,35 @@ from torch import nn;
 # from d2l import torch as d2l;
 # from IPython import display;
 
-
 matplotlib.use("Qt5Agg");
+
+
+class Timer:
+    def __init__(self):
+        self._times = [];
+        self._running = False;
+        self._startTIme = 0.0;
+
+
+    @property
+    def times(self) -> List[float]:
+        return self._times.copy();
+
+
+    def start(self):
+        if self._running:
+            return;
+
+        self._running = True;
+        self._startTIme = time.time();
+
+
+    def stop(self):
+        if not self._running:
+            return;
+
+        self._times.append(time.time() - self._startTIme);
+        self._running = False;
 
 
 def testModuleGradient(m : NN.INetModule, title: str, *data : np.ndarray):
@@ -456,6 +482,13 @@ def loadKaggleHousePrices() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
            testSet.iloc[:, 0].to_numpy();
 
 
+def plotFitResult(filePath : str):
+    with open(filePath, "rb") as file:
+        result = pickle.load(file);
+
+    NN.NetUtility.plotFitResult(result);
+
+
 def chapter2_Preprocess():
     filePath = "data/PyTorchTest/house_tiny.csv";
     with open(filePath, "wt", encoding = "utf-8") as file:
@@ -670,7 +703,8 @@ def chapter4_MLP_My(plot : bool = True):
         # return NN.SwishLayer(None, size);
         return NN.MaxoutLayer(4);
 
-    batchSize, maxEpoch = 256, 20;
+    lr = 0.01;
+    batchSize, maxEpoch = 256, 10;
     inputSize, outputSize = 28 * 28, 10;
 
     mnist = MNIST.MNIST("data/FashionMNIST/raw/");
@@ -680,8 +714,13 @@ def chapter4_MLP_My(plot : bool = True):
     # trainIterator = NN.SequentialDataIterator([mnist.trainX, labelSmoothing(mnist.trainY)], batchSize = batchSize, shuffle = True);
     # testIterator = NN.SequentialDataIterator([mnist.testX, labelSmoothing(mnist.testY)], batchSize = batchSize, shuffle = True);
     # lossFunc = NN.SoftmaxWithCrossEntropyLoss();
-    optimizer = NN.SGD(lr = 0.1);
-    # optimizer = NN.Adam();
+    # optimizer = NN.SGD(lr = lr);
+    # optimizer = NN.SGDM(lr = lr);
+    # optimizer = NN.AdaGrad(lr = lr);
+    # optimizer = NN.RMSProp(lr = lr);
+    # optimizer = NN.AdaDelta();
+    # optimizer = NN.Adam(lr = lr);
+    optimizer = NN.Adam(lr = lr, yogi = True);
     evaluator = NN.ClassifierAccuracyEvaluator();
 
     layersSize = [inputSize] + [256];
@@ -1219,14 +1258,13 @@ def chapter6_LeNet5_PyTorch(plot : bool = True):
 
 
 def chapter6_LeNet5_My(plot : bool = True):
-    lr = 0.1;
-    batchSize, maxEpoch = 256, 10;
+    lr = 0.3;
+    batchSize, maxEpoch = 256, 100;
 
     mnist = MNIST.MNIST("data/FashionMNIST/raw/");
     trainIterator = NN.SequentialDataIterator([mnist.trainX, mnist.trainY], batchSize = batchSize, shuffle = True);
     testIterator = NN.SequentialDataIterator([mnist.testX, mnist.testY], batchSize = batchSize, shuffle = True);
     lossFunc = NN.SoftmaxWithCrossEntropy1DLoss();
-    optimizer = NN.SGD(lr = lr);
     evaluator = NN.ClassifierAccuracyEvaluator();
 
     model = NN.SequentialContainer(
@@ -1239,7 +1277,29 @@ def chapter6_LeNet5_My(plot : bool = True):
         NN.AffineLayer(120, 84), NN.ReluLayer(),
         NN.AffineLayer(84, 10),
     );
-    model.fit(trainIterator, lossFunc, optimizer, maxEpoch, testIterator, evaluator, plot = plot);
+
+    minLr = 1e-7;
+
+    optimizer = NN.SGDM(lr = lr, weightDecay = 0.0, decoupledDecay = False);
+    optimizer = NN.NetOptimizerWithLrScheduler(optimizer, NN.AggregateNetLrScheduler([
+        NN.LinearNetLrScheduler(lr, startFactor = 0.01, minEpoch = 0, maxEpoch = 5),
+        NN.MultiStepNetLrScheduler(lr, list(range(10, 100, 5)), minEpoch = 5),
+        # NN.CyclicNetLrScheduler(NN.CosineNetLrScheduler(lr, minLr, minEpoch = 0, maxEpoch = 9), cycleSize = 10, minEpoch = 5, maxEpoch = 94),
+        # # NN.CosineNetLrScheduler(lr, minLr, minEpoch = 5, maxEpoch = 24),
+        # NN.ConstantNetLrScheduler(minLr, minEpoch = 94),
+    ]));
+
+    # optimizer = NN.AdamW(lr = lr);
+    # optimizer = NN.NetOptimizerWithLrScheduler(optimizer, NN.AggregateNetLrScheduler([
+    #     NN.LinearNetLrScheduler(lr, startFactor = 0.01, minEpoch = 0, maxEpoch = 4),
+    #     NN.CosineNetLrScheduler(lr, minLr, minEpoch = 4, maxEpoch = 24),
+    #     NN.ConstantNetLrScheduler(minLr, minEpoch = 24),
+    # ]));
+
+    result = model.fit(trainIterator, lossFunc, optimizer, maxEpoch, testIterator, evaluator, plot = plot);
+
+    with open("data/chapter6_LeNet5_My.pkl", "wb") as file:
+        pickle.dump(result, file, pickle.DEFAULT_PROTOCOL);
 
     X, y = next(iter(testIterator));
     yHat, = model.predictOne(X);
@@ -1841,7 +1901,7 @@ class MaskedSoftmaxCELossPyTorch(nn.CrossEntropyLoss):
         return weighted_loss
 
 
-def train_seq2seq(net, data_iter, lr, num_epochs, tgt_vocab, device):
+def train_seq2seq(net, data_iter, lr, num_epochs, tgt_vocab, device, plot : bool = True):
     """训练序列到序列模型"""
     def xavier_init_weights(m):
         if type(m) == nn.Linear:
@@ -1882,9 +1942,10 @@ def train_seq2seq(net, data_iter, lr, num_epochs, tgt_vocab, device):
         lossData.append(metric[0] / metric[1]);
         print(f"epoch: {epoch}, loss: {lossData[-1]}");
 
-    plt.figure();
-    plt.plot(lossData);
-    plt.show(block = True);
+    if plot:
+        plt.figure();
+        plt.plot(lossData);
+        plt.show(block = True);
 
 
 def bleu(pred_seq, label_seq, k):
@@ -1980,12 +2041,12 @@ class MaskedSoftmaxCELossMy(NN.SoftmaxWithCrossEntropy1DLoss):
         return dX, ;
 
 
-def testMaskedSoftmaxCELossMy1():
+def testSequenceSoftmaxWithCrossEntropy1DLoss1():
     N, D, C = 320, 24, 10;
     X, T = np.random.randn(N, D, C), np.random.choice(np.arange(C), size = (N, D), replace = True);
     validLen = np.random.choice(np.arange(D), size = N, replace = True);
     torchModule = MaskedSoftmaxCELossPyTorch();
-    myModule = MaskedSoftmaxCELossMy();
+    myModule = NN.SequenceSoftmaxWithCrossEntropy1DLoss();
 
     X1 = X;
     Y1 = myModule.forward(X1, validLen, T);
@@ -1998,19 +2059,7 @@ def testMaskedSoftmaxCELossMy1():
     Y2 = Y2.detach().numpy();
     dX2 = X2.grad.detach().numpy();
 
-    print(f"MaskedSoftmaxCELossMy, value1, Y error: {np.sum(np.abs(Y1 - Y2))}, dX error: {np.sum(np.abs(dX1 - dX2))}");
-    print("\n");
-
-
-def testMaskedSoftmaxCELossMyGradient1():
-    N, D, C = 320, 24, 10;
-    X, T = np.random.randn(N, D, C), np.random.choice(np.arange(C), size = (N, D), replace = True);
-    validLen = np.random.choice(np.arange(D), size = N, replace = True);
-    m = MaskedSoftmaxCELossMy();
-    loss = m.forward(X, validLen, T);
-    dX1 = m.backward()[0];
-    dXN = numericGradient(lambda x: m.forward(x, validLen, T), X);
-    print(f"MaskedSoftmaxCELossMy, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SequenceSoftmaxWithCrossEntropy1DLoss, value1, Y error: {np.sum(np.abs(Y1 - Y2))}, dX error: {np.sum(np.abs(dX1 - dX2))}");
     print("\n");
 
 
@@ -2194,17 +2243,17 @@ def chapter9_Nmt_My(plot : bool = True):
     embedSize, hiddenSize, layersNum, dropout = 32, 32, 2, 0.1;
     trainIterator, sourceVocab, targetVocab = loadDataNmt("/media/WindowsE/Data/ANKI/fra-eng/fra.txt", batchSize, stepSize, exampleSize = 1000, useTorch = False);
 
-    lossFunc = MaskedSoftmaxCELossMy();
+    lossFunc = NN.SequenceSoftmaxWithCrossEntropy1DLoss();
     optimizer = NN.GradientsClipping(1.0, NN.Adam(lr = lr));
     model = NmtEncoderDecoderMy(embedSize, hiddenSize, layersNum, sourceVocab, targetVocab, dropout = dropout);
 
-    # model.fit(trainIterator, lossFunc, optimizer, maxEpoch, plot = plot);
-    # with open("data/PyTorchTest/chapter9_Nmt_My.pkl", "wb") as file:
-    #     pickle.dump(model.params, file);
+    model.fit(trainIterator, lossFunc, optimizer, maxEpoch, plot = plot);
+    with open("data/PyTorchTest/chapter9_Nmt_My.pkl", "wb") as file:
+        pickle.dump(model.params, file);
 
-    with open("data/PyTorchTest/chapter9_Nmt_My.pkl", "rb") as file:
-        params = pickle.load(file);
-    model.params = params;
+    # with open("data/PyTorchTest/chapter9_Nmt_My.pkl", "rb") as file:
+    #     params = pickle.load(file);
+    # model.params = params;
 
     engs = ['go .', "i lost .", 'he\'s calm .', 'i\'m home .']
     fras = ['va !', 'j\'ai perdu .', 'il est calme .', 'je suis chez moi .']
@@ -2765,7 +2814,7 @@ def testTransformerEncoderBlock():
     C = np.random.randn(batchSize, sequenceLength, inputSize).astype(defaultDType);
     torchModule = EncoderBlock(inputSize, inputSize, inputSize, inputSize, inputSize, inputSize, ffnHiddenSize, headNum, dropoutRatio);
     myModule = NN.SequentialContainer(
-        NN.TransformerEncoderBlock(inputSize, attentionHiddenSize, ffnHiddenSize, inputSize, headNum, dropoutRatio = dropoutRatio),
+        NN.TransformerEncoderBlock(inputSize, attentionHiddenSize, ffnHiddenSize, inputSize, headNum = headNum, dropoutRatio = dropoutRatio),
         NN.FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
     );
 
@@ -2847,7 +2896,7 @@ def testTransformerEmbeddingEncoder():
     C = np.random.randn(batchSize, sequenceLength, embeddingSize).astype(defaultDType);
     torchModule = TransformerEncoder(vocabSize, embeddingSize, embeddingSize, embeddingSize, embeddingSize, embeddingSize, embeddingSize, ffnHiddenSize, headNum, blockNum, dropoutRatio);
     myModule = NN.SequentialContainer(
-        NN.TransformerEmbeddingEncoder(vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum, blockNum, dropoutRatio = dropoutRatio),
+        NN.TransformerEmbeddingEncoder(vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, dropoutRatio = dropoutRatio),
         NN.FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
     );
 
@@ -2941,7 +2990,7 @@ def testTransformerDecoderBlock():
     torch.sum(Y2).backward();
     Y2 = Y2.detach().numpy();
 
-    print(f"testTransformerEncoderBlock, Y error: {np.sum(Y1 - Y2)}, {np.linalg.norm(Y1 - Y2) / (np.linalg.norm(Y1) + np.linalg.norm(Y2))}");
+    print(f"testTransformerDecoderBlock, Y error: {np.sum(Y1 - Y2)}, {np.linalg.norm(Y1 - Y2) / (np.linalg.norm(Y1) + np.linalg.norm(Y2))}");
     compareGrads(torchModule, myModule);
     print("\n");
 
@@ -3023,7 +3072,7 @@ def chapter10_Nmt_Transformer_PyTorch():
     key_size, query_size, value_size = 32, 32, 32
     norm_shape = [32]
 
-    train_iter, src_vocab, tgt_vocab = loadDataNmt("/media/WindowsE/Data/ANKI/fra-eng/fra.txt", batch_size, num_steps, exampleSize = 1000, useTorch = True)
+    train_iter, src_vocab, tgt_vocab = loadDataNmt("data/PyTorchTest/fra-eng/fra.txt", batch_size, num_steps, exampleSize = 1000, useTorch = True)
 
     encoder = TransformerEncoder(
         len(src_vocab), key_size, query_size, value_size, num_hiddens,
@@ -3037,7 +3086,7 @@ def chapter10_Nmt_Transformer_PyTorch():
 
     # net.load_state_dict(torch.load("data/PyTorchTest/chapter10_Nmt_Transformer_PyTorch.params"));
 
-    train_seq2seq(net, train_iter, lr, num_epochs, tgt_vocab, device)
+    train_seq2seq(net, train_iter, lr, num_epochs, tgt_vocab, device, plot = False)
     torch.save(net.state_dict(), "data/PyTorchTest/chapter10_Nmt_Transformer_PyTorch.params");
     with open("data/PyTorchTest/chapter10_Nmt_Transformer_PyTorch.pkl", "wb") as file:
         pickle.dump(list(net.parameters()), file);
@@ -3090,8 +3139,11 @@ class NmtTransformerEncoderDecoderMy(NN.NetModelBase):
         sourceTokens = self._sourceVocab[sourceSentence.split(" ")] + [self._sourceVocab["<eos>"]];
         encoderValidLen = np.array([len(sourceTokens)]);
 
-        encoderX = np.array(truncatePad(sourceTokens, stepSize, self._sourceVocab["<pad>"])).reshape(1, -1);
-        encoderY, = self._encoder.forward(encoderX, encoderValidLen);
+        # encoderX = np.array(truncatePad(sourceTokens, stepSize, self._sourceVocab["<pad>"])).reshape(1, -1);
+        # encoderY, = self._encoder.forward(encoderX, encoderValidLen);
+
+        encoderX = np.array(sourceTokens).reshape(1, -1);
+        encoderY, = self._encoder.forward(encoderX);
 
         bosID, eosID = self._targetVocab["<bos>"], self._targetVocab["<eos>"];
         blockInputs = [None] * self._blockNum;
@@ -3176,9 +3228,9 @@ def chapter10_Nmt_Transformer_My(plot : bool = True):
     lr, maxEpoch = 0.005, 300;
     batchSize, headNum, blockNum = 64, 4, 2;
     sequenceLength, embeddingSize, attentionHiddenSize, ffnHiddenSize, dropoutRatio = 10, 32, 8, 64, 0.1;
-    trainIterator, sourceVocab, targetVocab = loadDataNmt("/media/WindowsE/Data/ANKI/fra-eng/fra.txt", batchSize, sequenceLength, exampleSize = 1000, useTorch = False);
+    trainIterator, sourceVocab, targetVocab = loadDataNmt("data/PyTorchTest/fra-eng/fra.txt", batchSize, sequenceLength, exampleSize = 1000, useTorch = False);
 
-    lossFunc = MaskedSoftmaxCELossMy();
+    lossFunc = NN.SequenceSoftmaxWithCrossEntropy1DLoss();
     optimizer = NN.GradientsClipping(1.0, NN.Adam(lr = lr));
     model = NmtTransformerEncoderDecoderMy(embeddingSize, attentionHiddenSize, ffnHiddenSize, sourceVocab, targetVocab, headNum = headNum, blockNum = blockNum, dropout = dropoutRatio);
 
@@ -3187,19 +3239,108 @@ def chapter10_Nmt_Transformer_My(plot : bool = True):
     # transposeFlags = [False] + [True] * 24 + [False] + [True] * 38;
     # injectParams(torchParams, model, transposeFlags);
 
-    model.fit(trainIterator, lossFunc, optimizer, maxEpoch, minEpoch = 2, plot = plot);
-    with open("data/PyTorchTest/chapter10_Nmt_Transformer_My.pkl", "wb") as file:
-        pickle.dump(model.params, file);
+    # model.fit(trainIterator, lossFunc, optimizer, maxEpoch, minEpoch = 2, plot = plot);
+    # with open("data/PyTorchTest/chapter10_Nmt_Transformer_My.pkl", "wb") as file:
+    #     pickle.dump(model.params, file);
 
-    # with open("data/PyTorchTest/chapter10_Nmt_Transformer_My.pkl", "rb") as file:
-    #     params = pickle.load(file);
-    # model.params = params;
+    with open("data/PyTorchTest/chapter10_Nmt_Transformer_My.pkl", "rb") as file:
+        params = pickle.load(file);
+    model.params = params;
 
     engs = ['go .', "i lost .", 'he\'s calm .', 'i\'m home .']
     fras = ['va !', 'j\'ai perdu .', 'il est calme .', 'je suis chez moi .']
     for eng, fra in zip(engs, fras):
         translation = model.translate(eng, sequenceLength);
         print(f'{eng} => {translation}, bleu {bleuNLP(translation.split(" "), fra.split(" "), gramNum = 2):.3f}');
+
+
+def chapter11_plotRisk():
+    def f(x):
+        return x * torch.cos(torch.pi * x);
+
+    def g(x):
+        return f(x) + 0.2 * torch.cos(5 * torch.pi * x);
+
+    xd = torch.arange(0.5, 1.5, 0.01);
+    plt.figure();
+    plt.plot(xd, f(xd), "-r");
+    plt.plot(xd, g(xd), "--b");
+    plt.show(block = True);
+
+
+def chapter11_matmul():
+    n = 1024;
+    batchSize = 256;
+    timer = Timer();
+    A = np.zeros((n, n));
+    B, C = np.random.randn(n, n), np.random.randn(n, n);
+
+    timer.start();
+    for i in range(n):
+        for j in range(n):
+            A[i, j] = B[i, :] @ C[:, j];
+    timer.stop();
+
+    timer.start();
+    for j in range(n):
+        A[:, j] = B @ C[:, j];
+    timer.stop();
+
+    timer.start();
+    A = B @ C;
+    timer.stop();
+
+    timer.start();
+    for j in range(0, n, batchSize):
+        A[:, j: j + batchSize] = B @ C[:, j: j + batchSize];
+    timer.stop();
+
+    print(timer.times);
+    print(timer.times[-2] / timer.times[-1]);
+
+
+class SquareRootLrScheduler(NN.INetOptimizer):
+    def __init__(self, net : NN.INetModel, optimizer : NN.INetOptimizer, lr : float):
+        self._model = net;
+        self._optimizer = optimizer;
+        self._baseLr = lr;
+        self._currentLr = lr;
+
+
+    @property
+    def learningRate(self) -> float:
+        return self._optimizer.learningRate;
+
+
+    @learningRate.setter
+    def learningRate(self, value: float):
+        self._optimizer.learningRate = value;
+
+
+    def updateStep(self, params: List[NN.INetParamDefinition], context : NN.INetContext):
+        lr = self._baseLr * math.pow(self._model.context.trainingEpoch + 1, -0.5);
+
+        if self._currentLr != lr:
+            self._optimizer.learningRate = lr;
+            self._currentLr = lr;
+            print(f"current LR: {lr}");
+
+        self._optimizer.updateStep(params, context);
+
+
+def testAny():
+    x = np.arange(-10, 10 + 0.01, 0.01);
+    p = scipy.stats.norm.cdf(x);
+
+    y1 = x * p;
+    y2 = NN.GeluLayer().forward(x)[0];
+    y3 = nn.GELU("tanh").forward(torch.tensor(x)).numpy();
+
+    plt.figure();
+    plt.plot(x, y1, "k");
+    plt.plot(x, y2, "r");
+    # plt.plot(x, y3, "y");
+    plt.show(block = True);
 
 
 if __name__ == "__main__":
@@ -3268,6 +3409,7 @@ if __name__ == "__main__":
 
     print("go.");
 
+    # plotFitResult("data/chapter6_LeNet5_My.pkl");
 
     # chapter2_Preprocess();
 
@@ -3296,15 +3438,14 @@ if __name__ == "__main__":
 
     # chapter6_learnKernel();
     # chapter6_LeNet5_PyTorch();
-    # chapter6_LeNet5_My();
+    # chapter6_LeNet5_My(True);
 
     # chapter8_PredictSine_My(False);
     # chapter8_TimeMachine_Zero();
     # chapter8_TimeMachine_PyTorch();
     # chapter8_TimeMachine_My();
     # chapter9_Nmt_PyTorch();
-    # testMaskedSoftmaxCELossMy1();
-    # testMaskedSoftmaxCELossMyGradient1();
+    # testSequenceSoftmaxWithCrossEntropy1DLoss1();
     # testNmtSeq2SeqEncoderMyGradient1();
     # testNmtSeq2SeqEncoderMyBiRnnGradient1();
     # testNmtSeq2SeqDecoderMyGradient1();
@@ -3327,11 +3468,15 @@ if __name__ == "__main__":
     # testEmbeddingLayer();
     # testTransformerEmbeddingEncoder();
     # testTransformerDecoderBlock();
-    # testTransformerEmbeddingDecoder();
+    testTransformerEmbeddingDecoder();
     # chapter10_Nmt_Transformer_PyTorch();
     # testNmtTransformerEncoderDecoderMy1();
     # testNmtTransformerEncoderDecoderMyGradient1();
-    chapter10_Nmt_Transformer_My();
+    # chapter10_Nmt_Transformer_My(True);
+
+    # chapter11_plotRisk();
+    # chapter11_matmul();
+
+    # testAny();
 
     print("exit.");
-
