@@ -484,8 +484,8 @@ def col2im(X : np.ndarray, imShape : Tuple[int, ...], FH : int, FW : int, stride
 
 
 # validLength shape: (batch_size) or (batch_size, query_num)
-def getAttentionMaskByValidLength(queryNum: int, keyNum, validLength: np.ndarray) -> np.ndarray:
-    if len(validLength.shape) == 1:
+def getAttentionMaskByValidLength(queryNum: int, keyNum, validLength: np.ndarray, onlyBatch : bool = False) -> np.ndarray:
+    if onlyBatch or len(validLength.shape) == 1:
         validLength = np.repeat(np.expand_dims(validLength, axis = -1), queryNum, axis = -1);
     validLength = np.expand_dims(validLength, axis = -1);
 

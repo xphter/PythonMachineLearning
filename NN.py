@@ -5148,7 +5148,7 @@ class TransformerEmbeddingEncoder(AggregateNetModule, INetAttentionModule):
         validLength = data[1] if len(data) > 1 else None;
 
         sequenceLength = X.shape[-1];
-        M = getAttentionMaskByValidLength(sequenceLength, sequenceLength, validLength) if validLength is not None else None;
+        M = getAttentionMaskByValidLength(sequenceLength, sequenceLength, validLength, onlyBatch = True) if validLength is not None else None;
 
         EX, = self._embedding.forward(X);
         Y, = self._encoder.forward(EX * self._embeddingScale, M);
@@ -5319,7 +5319,7 @@ class TransformerEmbeddingDecoder(AggregateNetModule, INetAttentionModule):
 
         decoderSequenceLength = X.shape[-1];
         encoderSequenceLength = encoderY.shape[-2];
-        encoderM = getAttentionMaskByValidLength(decoderSequenceLength, encoderSequenceLength, encoderValidLength) if encoderValidLength is not None else None;
+        encoderM = getAttentionMaskByValidLength(decoderSequenceLength, encoderSequenceLength, encoderValidLength, onlyBatch = True) if encoderValidLength is not None else None;
 
         EX, = self._embedding.forward(X);
         Y, = self._decoder.forward(EX * self._embeddingScale, encoderY, encoderM);
@@ -5343,7 +5343,7 @@ class TransformerEmbeddingDecoder(AggregateNetModule, INetAttentionModule):
 
         decoderSequenceLength = X.shape[-1];
         encoderSequenceLength = encoderY.shape[-2];
-        encoderM = getAttentionMaskByValidLength(decoderSequenceLength, encoderSequenceLength, encoderValidLength) if encoderValidLength is not None else None;
+        encoderM = getAttentionMaskByValidLength(decoderSequenceLength, encoderSequenceLength, encoderValidLength, onlyBatch = True) if encoderValidLength is not None else None;
 
         EX, = self._embedding.forward(X);
         return self._decoder.predict(EX * self._embeddingScale, encoderY, encoderM, blockInputs = blockInputs);
