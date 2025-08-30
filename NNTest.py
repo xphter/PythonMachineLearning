@@ -2271,9 +2271,11 @@ def unitTest():
     # testAdditiveAttentionModuleGradient1();
     # testAdditiveAttentionModuleGradient2();
     # testAdditiveAttentionModuleGradient3();
+    # testAdditiveAttentionModuleGradient4();
     # testDotProductAttentionModuleGradient1();
     # testDotProductAttentionModuleGradient2();
     # testDotProductAttentionModuleGradient3();
+    # testDotProductAttentionModuleGradient4();
     # testMultiHeadAttentionModule1();
     # testMultiHeadAttentionModule2();
     # testMultiHeadAttentionModule3();
@@ -2281,35 +2283,47 @@ def unitTest():
     # testMultiHeadAttentionModuleGradient1();
     # testMultiHeadAttentionModuleGradient2();
     # testMultiHeadAttentionModuleGradient3();
+    # testMultiHeadAttentionModuleGradient4();
     # testSelfAttentionModuleGradient1();
     # testSelfAttentionModuleGradient2();
     # testSelfAttentionModuleGradient3();
     # testSelfAttentionModuleGradient4();
+    # testSelfAttentionModuleGradient5();
     # testSinePositionalEncodingModuleGradient1();
     # testSinePositionalEncodingModuleGradient2();
     # testSinePositionalEncodingModuleGradient3();
+    # testSinePositionalEncodingModuleGradient4();
     # testTransformerAddNormalizationModuleGradient1();
+    # testTransformerAddNormalizationModuleGradient2();
+    # testTransformerPositionwiseFFNModuleGradient1();
     # testTransformerEncoderBlockGradient1();
     # testTransformerEncoderBlockGradient2();
     # testTransformerEncoderBlockGradient3();
+    # testTransformerEncoderBlockGradient4();
     # testTransformerEncoderGradient1();
     # testTransformerEncoderGradient2();
     # testTransformerEncoderGradient3();
+    # testTransformerEncoderGradient4();
     # testTransformerDecoderBlockGradient1();
     # testTransformerDecoderBlockGradient2();
     # testTransformerDecoderBlockGradient3();
+    # testTransformerDecoderBlockGradient4();
     # testTransformerDecoder1();
     # testTransformerDecoder2();
     # testTransformerDecoderGradient1();
     # testTransformerDecoderGradient2();
+    # testTransformerDecoderGradient3();
     # testTransformerEmbeddingEncoderGradient1();
     # testTransformerEmbeddingEncoderGradient2();
+    # testTransformerEmbeddingEncoderGradient3();
     # testTransformerEmbeddingDecoder1();
     # testTransformerEmbeddingDecoder2();
     # testTransformerEmbeddingDecoderGradient1();
     # testTransformerEmbeddingDecoderGradient2();
+    # testTransformerEmbeddingDecoderGradient3();
     # testAttentionPoolingLayerGradient1();
     # testAttentionPoolingLayerGradient2();
+    testAttentionPoolingLayerGradient3();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -5457,6 +5471,29 @@ def testAdditiveAttentionModuleGradient3():
     print("\n");
 
 
+def testAdditiveAttentionModuleGradient4():
+    batchSize, sequenceNum, queryNum, keyNum = 2, 3, 4, 5;
+    querySize, keySize, valueSize, hiddenSize = 6, 7, 8, 9;
+    Q = np.random.randn(batchSize, sequenceNum, queryNum, querySize);
+    K = np.random.randn(batchSize, sequenceNum, keyNum, keySize);
+    V = np.random.randn(batchSize, sequenceNum, keyNum, valueSize);
+    M = getAttentionMaskByValidLength(queryNum, keyNum, np.random.randint(1, keyNum + 1, (batchSize, sequenceNum, queryNum)));
+    m = AdditiveAttentionModule(querySize, keySize, hiddenSize);
+    Wq, Wk, wv = tuple([p.value for p in m.params]);
+
+    Y, = m.forward(Q, K, V, M);
+    dQ1, dK1, dV1 = m.backward(np.ones_like(Y));
+    dWq1, dWk1, dwv1 = tuple([p.grad for p in m.params]);
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
+    dWqN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = x, Wk = Wk, wv = wv).forward(Q, K, V, M)[0]), Wq);
+    dWkN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = x, wv = wv).forward(Q, K, V, M)[0]), Wk);
+    dwvN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = Wk, wv = x).forward(Q, K, V, M)[0]), wv);
+    print(f"AdditiveAttentionModule, numericGradient4, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dWq error: {np.sum(np.abs(dWq1 - dWqN))}, dWk error: {np.sum(np.abs(dWk1 - dWkN))}, dwv error: {np.sum(np.abs(dwv1 - dwvN))}");
+    print("\n");
+
+
 def testDotProductAttentionModuleGradient1():
     batchSize, queryNum, keyNum = 32, 20, 21;
     querySize, keySize, valueSize = 22, 22, 23;
@@ -5521,6 +5558,24 @@ def testDotProductAttentionModuleGradient3():
     dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
     dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
     print(f"DotProductAttentionModule, numericGradient3, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    print("\n");
+
+
+def testDotProductAttentionModuleGradient4():
+    batchSize, sequenceNum, queryNum, keyNum = 2, 3, 4, 5;
+    querySize, keySize, valueSize = 6, 6, 7;
+    Q = np.random.randn(batchSize, sequenceNum, queryNum, querySize);
+    K = np.random.randn(batchSize, sequenceNum, keyNum, keySize);
+    V = np.random.randn(batchSize, sequenceNum, keyNum, valueSize);
+    M = getAttentionMaskByValidLength(queryNum, keyNum, np.random.randint(1, keyNum + 1, (batchSize, sequenceNum, queryNum)));
+    m = DotProductAttentionModule();
+
+    Y, = m.forward(Q, K, V, M);
+    dQ1, dK1, dV1 = m.backward(np.ones_like(Y));
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
+    print(f"DotProductAttentionModule, numericGradient4, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
     print("\n");
 
 
@@ -5701,6 +5756,27 @@ def testMultiHeadAttentionModuleGradient3():
     print("\n");
 
 
+def testMultiHeadAttentionModuleGradient4():
+    batchSize, sequenceNum, headNum, queryNum, keyNum = 2, 3, 4, 5, 6;
+    querySize, keySize, valueSize = 7, 8, 9;
+    queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize = 10, 10, 10, 11;
+    Q = np.random.randn(batchSize, sequenceNum, queryNum, querySize);
+    K = np.random.randn(batchSize, sequenceNum, keyNum, keySize);
+    V = np.random.randn(batchSize, sequenceNum, keyNum, valueSize);
+    M = getAttentionMaskByValidLength(queryNum, keyNum, np.random.randint(1, keyNum + 1, (batchSize, sequenceNum, queryNum)));
+    attentionModule = DotProductAttentionModule();
+    m = MultiHeadAttentionModule(attentionModule, querySize, keySize, valueSize, (queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize), headNum = headNum);
+
+    Y, = m.forward(Q, K, V, M);
+    dQ1, dK1, dV1 = m.backward(np.ones_like(Y));
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
+    print(f"MultiHeadAttentionModule, numericGradient4, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    testModuleGradient(m, "MultiHeadAttentionModule, numericGradient4", Q, K, V, M);
+    print("\n");
+
+
 def testSelfAttentionModuleGradient1():
     def getLenMask(queryNum : int, keyNum, validLen : np.ndarray) -> np.ndarray:
         if len(validLen.shape) == 1:
@@ -5771,6 +5847,21 @@ def testSelfAttentionModuleGradient4():
     print("\n");
 
 
+def testSelfAttentionModuleGradient5():
+    batchSize, sequenceNum, sequenceLength, sequenceDimension = 2, 3, 4, 5;
+    headNum, queryHiddenSize, keyHiddenSize, valueHiddenSize = 6, 7, 7, 7;
+    X = np.random.randn(batchSize, sequenceNum, sequenceLength, sequenceDimension);
+    M = getAttentionMaskByValidLength(sequenceLength, sequenceLength, np.random.randint(1, sequenceLength + 1, (batchSize, sequenceNum, sequenceLength)));
+    m = SelfAttentionModule(MultiHeadAttentionModule(DotProductAttentionModule(), sequenceDimension, sequenceDimension, sequenceDimension, (queryHiddenSize, keyHiddenSize, valueHiddenSize, sequenceDimension), headNum = headNum));
+
+    Y, = m.forward(X, M);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
+    print(f"SelfAttentionModule, numericGradient5, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "SelfAttentionModule, numericGradient5", X, M);
+    print("\n");
+
+
 def testSinePositionalEncodingModuleGradient1():
     batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
@@ -5808,6 +5899,19 @@ def testSinePositionalEncodingModuleGradient3():
     print("\n");
 
 
+def testSinePositionalEncodingModuleGradient4():
+    batchSize, sequenceNum, headNum, sequenceLength, sequenceDimension = 2, 3, 4, 5, 6;
+    X = np.random.randn(batchSize, sequenceNum, headNum, sequenceLength, sequenceDimension);
+    startIndex = np.array(13);
+    m = SinePositionalEncodingModule(sequenceDimension);
+
+    Y, = m.forward(X, startIndex);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, startIndex)[0]), X);
+    print(f"SinePositionalEncodingModule, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print("\n");
+
+
 def testTransformerAddNormalizationModuleGradient1():
     batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
@@ -5824,6 +5928,38 @@ def testTransformerAddNormalizationModuleGradient1():
     dFN = numericGradient(lambda x: np.sum(m.forward(X, x)[0]), F);
     print(f"TransformerAddNormalizationModule, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dF error: {np.sum(np.abs(dF1 - dFN))}");
     testModuleGradient(m, "TransformerAddNormalizationModule, numericGradient1", X, F);
+    print("\n");
+
+
+def testTransformerAddNormalizationModuleGradient2():
+    batchSize, sequenceNum, sequenceLength, sequenceDimension = 2, 3, 4, 5;
+    X = np.random.randn(batchSize, sequenceNum, sequenceLength, sequenceDimension);
+    F = np.random.randn(*X.shape);
+    C = np.random.randn(*X.shape); # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerAddNormalizationModule(sequenceDimension),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+
+    Y, = m.forward(X, F);
+    dX1, dF1 = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, F)[0]), X);
+    dFN = numericGradient(lambda x: np.sum(m.forward(X, x)[0]), F);
+    print(f"TransformerAddNormalizationModule, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dF error: {np.sum(np.abs(dF1 - dFN))}");
+    testModuleGradient(m, "TransformerAddNormalizationModule, numericGradient2", X, F);
+    print("\n");
+
+
+def testTransformerPositionwiseFFNModuleGradient1():
+    batchSize, sequenceNum, sequenceLength, sequenceDimension, hiddenSize = 2, 3, 4, 5, 6;
+    X = np.random.randn(batchSize, sequenceNum, sequenceLength, sequenceDimension);
+    m = TransformerPositionwiseFFNModule(sequenceDimension, hiddenSize, activationFuncSelector = lambda: GeluLayer());
+
+    Y, = m.forward(X);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"TransformerAddNormalizationModule, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "TransformerAddNormalizationModule, numericGradient1", X);
     print("\n");
 
 
@@ -5884,6 +6020,26 @@ def testTransformerEncoderBlockGradient3():
     print("\n");
 
 
+def testTransformerEncoderBlockGradient4():
+    batchSize, sequenceNum, sequenceLength, sequenceDimension = 2, 3, 4, 5;
+    attentionHiddenSize, ffnHiddenSize, headNum = 6, 7, 8;
+    X = np.random.randn(batchSize, sequenceNum, sequenceLength, sequenceDimension);
+    validLength = np.random.randint(1, sequenceLength + 1, (batchSize, sequenceNum));
+    M = getAttentionMaskByValidLength(sequenceLength, sequenceLength, validLength, onlyBatch = True);
+    C = np.random.randn(*X.shape); # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerEncoderBlock(sequenceDimension, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+
+    Y, = m.forward(X, M);
+    dX1 = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
+    print(f"TransformerEncoderBlock, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "TransformerEncoderBlock, numericGradient4", X, M);
+    print("\n");
+
+
 def testTransformerEncoderGradient1():
     batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
     attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 22, 23, 8, 2;
@@ -5938,6 +6094,26 @@ def testTransformerEncoderGradient3():
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
     print(f"TransformerEncoder, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
     testModuleGradient(m, "TransformerEncoder, numericGradient3", X, M);
+    print("\n");
+
+
+def testTransformerEncoderGradient4():
+    batchSize, sequenceNum, sequenceLength, sequenceDimension = 2, 3, 4, 5;
+    attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 6, 7, 8, 9;
+    X = np.random.randn(batchSize, sequenceNum, sequenceLength, sequenceDimension);
+    validLength = np.random.randint(1, sequenceLength + 1, (batchSize, sequenceNum));
+    M = getAttentionMaskByValidLength(sequenceLength, sequenceLength, validLength, onlyBatch = True);
+    C = np.random.randn(*X.shape);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerEncoder(sequenceDimension, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda: GeluLayer()),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+
+    Y, = m.forward(X, M);
+    dX1 = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
+    print(f"TransformerEncoder, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "TransformerEncoder, numericGradient4", X, M);
     print("\n");
 
 
@@ -6016,6 +6192,33 @@ def testTransformerDecoderBlockGradient3():
     dEncoderYN = numericGradient(lambda x: np.sum(m.forward(Q, K, V, x, encoderM)[0]), encoderY);
     print(f"TransformerDecoderBlock, numericGradient3, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
     testModuleGradient(m, "TransformerEncoderBlock, numericGradient3", Q, K, V, encoderY, encoderM);
+    print("\n");
+
+
+def testTransformerDecoderBlockGradient4():
+    batchSize, sequenceNum, sequenceLength, sequenceDimension = 2, 3, 4, 5;
+    attentionHiddenSize, ffnHiddenSize, headNum = 6, 7, 8;
+    Q = np.random.randn(batchSize, sequenceNum, sequenceLength, sequenceDimension);
+    K = np.random.randn(batchSize, sequenceNum, sequenceLength, sequenceDimension);
+    V = np.random.randn(batchSize, sequenceNum, sequenceLength, sequenceDimension);
+    encoderY = np.random.randn(batchSize, sequenceNum, sequenceLength + 1, sequenceDimension + 2);
+    encoderValidLength = np.random.randint(1, sequenceLength + 2, (batchSize, sequenceNum));
+    encoderM = getAttentionMaskByValidLength(sequenceLength, sequenceLength + 1, encoderValidLength, onlyBatch = True);
+    C = np.random.randn(*Q.shape); # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerDecoderBlock(sequenceDimension, sequenceDimension + 2, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+    m.context.isTrainingMode = True;
+
+    Y, = m.forward(Q, K, V, encoderY, encoderM);
+    dQ1, dK1, dV1, dEncoderY1 = m.backward(np.ones_like(Y));
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, encoderY, encoderM)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, encoderY, encoderM)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, encoderY, encoderM)[0]), V);
+    dEncoderYN = numericGradient(lambda x: np.sum(m.forward(Q, K, V, x, encoderM)[0]), encoderY);
+    print(f"TransformerDecoderBlock, numericGradient4, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
+    testModuleGradient(m, "TransformerEncoderBlock, numericGradient4", Q, K, V, encoderY, encoderM);
     print("\n");
 
 
@@ -6101,6 +6304,29 @@ def testTransformerDecoderGradient2():
     print("\n");
 
 
+def testTransformerDecoderGradient3():
+    batchSize, sequenceNum, sequenceLength, sequenceDimension = 2, 3, 4, 5;
+    attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 6, 7, 8, 9;
+    X = np.random.randn(batchSize, sequenceNum, sequenceLength, sequenceDimension);
+    encoderY = np.random.randn(batchSize, sequenceNum, sequenceLength + 1, sequenceDimension + 2);
+    encoderValidLength = np.random.randint(1, sequenceLength + 2, (batchSize, sequenceNum));
+    encoderM = getAttentionMaskByValidLength(sequenceLength, sequenceLength + 1, encoderValidLength, onlyBatch = True);
+    C = np.random.randn(*X.shape);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerDecoder(sequenceDimension, sequenceDimension + 2, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda: GeluLayer()),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+    m.context.isTrainingMode = True;
+
+    Y, = m.forward(X, encoderY, encoderM);
+    dX1, dEncoderY1 = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, encoderY, encoderM)[0]), X);
+    dEncoderYN = numericGradient(lambda x: np.sum(m.forward(X, x, encoderM)[0]), encoderY);
+    print(f"TransformerDecoder, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
+    testModuleGradient(m, "TransformerDecoder, numericGradient3", X, encoderY, encoderM);
+    print("\n");
+
+
 def testTransformerEmbeddingEncoderGradient1():
     batchSize, sequenceLength = 32, 20;
     vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 120, 16, 17, 18, 8, 2;
@@ -6131,6 +6357,23 @@ def testTransformerEmbeddingEncoderGradient2():
     Y, = m.forward(X, validLength);
     dX1 = m.backward(np.ones_like(Y));
     testModuleGradient(m, "TransformerEmbeddingEncoder, numericGradient2", X, validLength);
+    print("\n");
+
+
+def testTransformerEmbeddingEncoderGradient3():
+    batchSize, sequenceNum, sequenceLength = 2, 3, 4;
+    vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 5, 6, 7, 8, 9, 10;
+    X = np.random.randint(0, vocabSize, (batchSize, sequenceNum, sequenceLength));
+    validLength = np.random.randint(1, sequenceLength + 1, (batchSize, sequenceNum));
+    C = np.random.randn(batchSize, sequenceNum, sequenceLength, embeddingSize);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerEmbeddingEncoder(vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda: GeluLayer()),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+
+    Y, = m.forward(X, validLength);
+    dX1 = m.backward(np.ones_like(Y));
+    testModuleGradient(m, "TransformerEmbeddingEncoder, numericGradient3", X, validLength);
     print("\n");
 
 
@@ -6212,6 +6455,26 @@ def testTransformerEmbeddingDecoderGradient2():
     print("\n");
 
 
+def testTransformerEmbeddingDecoderGradient3():
+    batchSize, sequenceNum, sequenceLength = 2, 3, 4;
+    vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 5, 6, 7, 8, 9, 10, 11;
+    X = np.random.randint(0, vocabSize, (batchSize, sequenceNum, sequenceLength));
+    encoderY = np.random.randn(batchSize, sequenceNum, sequenceLength + 1, encoderSize);
+    encoderValidLength = np.random.randint(1, sequenceLength + 2, (batchSize, sequenceNum));
+    C = np.random.randn(batchSize, sequenceNum, sequenceLength, embeddingSize);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+    m = SequentialContainer(
+        TransformerEmbeddingDecoder(vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda: GeluLayer()),
+        FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
+    );
+
+    Y, = m.forward(X, encoderY, encoderValidLength);
+    dX1, dEncoderY1 = m.backward(np.ones_like(Y));
+    dEncoderYN = numericGradient(lambda x: np.sum(m.forward(X, x, encoderValidLength)[0]), encoderY);
+    print(f"TransformerEmbeddingDecoder, numericGradient3, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
+    testModuleGradient(m, "TransformerEmbeddingDecoder, numericGradient3", X, encoderY, encoderValidLength);
+    print("\n");
+
+
 def testAttentionPoolingLayerGradient1():
     batchSize, sequenceLength, inputSize, hiddenSize = 32, 20, 21, (22, 23);
     X = np.random.randn(batchSize, sequenceLength, inputSize);
@@ -6234,8 +6497,22 @@ def testAttentionPoolingLayerGradient2():
     Y, = m.forward(X, M);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"AttentionPoolingLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"AttentionPoolingLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
     testModuleGradient(m, "AttentionPoolingLayer, numericGradient2", X, M);
+    print("\n");
+
+
+def testAttentionPoolingLayerGradient3():
+    batchSize, sequenceNum, sequenceLength, inputSize, hiddenSize = 2, 3, 4, 5, (6, 7);
+    X = np.random.randn(batchSize, sequenceNum, sequenceLength, inputSize);
+    M = np.random.randint(0, 2, (batchSize, sequenceNum, sequenceLength));
+    m = AttentionPoolingLayer(inputSize, hiddenSize, activationFuncSelector = lambda x: GeluLayer());
+
+    Y, = m.forward(X, M);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
+    print(f"AttentionPoolingLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    testModuleGradient(m, "AttentionPoolingLayer, numericGradient3", X, M);
     print("\n");
 
 
