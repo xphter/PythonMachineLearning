@@ -2323,7 +2323,7 @@ def unitTest():
     # testTransformerEmbeddingDecoderGradient3();
     # testAttentionPoolingLayerGradient1();
     # testAttentionPoolingLayerGradient2();
-    testAttentionPoolingLayerGradient3();
+    # testAttentionPoolingLayerGradient3();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -2354,6 +2354,10 @@ def unitTest():
 
 def sumAll(*X : np.ndarray) -> float:
     return sum([float(np.sum(x)) for x in X]);
+
+
+def getErrorText(title : str, x1 : np.ndarray, x2 : np.ndarray) -> str:
+    return f"{title}: {np.sum(np.fabs(x1 - x2))}({np.linalg.norm(x1 - x2) / (np.linalg.norm(x1) + np.linalg.norm(x2))}), ";
 
 
 def testPerformance():
@@ -3388,60 +3392,60 @@ def testAffineLayerGradient4():
 
 
 def testConvolution1DLayer1():
-    N, T, D = 32, 24, 16;
-    FN, FH, S, P = 16, 3, 1, 0;
-    X = np.random.randn(N, T, D);
-    W = np.random.randn(FN, FH, D);
+    N, T, D = 32, 48, 8;
+    FN, FW, S, P = 16, 3, 1, 0;
+    X = np.random.randn(N, D, T);
+    W = np.random.randn(FN, D, FW);
     b = np.random.randn(FN);
 
-    m = Convolution1DLayer(FN, FH, D, S, P, W = W, b = b);
+    m = Convolution1DLayer(D, FN, FW, S, P, W = W, b = b);
     Y1 = m.forward(X)[0];
 
-    OH = convOutputSize(T, FH, S, P);
-    Y2 = np.zeros((N, OH, FN));
+    OT = convOutputSize(T, FW, S, P);
+    Y2 = np.zeros((N, FN, OT));
     for i in range(N):
-        for j in range(OH):
-            l = j * S;
-            x = X[i, l: l + FH, :];
+        for j in range(FN):
+            for k in range(OT):
+                t = k * S;
+                x = X[i, :, t: t + FW];
 
-            for k in range(FN):
-                Y2[i, j, k] = np.sum(x * W[k, :, :]) + b[k];
+                Y2[i, j, k] = np.sum(x * W[j, :, :]) + b[j];
 
-    print(f"Convolution1DLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"Convolution1DLayer, value1, {getErrorText('Y error', Y1, Y2)}");
     print("\n");
 
 
 def testConvolution1DLayerGradient1():
-    N, T, D = 32, 24, 16;
-    FN, FH, S, P = 16, 3, 1, 0;
-    X = np.random.randn(N, T, D);
-    W = np.random.randn(FN, FH, D);
+    N, T, D = 32, 48, 8;
+    FN, FW, S, P = 16, 3, 1, 0;
+    X = np.random.randn(N, D, T);
+    W = np.random.randn(FN, D, FW);
     b = np.random.randn(FN);
-    m = Convolution1DLayer(FN, FH, D, S, P, W = W, b = b);
+    m = Convolution1DLayer(D, FN, FW, S, P, W = W, b = b);
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dW1, db1 = m.params[0].grad, m.params[1].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dWN = numericGradient(lambda x: np.sum(Convolution1DLayer(FN, FH, D, S, P, W = x, b = b).forward(X)[0]), W);
-    dbN = numericGradient(lambda x: np.sum(Convolution1DLayer(FN, FH, D, S, P, W = W, b = x).forward(X)[0]), b);
-    print(f"Convolution1DLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    dWN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, W = x, b = b).forward(X)[0]), W);
+    dbN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, W = W, b = x).forward(X)[0]), b);
+    print(f"Convolution1DLayer, numericGradient1, {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
 def testConvolution1DLayerGradient2():
-    N, T, D = 32, 24, 16;
-    FN, FH, S, P = 16, 3, 2, (25, 0);
-    X = np.random.randn(N, T, D);
-    W = np.random.randn(FN, FH, D);
+    N, T, D = 32, 48, 8;
+    FN, FW, S, P = 16, 3, 2, (12, 13);
+    X = np.random.randn(N, D, T);
+    W = np.random.randn(FN, D, FW);
     b = np.random.randn(FN);
-    m = Convolution1DLayer(FN, FH, D, S, P, W = W, b = b);
+    m = Convolution1DLayer(D, FN, FW, S, P, W = W, b = b);
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dW1, db1 = m.params[0].grad, m.params[1].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dWN = numericGradient(lambda x: np.sum(Convolution1DLayer(FN, FH, D, S, P, W = x, b = b).forward(X)[0]), W);
-    dbN = numericGradient(lambda x: np.sum(Convolution1DLayer(FN, FH, D, S, P, W = W, b = x).forward(X)[0]), b);
-    print(f"Convolution1DLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    dWN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, W = x, b = b).forward(X)[0]), W);
+    dbN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, W = W, b = x).forward(X)[0]), b);
+    print(f"Convolution1DLayer, numericGradient2, {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 

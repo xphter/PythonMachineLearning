@@ -367,55 +367,54 @@ def numericGradient(f : Callable, X : np.ndarray):
     return grad;
 
 
-def seq2col(X : np.ndarray, FH : int, stride : int = 1, pad : Union[Tuple[int, ...], int] = 0) -> np.ndarray:
-    if isinstance(pad, int):
-        pad = (pad, ) * 2;
-    padNumber = sum(pad);
+# X shape: batch_size, input_channel, sequence_length
+def seq2col(X : np.ndarray, FW : int, stride : int = 1, padding : Union[Tuple[int, int], int] = 0) -> Tuple[np.ndarray, int]:
+    if isinstance(padding, int):
+        padding = (padding, padding);
+    padNumber = sum(padding);
 
-    N, T, D = X.shape;
+    N, C, T = X.shape;
 
-    if (T + padNumber - FH) % stride != 0:
+    if (T + padNumber - FW) % stride != 0:
         raise ValueError("the convolution core unable to cover all data");
 
-    OH = (T + padNumber - FH) // stride + 1;
+    OT = (T + padNumber - FW) // stride + 1;
 
-    seq = X if padNumber <= 0 else np.pad(X, [(0, 0), (pad[0], pad[1]), (0, 0)], "constant");
-    col = np.zeros((N, FH, D, OH), dtype = X.dtype);
+    seq = X if padNumber <= 0 else np.pad(X, [(0, 0), (0, 0), (padding[0], padding[1])], "constant");
+    col = np.zeros((N, C, FW, OT), dtype = X.dtype);
 
-    for y in range(FH):
-        yMax = y + stride * OH;
+    for t in range(FW):
+        tMax = t + stride * OT;
 
-        for x in range(D):
-            col[:, y, x, :] = seq[:, y: yMax: stride, x];
+        col[:, :, t, :] = seq[:, :, t : tMax : stride];
 
-    return col.transpose(0, 3, 1, 2).reshape(N * OH, -1);
+    return col.transpose(0, 3, 1, 2).reshape(N * OT, -1), OT;
 
 
-def col2seq(X : np.ndarray, seqShape : tuple, FH : int, stride : int = 1, pad : Union[Tuple[int, ...], int] = 0, inDiff : bool = False) -> np.ndarray:
-    if isinstance(pad, int):
-        pad = (pad, ) * 2;
-    padNumber = sum(pad);
+def col2seq(X : np.ndarray, seqShape : tuple, FW : int, stride : int = 1, padding : Union[Tuple[int, int], int] = 0, inDiff : bool = False) -> np.ndarray:
+    if isinstance(padding, int):
+        padding = (padding, padding);
+    padNumber = sum(padding);
 
-    N, T, D = seqShape;
+    N, C, T = seqShape;
 
-    if (T + padNumber - FH) % stride != 0:
+    if (T + padNumber - FW) % stride != 0:
         raise ValueError("the convolution core unable to cover all data");
 
-    OH = (T + padNumber - FH) // stride + 1;
+    OT = (T + padNumber - FW) // stride + 1;
 
-    col = X.reshape(N, OH, FH, D).transpose(0, 2, 3, 1);
-    seq = np.zeros((N, T + padNumber, D), dtype = X.dtype);
+    col = X.reshape(N, OT, C, FW).transpose(0, 2, 3, 1);
+    seq = np.zeros((N, C, T + padNumber), dtype = X.dtype);
 
-    for y in range(FH):
-        yMax = y + stride * OH;
+    for t in range(FW):
+        tMax = t + stride * OT;
 
-        for x in range(D):
-            if inDiff:
-                seq[:, y: yMax: stride, x] += col[:, y, x, :];
-            else:
-                seq[:, y: yMax: stride, x] = col[:, y, x, :];
+        if inDiff:
+            seq[:, :, t: tMax: stride] += col[:, :, t, :];
+        else:
+            seq[:, :, t: tMax: stride] = col[:, :, t, :];
 
-    return seq[:, pad[0]: T + pad[0], :];
+    return seq[:, :, padding[0]: T + padding[0]];
 
 
 def parseStride2D(stride : Union[Tuple[int, int], int]) -> Tuple[int, int]:
@@ -428,6 +427,7 @@ def parsePadding2D(padding : Union[Tuple[int, ...], int]) -> Tuple[int, int, int
     return paddingTop, paddingBottom, paddingLeft, paddingRight;
 
 
+# X shape: batch_size, input_channel, image_height, image_width
 def im2col(X : np.ndarray, FH : int, FW : int, stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int] = 0) -> Tuple[np.ndarray, int, int]:
     N, C, H, W = X.shape;
     strideH, strideW = parseStride2D(stride);

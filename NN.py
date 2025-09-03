@@ -1837,18 +1837,18 @@ class MinMaxLayer(NetModuleBase):
 
 
 class Convolution1DLayer(NetModuleBase):
-    def __init__(self, FN : int, FH : int, FW : int, stride = 1, pad : Union[Tuple[int, ...], int] = 0, W : np.ndarray = None, b : np.ndarray = None):
+    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : int, stride : int = 1, padding : Union[Tuple[int, int], int] = 0, W : np.ndarray = None, b : np.ndarray = None):
         super().__init__();
 
         self._stride = stride;
-        self._pad = (pad, ) * 2 if isinstance(pad, int) else pad;
+        self._padding = (padding, padding) if isinstance(padding, int) else padding;
         self._shape = None;
         self._colX = None;
         self._colW = None;
-        self._name = f"Convolution1D {FN}*{FH}*{FW}";
+        self._name = f"Convolution1D {outputChannel}*{inputChannel}*{kernelSize}";
 
-        self._weight = math.sqrt(2.0 / (FH * FW)) * np.random.randn(FN, FH, FW).astype(defaultDType) if W is None else W;
-        self._bias = np.zeros(FN, dtype = defaultDType) if b is None else b;
+        self._weight = math.sqrt(2.0 / (inputChannel * kernelSize)) * np.random.randn(outputChannel, inputChannel, kernelSize).astype(defaultDType) if W is None else W;
+        self._bias = np.zeros(outputChannel, dtype = defaultDType) if b is None else b;
 
         self._params.append(NetParamDefinition("weight", self._weight));
         self._params.append(NetParamDefinition("bias", self._bias, canDecay = False));
@@ -1872,29 +1872,28 @@ class Convolution1DLayer(NetModuleBase):
         X = data[0];
         self._shape = X.shape;
 
-        N, T, D = X.shape;
-        FN, FH, FW = self._weight.shape;
-        OH = convOutputSize(T, FH, self._stride, sum(self._pad));
+        N, C, T = X.shape;
+        FN, C, FW = self._weight.shape;
 
-        self._colX = seq2col(X, FH, self._stride, self._pad);
+        self._colX, OT = seq2col(X, FW, self._stride, self._padding);
         self._colW = self._weight.reshape(FN, -1).T;
         Y = self._colX @ self._colW + self._bias;
-        Y = Y.reshape(N, OH, FN);
+        Y = Y.reshape(N, OT, FN).transpose(0, 2, 1);
 
         return Y, ;
 
 
     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
-        FN, FH, FW = self._weight.shape;
+        FN, C, FW = self._weight.shape;
 
-        colDY = dY.reshape(-1, FN);
+        colDY = dY.transpose(0, 2, 1).reshape(-1, FN);
         dW = self._colX.T @ colDY;
         db = np.sum(colDY, axis = 0);
         dX = colDY @ self._colW.T;
-        dX = col2seq(dX, self._shape, FH, self._stride, self._pad, True);
+        dX = col2seq(dX, self._shape, FW, self._stride, self._padding, True);
 
-        self._params[0].grad[...] = dW.T.reshape(FN, FH, FW);
+        self._params[0].grad[...] = dW.T.reshape(FN, C, FW);
         self._params[1].grad[...] = db;
 
         return dX, ;
