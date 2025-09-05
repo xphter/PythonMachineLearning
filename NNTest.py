@@ -11,8 +11,6 @@ import random;
 import collections;
 import urllib;
 
-import cupy as cp;
-import numpy as np;
 import pandas as pd;
 import scipy.stats;
 import matplotlib.pyplot as plt;
@@ -31,7 +29,7 @@ from GMM import *;
 from NN import *;
 from MNIST import *;
 from PTB import *;
-import torch;
+# import torch;
 
 
 def preprocess(text : str) -> (np.ndarray, dict, dict):
@@ -2097,6 +2095,8 @@ def unitTest():
     # testPerformance();
     # testFunctionalNetModuleGradient1();
     # testFunctionalNetModuleGradient2();
+    # testRelu_Numba();
+    testReluLayer_Numba();
     # testSigmoid1();
     # testSigmoid2();
     # testSigmoidGradient1();
@@ -2349,7 +2349,7 @@ def unitTest():
     # testSeq2SeqTSModel2();
     # testSeq2SeqTSModel_Dropout();
 
-    print(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} end to unit test\n");
+    print(f"\n{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} end to unit test\n");
 
 
 def sumAll(*X : np.ndarray) -> float:
@@ -2414,6 +2414,38 @@ def testFunctionalNetModuleGradient2():
     print(f"FunctionalNetModule, numericGradient2, dX1 error: {np.sum(np.abs(dX1 - dX1N))}, dX2 error: {np.sum(np.abs(dX2 - dX2N))}");
     print("\n");
 
+
+def testRelu_Numba():
+    N = 1000;
+    X = np.random.randn(N, N);
+
+    relu(X);
+
+    st = time.time();
+    for _ in range(N):
+        relu(X);
+    et = time.time();
+
+    print(f"time: {et - st} s.");
+
+
+# conclusion: not applicable
+def testReluLayer_Numba():
+    N = 1000;
+    X = np.random.randn(N, N);
+    dY = np.ones_like(X);
+
+    m = ReluLayer();
+    Y, = m.forward(X);
+    dX, = m.backward(dY);
+
+    st = time.time();
+    for _ in range(N):
+        Y, = m.forward(X);
+        dX, = m.backward(dY);
+    et = time.time();
+
+    print(f"time: {et - st} s.");
 
 
 def testSigmoid1():
