@@ -19,7 +19,7 @@ import mpl_toolkits.mplot3d as p3d;
 from typing import List, Tuple, Dict, Callable, Any;
 
 import DeviceConfig;
-DeviceConfig.floatLength = 64;
+DeviceConfig.floatLength = 32;
 # DeviceConfig.enableGPU = True;
 
 import DataHelper;
@@ -29,7 +29,7 @@ from GMM import *;
 from NN import *;
 from MNIST import *;
 from PTB import *;
-# import torch;
+import torch;
 
 
 def preprocess(text : str) -> (np.ndarray, dict, dict):
@@ -2096,7 +2096,7 @@ def unitTest():
     # testFunctionalNetModuleGradient1();
     # testFunctionalNetModuleGradient2();
     # testRelu_Numba();
-    testReluLayer_Numba();
+    # testReluLayer_Numba();
     # testSigmoid1();
     # testSigmoid2();
     # testSigmoidGradient1();
@@ -2189,7 +2189,7 @@ def unitTest():
     # testBatchNormalization1DLayer1();
     # testBatchNormalization1DLayer2();
     # testBatchNormalization1DLayerGradient1();
-    # testBatchNormalizationLayer1DGradient2();
+    testBatchNormalizationLayer1DGradient2();
     # testLayerNormalizationLayer1();
     # testLayerNormalizationLayerGradient1();
     # testLayerNormalizationLayerGradient2();
@@ -2357,7 +2357,7 @@ def sumAll(*X : np.ndarray) -> float:
 
 
 def getErrorText(title : str, x1 : np.ndarray, x2 : np.ndarray) -> str:
-    return f"{title}: {np.sum(np.fabs(x1 - x2))}({np.linalg.norm(x1 - x2) / (np.linalg.norm(x1) + np.linalg.norm(x2))}), ";
+    return f", {title}: {np.sum(np.fabs(x1 - x2))}({np.linalg.norm(x1 - x2) / (np.linalg.norm(x1) + np.linalg.norm(x2))})";
 
 
 def testPerformance():
@@ -3363,7 +3363,7 @@ def testAffineLayerGradient1():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(AffineLayer(inputSize, outputSize, W = x, b = b).forward(X)[0]), W);
     dbN = numericGradient(lambda x: np.sum(AffineLayer(inputSize, outputSize, W = W, b = x).forward(X)[0]), b);
-    print(f"AffineLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print(f"AffineLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}{getErrorText('dW error', dW1, dWN)}{getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
@@ -3385,7 +3385,7 @@ def testAffineLayerGradient2():
     Y2 = m2.forward(X)[0];
     dX2 = m2.backward(np.ones_like(Y2))[0];
     dW2 = m2.params[0].grad;
-    print(f"AffineLayer, numericGradient2, Y error: {np.sum(np.abs(Y1 - Y2))}, dX error: {np.sum(np.abs(dX1 - dX2))}, dW error: {np.sum(np.abs(dW1 - dW2))}");
+    print(f"AffineLayer, numericGradient2 {getErrorText('Y error', Y1, Y2)}{getErrorText('dX error', dX1, dX2)}{getErrorText('dW error', dW1, dW2)}");
     print("\n");
 
 
@@ -3401,7 +3401,7 @@ def testAffineLayerGradient3():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(AffineLayer(D, outputSize, W = x, b = b).forward(X)[0]), W);
     dbN = numericGradient(lambda x: np.sum(AffineLayer(D, outputSize, W = W, b = x).forward(X)[0]), b);
-    print(f"AffineLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print(f"AffineLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}{getErrorText('dW error', dW1, dWN)}{getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
@@ -3418,7 +3418,7 @@ def testAffineLayerGradient4():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"AffineLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"AffineLayer, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "AffineLayer, numericGradient4", X);
     print("\n");
 
@@ -3443,7 +3443,7 @@ def testConvolution1DLayer1():
 
                 Y2[i, j, k] = np.sum(x * W[j, :, :]) + b[j];
 
-    print(f"Convolution1DLayer, value1, {getErrorText('Y error', Y1, Y2)}");
+    print(f"Convolution1DLayer, value1 {getErrorText('Y error', Y1, Y2)}");
     print("\n");
 
 
@@ -3460,7 +3460,7 @@ def testConvolution1DLayerGradient1():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, W = x, b = b).forward(X)[0]), W);
     dbN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, W = W, b = x).forward(X)[0]), b);
-    print(f"Convolution1DLayer, numericGradient1, {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
+    print(f"Convolution1DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
@@ -3477,7 +3477,7 @@ def testConvolution1DLayerGradient2():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, W = x, b = b).forward(X)[0]), W);
     dbN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, W = W, b = x).forward(X)[0]), b);
-    print(f"Convolution1DLayer, numericGradient2, {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
+    print(f"Convolution1DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
@@ -3749,30 +3749,30 @@ def testBatchNormalization1DLayer1():
     Y1 = m1.forward(X01).detach().numpy();
     Y2, = m2.forward(X02);
 
-    print(f"BatchNormalization1DLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
-    print(f"BatchNormalization1DLayer, value1, eval mean error: {np.sum(np.abs(m1.running_mean.detach().numpy() - m2.evalMean))}");
-    print(f"BatchNormalization1DLayer, value1, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
+    print(f"BatchNormalization1DLayer, value1 {getErrorText('Y error', Y1, Y2)}");
+    print(f"BatchNormalization1DLayer, value1 {getErrorText('eval mean error', m1.running_mean.detach().numpy(), m2.evalMean)}");
+    print(f"BatchNormalization1DLayer, value1 {getErrorText('eval var error', m1.running_var.detach().numpy(), m2.evalVar)}");
 
     Y1 = m1.forward(X11).detach().numpy();
     Y2, = m2.forward(X12);
 
-    print(f"BatchNormalization1DLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
-    print(f"BatchNormalization1DLayer, value1, eval mean error: {np.sum(np.abs(m1.running_mean.detach().numpy() - m2.evalMean))}");
-    print(f"BatchNormalization1DLayer, value1, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
+    print(f"BatchNormalization1DLayer, value1 {getErrorText('Y error', Y1, Y2)}");
+    print(f"BatchNormalization1DLayer, value1 {getErrorText('eval mean error', m1.running_mean.detach().numpy(), m2.evalMean)}");
+    print(f"BatchNormalization1DLayer, value1 {getErrorText('eval var error', m1.running_var.detach().numpy(), m2.evalVar)}");
 
     Y1 = m1.forward(X21).detach().numpy();
     Y2, = m2.forward(X22);
 
-    print(f"BatchNormalization1DLayer, value1, Y = {np.sum(np.abs(Y1 - Y2))}");
-    print(f"BatchNormalization1DLayer, value1, eval mean error: {np.sum(np.abs(m1.running_mean.detach().numpy() - m2.evalMean))}");
-    print(f"BatchNormalization1DLayer, value1, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
+    print(f"BatchNormalization1DLayer, value1 {getErrorText('Y error', Y1, Y2)}");
+    print(f"BatchNormalization1DLayer, value1 {getErrorText('eval mean error', m1.running_mean.detach().numpy(), m2.evalMean)}");
+    print(f"BatchNormalization1DLayer, value1 {getErrorText('eval var error', m1.running_var.detach().numpy(), m2.evalVar)}");
 
     m1.eval();
     m2.context.isTrainingMode = False;
     Y1 = m1.forward(X31).detach().numpy();
     Y2, = m2.forward(X32);
 
-    print(f"BatchNormalization1DLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"BatchNormalization1DLayer, value1 {getErrorText('Y error', Y1, Y2)}");
 
 
 def testBatchNormalization1DLayer2():
@@ -3796,32 +3796,32 @@ def testBatchNormalization1DLayer2():
     m2.context.trainingIterations += 1;
     Y2, = m2.forward(X02);
 
-    print(f"BatchNormalization1DLayer, value2, Y error: {np.sum(np.abs(Y1 - Y2))}");
-    print(f"BatchNormalization1DLayer, value2, eval mean error: {np.sum(np.abs(m1.running_mean.detach().numpy() - m2.evalMean))}");
-    print(f"BatchNormalization1DLayer, value2, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
+    print(f"BatchNormalization1DLayer, value2 {getErrorText('Y error', Y1, Y2)}");
+    print(f"BatchNormalization1DLayer, value2 {getErrorText('eval mean error', m1.running_mean.detach().numpy(), m2.evalMean)}");
+    print(f"BatchNormalization1DLayer, value2 {getErrorText('eval var error', m1.running_var.detach().numpy(), m2.evalVar)}");
 
     Y1 = m1.forward(X11).detach().numpy();
     m2.context.trainingIterations += 1;
     Y2, = m2.forward(X12);
 
-    print(f"BatchNormalization1DLayer, value2, Y error: {np.sum(np.abs(Y1 - Y2))}");
-    print(f"BatchNormalization1DLayer, value2, eval mean error: {np.sum(np.abs(m1.running_mean.detach().numpy() - m2.evalMean))}");
-    print(f"BatchNormalization1DLayer, value2, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
+    print(f"BatchNormalization1DLayer, value2 {getErrorText('Y error', Y1, Y2)}");
+    print(f"BatchNormalization1DLayer, value2 {getErrorText('eval mean error', m1.running_mean.detach().numpy(), m2.evalMean)}");
+    print(f"BatchNormalization1DLayer, value2 {getErrorText('eval var error', m1.running_var.detach().numpy(), m2.evalVar)}");
 
     Y1 = m1.forward(X21).detach().numpy();
     m2.context.trainingIterations += 1;
     Y2, = m2.forward(X22);
 
-    print(f"BatchNormalization1DLayer, value2, Y = {np.sum(np.abs(Y1 - Y2))}");
-    print(f"BatchNormalization1DLayer, value2, eval mean error: {np.sum(np.abs(m1.running_mean.detach().numpy() - m2.evalMean))}");
-    print(f"BatchNormalization1DLayer, value2, eval var error: {np.sum(np.abs(m1.running_var.detach().numpy() - m2.evalVar))}");
+    print(f"BatchNormalization1DLayer, value2 {getErrorText('Y error', Y1, Y2)}");
+    print(f"BatchNormalization1DLayer, value2 {getErrorText('eval mean error', m1.running_mean.detach().numpy(), m2.evalMean)}");
+    print(f"BatchNormalization1DLayer, value2 {getErrorText('eval var error', m1.running_var.detach().numpy(), m2.evalVar)}");
 
     m1.eval();
     m2.context.isTrainingMode = False;
     Y1 = m1.forward(X31).detach().numpy();
     Y2, = m2.forward(X32);
 
-    print(f"BatchNormalization1DLayer, value2, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"BatchNormalization1DLayer, value2 {getErrorText('Y error', Y1, Y2)}");
 
 
 def testBatchNormalization1DLayerGradient1():
@@ -3842,7 +3842,7 @@ def testBatchNormalization1DLayerGradient1():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dGammaN = numericGradient(lambda x: np.sum(createModel(D, x, beta).forward(X)[0]), gamma);
     dBetaN = numericGradient(lambda x: np.sum(createModel(D, gamma, x).forward(X)[0]), beta);
-    print(f"BatchNormalization1DLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dGamma error: {np.sum(np.abs(dGamma1 - dGammaN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print(f"BatchNormalization1DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}{getErrorText('dGamma error', dGamma1, dGammaN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
@@ -3863,7 +3863,7 @@ def testBatchNormalizationLayer1DGradient2():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dGammaN = numericGradient(lambda x: np.sum(createModel(D, x, beta).forward(X)[0]), gamma);
     dBetaN = numericGradient(lambda x: np.sum(createModel(D, gamma, x).forward(X)[0]), beta);
-    print(f"BatchNormalization1DLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dGamma error: {np.sum(np.abs(dGamma1 - dGammaN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print(f"BatchNormalization1DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}{getErrorText('dGamma error', dGamma1, dGammaN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
