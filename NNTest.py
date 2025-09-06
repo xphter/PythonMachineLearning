@@ -2092,6 +2092,8 @@ def testSeq2Seq():
 def unitTest():
     print(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} start to unit test\n");
 
+    testSGD_Numba();
+
     # testPerformance();
     # testFunctionalNetModuleGradient1();
     # testFunctionalNetModuleGradient2();
@@ -2189,7 +2191,7 @@ def unitTest():
     # testBatchNormalization1DLayer1();
     # testBatchNormalization1DLayer2();
     # testBatchNormalization1DLayerGradient1();
-    testBatchNormalizationLayer1DGradient2();
+    # testBatchNormalizationLayer1DGradient2();
     # testLayerNormalizationLayer1();
     # testLayerNormalizationLayerGradient1();
     # testLayerNormalizationLayerGradient2();
@@ -2358,6 +2360,22 @@ def sumAll(*X : np.ndarray) -> float:
 
 def getErrorText(title : str, x1 : np.ndarray, x2 : np.ndarray) -> str:
     return f", {title}: {np.sum(np.fabs(x1 - x2))}({np.linalg.norm(x1 - x2) / (np.linalg.norm(x1) + np.linalg.norm(x2))})";
+
+
+def testSGD_Numba():
+    N = 10000;
+    sdg = SGD();
+    context = NetContext();
+    params = [NetParamDefinition(f"weight{i}", np.random.randn(100, 100), grad = np.random.randn(100, 100)) for i in range(100)];
+
+    sdg.updateStep(params, context);
+
+    st = time.time();
+    for _ in range(N):
+        sdg.updateStep(params, context)
+    et = time.time();
+
+    print(f"time: {et - st} s.");
 
 
 def testPerformance():
