@@ -702,7 +702,7 @@ def loadTSData1AndMany(targetTag : str, negativeTags : List[str], positiveTags :
 
 def testTS_Many2One():
     targetTag = "TI6116A.PV";
-    negativeTags = [];  #['XIP301A.PV', 'DI6103.PV', 'FIC6031.SV', 'PDI6105.PV', 'DI6104.PV', 'JI6601.PV', 'TIC6522.SV'];
+    negativeTags = [];   # ['XIP301A.PV', 'DI6103.PV', 'FIC6031.SV', 'PDI6105.PV', 'DI6104.PV', 'JI6601.PV', 'TIC6522.SV'];
     # positiveTags = [];
     positiveTags = ['TI6116B.PV', 'TIC6115.PV', 'TI6106.PV', 'TI6901.PV', 'TI6166A.PV', 'TE6658.PV', 'TI6107D.PV', 'TI6107C.PV', 'TI6107H.PV', 'TI6107G.PV'];
 
@@ -2092,7 +2092,8 @@ def testSeq2Seq():
 def unitTest():
     print(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} start to unit test\n");
 
-    testSGD_Numba();
+    # testSGD_Numba();
+    testSeq2col_Numba();
 
     # testPerformance();
     # testFunctionalNetModuleGradient1();
@@ -2372,7 +2373,22 @@ def testSGD_Numba():
 
     st = time.time();
     for _ in range(N):
-        sdg.updateStep(params, context)
+        sdg.updateStep(params, context);
+    et = time.time();
+
+    print(f"time: {et - st} s.");
+
+
+def testSeq2col_Numba():
+    N = 1000;
+    FW, stride, padding = 5, 1, 0;
+    X = np.random.randn(1000, 30, 10);
+
+    Y, OT = seq2col(X, FW, stride, padding);
+
+    st = time.time();
+    for _ in range(N):
+        Y, OT = seq2col(X, FW, stride, padding);
     et = time.time();
 
     print(f"time: {et - st} s.");
@@ -2511,7 +2527,7 @@ def testSigmoidGradient2():
     print("\n");
 
 
-def testlabelSmoothing():
+def testLabelSmoothing():
     X = np.array([-25.0, -21, 21, 25]);
     Y = sigmoid(X);
 
@@ -6882,15 +6898,15 @@ def testBernoulliVAEGradient2():
     X, epsilon = np.random.randn(N, D), np.random.randn(N, L, H);
 
     m = BernoulliVAE(AggregateNetModule(
-        AffineLayer(D, 32),#, W = np.random.randn(D, 32), b = np.random.randn(32)),
+        AffineLayer(D, 32), #, W = np.random.randn(D, 32), b = np.random.randn(32)),
         SoftplusLayer(),
-        AffineLayer(32, 16),#, W = np.random.randn(32, 16), b = np.random.randn(16)),
+        AffineLayer(32, 16), #, W = np.random.randn(32, 16), b = np.random.randn(16)),
         SoftplusLayer(),
-        AffineLayer(16, 2 * H),#, W = np.random.randn(16, 2 * H), b = np.random.randn(2 * H)),
+        AffineLayer(16, 2 * H), #, W = np.random.randn(16, 2 * H), b = np.random.randn(2 * H)),
     ), AggregateNetModule(
-        AffineLayer(H, 16),#, W = np.random.randn(H, 16), b = np.random.randn(16)),
+        AffineLayer(H, 16), #, W = np.random.randn(H, 16), b = np.random.randn(16)),
         SoftplusLayer(),
-        AffineLayer(16, 32),#, W = np.random.randn(16, 32), b = np.random.randn(32)),
+        AffineLayer(16, 32), #, W = np.random.randn(16, 32), b = np.random.randn(32)),
         SoftplusLayer(),
         AffineLayer(32, D)#, W = np.random.randn(32, D), b = np.random.randn(D)),
     ), H, L);
