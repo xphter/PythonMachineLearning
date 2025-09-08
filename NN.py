@@ -126,7 +126,7 @@ class INetParamDefinition(INetParam):
 
 
     @abc.abstractmethod
-    def copy(self, share : bool):
+    def copy(self, share : bool) -> "INetParamDefinition":
         pass;
 
 
@@ -138,7 +138,7 @@ class INetState(metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def copy(self):
+    def copy(self) -> "INetState":
         pass;
 
 
@@ -233,7 +233,7 @@ class INetAccuracyEvaluator(metaclass = abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def accuracy(self) -> Optional[float]:
+    def accuracy(self) -> float:
         pass;
 
 
@@ -370,7 +370,7 @@ class INetFitResult(metaclass = abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def accuracyName(self) -> str:
+    def accuracyName(self) -> Optional[str]:
         pass;
 
 
@@ -666,7 +666,7 @@ class AggregateNetModule(NetModuleBase):
 
 
     @property
-    def modules(self) -> Tuple[INetModule]:
+    def modules(self) -> Tuple[INetModule, ...]:
         return self._modules;
 
 
@@ -842,7 +842,7 @@ class NetFitResult(INetFitResult):
 
 
     @property
-    def accuracyName(self) -> str:
+    def accuracyName(self) -> Optional[str]:
         return self._accuracyName;
 
 
@@ -870,14 +870,14 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                     loss = lossFunc.forward(*Y, T) if T is not None else lossFunc.forward(*Y);
 
                     lossValues.append(loss);
-                    evaluator.update(loss, *Y, T);
+                    evaluator.update(loss, *Y, T) if T is not None else evaluator.update(loss, *Y);
 
                 evaluator.fromLoss(lossValues);
         finally:
             self.reset();
             self.context.isTrainingMode = True;
 
-        return sum(lossValues) / len(lossValues), evaluator.accuracy;
+        return sum(lossValues) / len(lossValues) if lossValues is not None else 0.0, evaluator.accuracy;
 
 
     def fit(self, trainingIterator: IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch: int, testIterator: Optional[IDataIterator] = None,
@@ -920,7 +920,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
                 lossValues.append(loss);
                 if evaluator is not None:
-                    evaluator.update(loss, *Y, T);
+                    evaluator.update(loss, *Y, T) if T is not None else evaluator.update(loss, *Y);
 
                 self.backward(*lossFunc.backward());
                 optimizer.updateStep(self.params, self.context);
@@ -951,11 +951,11 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                     paramsData.append([p.copy(False) for p in self.params]);
                     statesData.append([s.copy() for s in self.states]);
 
-            trainingMessage = f", training {evaluator.name}: {trainingAccuracyData[-1]}" if len(trainingAccuracyData) > 0 else "";
-            testMessage = f", test loss: {testLossData[-1]}, test {evaluator.name}: {testAccuracyData[-1]}" if len(testAccuracyData) > 0 else "";
+            trainingMessage = f", training {evaluator.name}: {trainingAccuracyData[-1]}" if len(trainingAccuracyData) > 0 and evaluator is not None else "";
+            testMessage = f", test loss: {testLossData[-1]}, test {evaluator.name}: {testAccuracyData[-1]}" if len(testAccuracyData) > 0 and evaluator is not None else "";
             print(f"epoch {epoch}, training loss: {trainingLossData[-1]}{trainingMessage}{testMessage}, elapsed time: {int(time.time() - startTime)}s");
 
-        if minEpoch is not None and len(paramsData) > 0:
+        if minEpoch is not None and len(paramsData) > 0 and evaluator is not None:
             index = np.argmax(testAccuracyData[minEpoch:]) if evaluator.high else np.argmin(testAccuracyData[minEpoch:]);
             self.params = paramsData[minEpoch + int(index)];
             self.states = statesData[minEpoch + int(index)];
@@ -994,7 +994,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
 class NetLossBase(INetLoss, metaclass = abc.ABCMeta):
     def __init__(self):
-        self._loss = None;
+        self._loss = 0.0;
 
 
     @property
@@ -3646,7 +3646,7 @@ class CBOWModel(NetModelBase):
         return dX, ;
 
 
-    def getFinalTag(self, T : np.ndarray) -> np.ndarray:
+    def getFinalTag(self, T : np.ndarray) -> Optional[np.ndarray]:
         return self._finalTag;
 
 
@@ -3702,7 +3702,7 @@ class SkipGramModel(NetModelBase):
         return dX, ;
 
 
-    def getFinalTag(self, T : np.ndarray) -> np.ndarray:
+    def getFinalTag(self, T : np.ndarray) -> Optional[np.ndarray]:
         return self._finalTag;
 
 
@@ -5698,7 +5698,7 @@ class RepeatedWrapper(NetModuleBase):
 
 
     def _copyMembers(self, module : INetModule, shareParams : bool):
-        raise NotImplemented();
+        raise NotImplementedError();
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
@@ -5835,9 +5835,9 @@ class MaeAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     @property
-    def accuracy(self) -> Optional[float]:
+    def accuracy(self) -> float:
         # return math.sqrt(self._rss / self._totalCount) if self._totalCount > 0 else None;
-        return (self._rss / self._totalCount) if self._totalCount > 0 else None;
+        return (self._rss / self._totalCount) if self._totalCount > 0 else 0.0;
 
 
     def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
@@ -5884,10 +5884,10 @@ class MseAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     @property
-    def accuracy(self) -> Optional[float]:
-        result = (self._rss / self._totalCount) if self._totalCount > 0 else None;
+    def accuracy(self) -> float:
+        result = (self._rss / self._totalCount) if self._totalCount > 0 else 0.0;
 
-        if result is not None and self._takeRoot:
+        if self._takeRoot:
             result = math.sqrt(result);
 
         return result;
@@ -5934,8 +5934,8 @@ class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     @property
-    def accuracy(self) -> Optional[float]:
-        return self._rightCount / self._totalCount if self._totalCount > 0 else None;
+    def accuracy(self) -> float:
+        return self._rightCount / self._totalCount if self._totalCount > 0 else 0.0;
 
 
     def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
@@ -5965,7 +5965,7 @@ class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
 
 class PerplexityAccuracyEvaluator(INetAccuracyEvaluator):
     def __init__(self):
-        self._perplexity = None;
+        self._perplexity = 0.0;
 
 
     @property
@@ -5979,7 +5979,7 @@ class PerplexityAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     @property
-    def accuracy(self) -> Optional[float]:
+    def accuracy(self) -> float:
         return self._perplexity;
 
 
@@ -5996,7 +5996,7 @@ class PerplexityAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     def reset(self):
-        self._perplexity = None;
+        self._perplexity = 0.0;
 
 
 # the output distribution of VAE is Gaussian
