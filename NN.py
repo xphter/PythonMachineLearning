@@ -2,7 +2,7 @@
 #
 # Copyright (C) 2024 XphteR, Inc. All Rights Reserved
 #
-# @Time    : 2024-11-16
+# @Time    : 2025-09-09
 # @Author  : Du Peng
 # @Email   : 278770518@qq.com
 # @File    : NN.py
@@ -238,7 +238,7 @@ class INetAccuracyEvaluator(metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def fromLoss(self, lossValues : List[float] = None) -> bool:
+    def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
         pass;
 
 
@@ -381,14 +381,14 @@ class INetModel(INetModule, metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def eval(self, lossFunc: INetLoss, evaluator: INetAccuracyEvaluator, lossValues: List[float] = None, iterator: Iterable = None) -> Tuple[float, float]:
+    def eval(self, lossFunc: INetLoss, evaluator: INetAccuracyEvaluator, lossValues: Optional[List[float]] = None, iterator: Optional[Iterable] = None) -> Tuple[float, float]:
         pass;
 
 
     @abc.abstractmethod
-    def fit(self, trainingIterator : IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch : int, testIterator : IDataIterator = None,
-            evaluator: INetAccuracyEvaluator = None, evalEpoch : bool = True, evalIterations : int = None, evalTrainingData : bool = False, evalTestData : bool = True,
-            minEpoch : int = None, plot = False) -> INetFitResult:
+    def fit(self, trainingIterator : IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch : int, testIterator : Optional[IDataIterator] = None,
+            evaluator: Optional[INetAccuracyEvaluator] = None, evalEpoch : bool = True, evalIterations : Optional[int] = None, evalTrainingData : bool = False, evalTestData : bool = True,
+            minEpoch : Optional[int] = None, plot = False) -> INetFitResult:
         pass;
 
 
@@ -477,7 +477,7 @@ class NetContext(INetContext):
 
 
 class NetParam(INetParam):
-    def __init__(self, value : np.ndarray, grad : np.ndarray = None):
+    def __init__(self, value : np.ndarray, grad : Optional[np.ndarray] = None):
         self._value = value;
         self._grad = np.zeros_like(value, dtype = value.dtype) if grad is None else grad;
 
@@ -493,7 +493,7 @@ class NetParam(INetParam):
 
 
 class NetParamDefinition(NetParam, INetParamDefinition):
-    def __init__(self, name : str, value : np.ndarray, handler: Optional[INetParamHandler] = None, grad : np.ndarray = None, canDecay : bool = True):
+    def __init__(self, name : str, value : np.ndarray, handler: Optional[INetParamHandler] = None, grad : Optional[np.ndarray] = None, canDecay : bool = True):
         super().__init__(value, grad);
 
         self._name = name;
@@ -790,7 +790,7 @@ class NetFitResult(INetFitResult):
                  testLossData : List[float], testAccuracyData : List[float],
                  finalTrainingLoss : Optional[float] = None, finalTrainingAccuracy : Optional[float] = None,
                  finalTestLoss : Optional[float] = None, finalTestAccuracy : Optional[float] = None,
-                 accuracyName : str = None):
+                 accuracyName : Optional[str] = None):
         self._trainingLossData = trainingLossData;
         self._trainingAccuracyData = trainingAccuracyData;
         self._testLossData = testLossData;
@@ -855,7 +855,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         return T;
 
 
-    def eval(self, lossFunc : INetLoss, evaluator : INetAccuracyEvaluator, lossValues : List[float] = None, iterator : Iterable = None) -> Tuple[float, float]:
+    def eval(self, lossFunc : INetLoss, evaluator : INetAccuracyEvaluator, lossValues : Optional[List[float]] = None, iterator : Optional[Iterable] = None) -> Tuple[float, float]:
         self.context.isTrainingMode = False;
 
         try:
@@ -880,9 +880,9 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         return sum(lossValues) / len(lossValues), evaluator.accuracy;
 
 
-    def fit(self, trainingIterator: IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch: int, testIterator: IDataIterator = None,
-            evaluator: INetAccuracyEvaluator = None, evalEpoch: bool = True, evalIterations: int = None, evalTrainingData: bool = False, evalTestData: bool = True,
-            minEpoch : int = None, plot = False) -> INetFitResult:
+    def fit(self, trainingIterator: IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch: int, testIterator: Optional[IDataIterator] = None,
+            evaluator: Optional[INetAccuracyEvaluator] = None, evalEpoch: bool = True, evalIterations: Optional[int] = None, evalTrainingData: bool = False, evalTestData: bool = True,
+            minEpoch : Optional[int] = None, plot = False) -> INetFitResult:
         lossValues = [];
         trainingLossData = [];
         trainingAccuracyData = [];
@@ -1022,7 +1022,7 @@ class NetOptimizerBase(INetOptimizer, metaclass = abc.ABCMeta):
 
 
     def _onPreUpdate(self, params : List[INetParamDefinition]):
-        handler: Optinal[INetParamHandler] = None;
+        handler: Optional[INetParamHandler] = None;
 
         for p in params:
             if self._canDecay and p.canDecay:
@@ -1043,7 +1043,7 @@ class NetOptimizerBase(INetOptimizer, metaclass = abc.ABCMeta):
 
 
     def _onPostUpdate(self, params : List[INetParamDefinition]):
-        handler: Optinal[INetParamHandler] = None;
+        handler: Optional[INetParamHandler] = None;
 
         for p in params:
             if (handler := p.handler) is None:
@@ -1063,7 +1063,7 @@ class NetOptimizerBase(INetOptimizer, metaclass = abc.ABCMeta):
 
 
 class NetLrSchedulerBase(INetLrScheduler, metaclass = abc.ABCMeta):
-    def __init__(self, baseLr : float, minEpoch : int = 0, maxEpoch : int = None):
+    def __init__(self, baseLr : float, minEpoch : int = 0, maxEpoch : Optional[int] = None):
         self._baseLr = baseLr;
         self._currentLr = baseLr;
         self._minEpoch = minEpoch;
@@ -1144,7 +1144,7 @@ class ReluLayer(NetModuleBase):
 
 
 class PReluLayer(NetModuleBase):
-    def __init__(self, beta : Union[float, np.ndarray] = None, outputSize : int = None):
+    def __init__(self, beta : Optional[Union[float, np.ndarray]] = None, outputSize : Optional[int] = None):
         super().__init__();
 
         self._X = None;
@@ -1216,7 +1216,7 @@ class SoftplusLayer(NetModuleBase):
 
 
 class SwishLayer(NetModuleBase):
-    def __init__(self, beta : Union[float, np.ndarray] = None, outputSize : int = None):
+    def __init__(self, beta : Optional[Union[float, np.ndarray]] = None, outputSize : Optional[int] = None):
         super().__init__();
 
         self._X = None;
@@ -1531,7 +1531,7 @@ class FlattenLayer(NetModuleBase):
 
 
 class AffineLayer(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, includeBias : bool = True, W : np.ndarray = None, b : np.ndarray = None, weightHandler : INetParamHandler = None):
+    def __init__(self, inputSize : int, outputSize : int, includeBias : bool = True, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None, weightHandler : Optional[INetParamHandler] = None):
         super().__init__();
 
         self._X = None;
@@ -1603,7 +1603,7 @@ class AffineLayer(NetModuleBase):
 
 
 class BatchNormalization1DLayer(NetModuleBase):
-    def __init__(self, inputSize : int, gamma : np.ndarray = None, beta : np.ndarray = None, epsilon = 1e-8, momentum : Optional[float] = 0.1):
+    def __init__(self, inputSize : int, gamma : Optional[np.ndarray] = None, beta : Optional[np.ndarray] = None, epsilon = 1e-8, momentum : Optional[float] = 0.1):
         super().__init__();
 
         self._epsilon = epsilon;
@@ -1734,7 +1734,7 @@ class BatchNormalization1DLayer(NetModuleBase):
 
 
 class LayerNormalizationLayer(NetModuleBase):
-    def __init__(self, layerShape : Union[int, Tuple[int, ...]], gamma : np.ndarray = None, beta : np.ndarray = None, epsilon = 1e-8):
+    def __init__(self, layerShape : Union[int, Tuple[int, ...]], gamma : Optional[np.ndarray] = None, beta : Optional[np.ndarray] = None, epsilon = 1e-8):
         super().__init__();
 
         self._epsilon = epsilon;
@@ -1802,7 +1802,7 @@ class LayerNormalizationLayer(NetModuleBase):
 
 
 class MinMaxLayer(NetModuleBase):
-    def __init__(self, minValue : float = None, maxValue : float = None):
+    def __init__(self, minValue : Optional[float] = None, maxValue : Optional[float] = None):
         super().__init__();
 
         self._minValue = minValue;
@@ -1837,7 +1837,7 @@ class MinMaxLayer(NetModuleBase):
 
 
 class Convolution1DLayer(NetModuleBase):
-    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : int, stride : int = 1, padding : Union[Tuple[int, int], int] = 0, W : np.ndarray = None, b : np.ndarray = None):
+    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : int, stride : int = 1, padding : Union[Tuple[int, int], int] = 0, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None):
         super().__init__();
 
         self._stride = stride;
@@ -1900,7 +1900,7 @@ class Convolution1DLayer(NetModuleBase):
 
 
 class Convolution2DLayer(NetModuleBase):
-    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : Union[Tuple[int, int], int], stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int] = 0, W : np.ndarray = None, b : np.ndarray = None):
+    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : Union[Tuple[int, int], int], stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int] = 0, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None):
         super().__init__();
 
         FH, FW = kernelSize[: 2] if isinstance(kernelSize, tuple) else (kernelSize, kernelSize);
@@ -1964,7 +1964,7 @@ class Convolution2DLayer(NetModuleBase):
 
 
 class MaxPooling2DLayer(NetModuleBase):
-    def __init__(self, poolingSize : Union[Tuple[int, int], int], stride : Union[Tuple[int, int], int] = None, padding : Union[Tuple[int, ...], int] = 0):
+    def __init__(self, poolingSize : Union[Tuple[int, int], int], stride : Optional[Union[Tuple[int, int], int]] = None, padding : Union[Tuple[int, ...], int] = 0):
         super().__init__();
 
         self._PH, self._PW = poolingSize[: 2] if isinstance(poolingSize, tuple) else (poolingSize, poolingSize);
@@ -2006,7 +2006,7 @@ class MaxPooling2DLayer(NetModuleBase):
 
 
 class AvgPooling2DLayer(NetModuleBase):
-    def __init__(self, poolingSize : Union[Tuple[int, int], int], stride : Union[Tuple[int, int], int] = None, padding : Union[Tuple[int, ...], int] = 0):
+    def __init__(self, poolingSize : Union[Tuple[int, int], int], stride : Optional[Union[Tuple[int, int], int]] = None, padding : Union[Tuple[int, ...], int] = 0):
         super().__init__();
 
         self._PH, self._PW = poolingSize[: 2] if isinstance(poolingSize, tuple) else (poolingSize, poolingSize);
@@ -2043,7 +2043,7 @@ class AvgPooling2DLayer(NetModuleBase):
 
 
 class AdditiveResidualBlock(NetModuleBase):
-    def __init__(self, mainModule : INetModule, adaptiveModule : INetModule = None, activationModule : INetModule = None):
+    def __init__(self, mainModule : INetModule, adaptiveModule : Optional[INetModule] = None, activationModule : Optional[INetModule] = None):
         super().__init__();
 
         self._mainModule = mainModule;
@@ -2080,7 +2080,7 @@ class AdditiveResidualBlock(NetModuleBase):
 
 
 class EmbeddingLayer(NetModuleBase):
-    def __init__(self, embeddingNum : int, embeddingSize : int, W : np.ndarray = None):
+    def __init__(self, embeddingNum : int, embeddingSize : int, W : Optional[np.ndarray] = None):
         super().__init__();
 
         self._index = None;
@@ -2123,7 +2123,7 @@ class EmbeddingLayer(NetModuleBase):
 
 
 class EmbeddingWithDotLayer(NetModuleBase):
-    def __init__(self, embeddingNum : int, embeddingSize : int, W : np.ndarray = None):
+    def __init__(self, embeddingNum : int, embeddingSize : int, W : Optional[np.ndarray] = None):
         super().__init__();
 
         self._X = None;
@@ -2168,7 +2168,7 @@ class EmbeddingWithDotLayer(NetModuleBase):
 
 
 class RnnCellBase(NetModuleBase, metaclass = abc.ABCMeta):
-    def __init__(self, inputSize : int, hiddenSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
+    def __init__(self, inputSize : int, hiddenSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, bx : Optional[np.ndarray] = None, bh : Optional[np.ndarray] = None):
         super().__init__();
 
         self._inputSize = inputSize;
@@ -2211,7 +2211,7 @@ class RnnCellBase(NetModuleBase, metaclass = abc.ABCMeta):
 
 
 class RnnCell(RnnCellBase):
-    def __init__(self, inputSize : int, hiddenSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None, activationFunc : INetModule = None):
+    def __init__(self, inputSize : int, hiddenSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, bx : Optional[np.ndarray] = None, bh : Optional[np.ndarray] = None, activationFunc : Optional[INetModule] = None):
         if activationFunc is not None and len(activationFunc.params) > 0:
             raise ValueError("not supports activation function with parameters");
 
@@ -2259,7 +2259,7 @@ class RnnCell(RnnCellBase):
 
 
 class GruCell(RnnCellBase):
-    def __init__(self, inputSize : int, hiddenSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
+    def __init__(self, inputSize : int, hiddenSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, bx : Optional[np.ndarray] = None, bh : Optional[np.ndarray] = None):
         super().__init__(inputSize, hiddenSize, Wx, Wh, bx, bh);
 
         self._Xg, self._Xa = None, None;
@@ -2336,7 +2336,7 @@ class GruCell(RnnCellBase):
 
 
 class LstmCell(RnnCellBase):
-    def __init__(self, inputSize : int, hiddenSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
+    def __init__(self, inputSize : int, hiddenSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, bx : Optional[np.ndarray] = None, bh : Optional[np.ndarray] = None):
         super().__init__(inputSize, hiddenSize, Wx, Wh, bx, bh);
 
         self._X, self._W, self._C = None, None, None;
@@ -2401,7 +2401,7 @@ class LstmCell(RnnCellBase):
 
 
 class RnnLayerBase(NetModuleBase, metaclass = abc.ABCMeta):
-    def __init__(self, inputSize : int, hiddenSize : int, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
+    def __init__(self, inputSize : int, hiddenSize : int, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, bx : Optional[np.ndarray] = None, bh : Optional[np.ndarray] = None):
         super().__init__();
 
         if not returnSequence and not returnState:
@@ -2450,7 +2450,7 @@ class RnnLayerBase(NetModuleBase, metaclass = abc.ABCMeta):
 
 
 class RnnLayer(RnnLayerBase):
-    def __init__(self, inputSize : int, hiddenSize : int, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None, activationFuncSelector : Callable = None):
+    def __init__(self, inputSize : int, hiddenSize : int, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, bx : Optional[np.ndarray] = None, bh : Optional[np.ndarray] = None, activationFuncSelector : Optional[Callable] = None):
         super().__init__(inputSize, hiddenSize, stateful, returnSequence, returnState, Wx, Wh, bx, bh);
 
         self._H = None;
@@ -2567,7 +2567,7 @@ class RnnLayer(RnnLayerBase):
 
 
 class GruLayer(RnnLayerBase):
-    def __init__(self, inputSize : int, hiddenSize : int, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
+    def __init__(self, inputSize : int, hiddenSize : int, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, bx : Optional[np.ndarray] = None, bh : Optional[np.ndarray] = None):
         super().__init__(inputSize, hiddenSize, stateful, returnSequence, returnState, Wx, Wh, bx, bh);
 
         self._H = None;
@@ -2724,7 +2724,7 @@ class GruLayer(RnnLayerBase):
 
 
 class LstmLayer(RnnLayerBase):
-    def __init__(self, inputSize : int, hiddenSize : int, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, Wx : np.ndarray = None, Wh : np.ndarray = None, bx : np.ndarray = None, bh : np.ndarray = None):
+    def __init__(self, inputSize : int, hiddenSize : int, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, bx : Optional[np.ndarray] = None, bh : Optional[np.ndarray] = None):
         super().__init__(inputSize, hiddenSize, stateful, returnSequence, returnState, Wx, Wh, bx, bh);
 
         self._H, self._C = None, None;
@@ -2881,7 +2881,7 @@ class LstmLayer(RnnLayerBase):
 dropout mechanism: https://arxiv.org/abs/1603.05118 <Recurrent Dropout without Memory Loss>
 '''
 class LstmCell2(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, inputDropout : float = 0, recurrentDropout : float = 0):
+    def __init__(self, inputSize : int, outputSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None, inputDropout : float = 0, recurrentDropout : float = 0):
         super().__init__();
 
         self._X, self._H, self._C = None, None, None;
@@ -2979,16 +2979,16 @@ class LstmCell2(NetModuleBase):
         return dX, dH, dC;
 
 
-    def setInputDropoutMask(self, mask : np.ndarray = None):
+    def setInputDropoutMask(self, mask : Optional[np.ndarray] = None):
         self._inputDropoutMask = mask;
 
 
-    def setRecurrentDropoutMask(self, mask : np.ndarray = None):
+    def setRecurrentDropoutMask(self, mask : Optional[np.ndarray] = None):
         self._recurrentDropoutMask = mask;
 
 
 class LstmLayer2(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, inputDropout : float = 0, recurrentDropout : float = 0):
+    def __init__(self, inputSize : int, outputSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, inputDropout : float = 0, recurrentDropout : float = 0):
         super().__init__();
 
         self._T = 0;
@@ -3210,7 +3210,7 @@ class LstmLayer2(NetModuleBase):
         return din;
 
 
-    def setState(self, H : np.ndarray, C : np.ndarray = None):
+    def setState(self, H : np.ndarray, C : Optional[np.ndarray] = None):
         self._H, self._C = H, C;
 
 
@@ -3220,7 +3220,7 @@ class LstmLayer2(NetModuleBase):
 
 
     # only used in unit test!
-    def setInputDropoutMask(self, mask : np.ndarray = None):
+    def setInputDropoutMask(self, mask : Optional[np.ndarray] = None):
         self._inputDropoutMask = mask;
 
         for cell in self._lstmModules:
@@ -3228,7 +3228,7 @@ class LstmLayer2(NetModuleBase):
 
 
     # only used in unit test!
-    def setRecurrentDropoutMask(self, mask : np.ndarray = None):
+    def setRecurrentDropoutMask(self, mask : Optional[np.ndarray] = None):
         self._recurrentDropoutMask = mask;
 
         for cell in self._lstmModules:
@@ -3236,7 +3236,7 @@ class LstmLayer2(NetModuleBase):
 
 
 class BahdanauAttentionLstmLayer(LstmLayer):
-    def __init__(self, inputSize : int, outputSize : int, Wx : np.ndarray = None, Wh : np.ndarray = None, b : np.ndarray = None, Wq : np.ndarray = None, Wk : np.ndarray = None, wv : np.ndarray = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, inputDropout : float = 0, recurrentDropout : float = 0):
+    def __init__(self, inputSize : int, outputSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None, Wq : Optional[np.ndarray] = None, Wk : Optional[np.ndarray] = None, wv : Optional[np.ndarray] = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, inputDropout : float = 0, recurrentDropout : float = 0):
         super().__init__(outputSize + inputSize, outputSize, Wx, Wh, b, returnSequences, returnState, stateful, stepwise, inputDropout, recurrentDropout);
 
         self._shapeK = None;
@@ -3592,7 +3592,7 @@ class CorpusNegativeSampler:
 
 
 class CBOWModel(NetModelBase):
-    def __init__(self, windowSize : int, vocabSize : int, hiddenSize : int, negativeSampler : CorpusNegativeSampler, inW : np.ndarray = None, outW : np.ndarray = None):
+    def __init__(self, windowSize : int, vocabSize : int, hiddenSize : int, negativeSampler : CorpusNegativeSampler, inW : Optional[np.ndarray] = None, outW : Optional[np.ndarray] = None):
         self._finalTag = None;
         self._windowSize = windowSize;
         self._vocabSize = vocabSize;
@@ -3651,7 +3651,7 @@ class CBOWModel(NetModelBase):
 
 
 class SkipGramModel(NetModelBase):
-    def __init__(self, windowSize : int, vocabSize : int, hiddenSize : int, negativeSampler : CorpusNegativeSampler, inW : np.ndarray = None, outW : np.ndarray = None):
+    def __init__(self, windowSize : int, vocabSize : int, hiddenSize : int, negativeSampler : CorpusNegativeSampler, inW : Optional[np.ndarray] = None, outW : Optional[np.ndarray] = None):
         self._finalTag = None;
         self._windowSize = windowSize;
         self._vocabSize = vocabSize;
@@ -4352,7 +4352,7 @@ class NetOptimizerWithLrScheduler(INetOptimizer):
 
 
 class ConstantNetLrScheduler(NetLrSchedulerBase):
-    def __init__(self, baseLr : float, minEpoch : int = 0, maxEpoch : int = None):
+    def __init__(self, baseLr : float, minEpoch : int = 0, maxEpoch : Optional[int] = None):
         super().__init__(baseLr, minEpoch = minEpoch, maxEpoch = maxEpoch);
 
 
@@ -4382,7 +4382,7 @@ class LinearNetLrScheduler(NetLrSchedulerBase):
 
 
 class MultiStepNetLrScheduler(NetLrSchedulerBase):
-    def __init__(self, baseLr : float, milestones : List[int], gamma : float = 0.5, minEpoch : int = 0, maxEpoch : int = None):
+    def __init__(self, baseLr : float, milestones : List[int], gamma : float = 0.5, minEpoch : int = 0, maxEpoch : Optional[int] = None):
         super().__init__(baseLr, minEpoch = minEpoch, maxEpoch = maxEpoch);
 
         self._milestones = milestones;
@@ -4424,7 +4424,7 @@ class CosineNetLrScheduler(NetLrSchedulerBase):
 
 
 class CyclicNetLrScheduler(NetLrSchedulerBase):
-    def __init__(self, scheduler : INetLrScheduler, cycleSize : int, baseLr : float = 0.0, minEpoch : int = 0, maxEpoch : int = None):
+    def __init__(self, scheduler : INetLrScheduler, cycleSize : int, baseLr : float = 0.0, minEpoch : int = 0, maxEpoch : Optional[int] = None):
         if scheduler is None:
             raise ValueError("scheduler is None");
         if cycleSize <= 0:
@@ -4448,13 +4448,13 @@ class CyclicNetLrScheduler(NetLrSchedulerBase):
 
 
 class AggregateNetLrScheduler(NetLrSchedulerBase):
-    def __init__(self, schedulers : List[INetLrScheduler], baseLr : float = 0.0, minEpoch : int = 0, maxEpoch : int = None):
+    def __init__(self, schedulers : List[INetLrScheduler], baseLr : float = 0.0, minEpoch : int = 0, maxEpoch : Optional[int] = None):
         super().__init__(baseLr, minEpoch = minEpoch, maxEpoch = maxEpoch);
 
         self._schedulers = schedulers;
 
 
-    def epochStep(self,epoch : int):
+    def epochStep(self, epoch : int):
         scheduler = None;
 
         for item in self._schedulers:
@@ -4710,7 +4710,7 @@ class SequentialContainer(NetModelBase):
 
 
 class AdditiveAttentionModule(AggregateNetModule, INetAttentionModule):
-    def __init__(self, querySize : int, keySize : int, hiddenSize : int, dropoutRatio : float = 0.0, Wq : np.ndarray = None, Wk : np.ndarray = None, wv : np.ndarray = None):
+    def __init__(self, querySize : int, keySize : int, hiddenSize : int, dropoutRatio : float = 0.0, Wq : Optional[np.ndarray] = None, Wk : Optional[np.ndarray] = None, wv : Optional[np.ndarray] = None):
         self._dropoutLayer = DropoutLayer(dropoutRatio);
         super().__init__(self._dropoutLayer);
 
@@ -4834,7 +4834,7 @@ class DotProductAttentionModule(AggregateNetModule, INetAttentionModule):
 
 
 class MultiHeadAttentionModule(AggregateNetModule, INetAttentionModule):
-    def __init__(self, attentionModule : INetAttentionModule, querySize : int, keySize : int, valueSize : int, hiddenSize : Union[int, Tuple[int, int, int, int]], headNum : int = 2, Wq : np.ndarray = None, Wk : np.ndarray = None, Wv : np.ndarray = None, Wo : np.ndarray = None):
+    def __init__(self, attentionModule : INetAttentionModule, querySize : int, keySize : int, valueSize : int, hiddenSize : Union[int, Tuple[int, int, int, int]], headNum : int = 2, Wq : Optional[np.ndarray] = None, Wk : Optional[np.ndarray] = None, Wv : Optional[np.ndarray] = None, Wo : Optional[np.ndarray] = None):
         self._attentionModule = attentionModule;
         super().__init__(self._attentionModule);
 
@@ -5033,7 +5033,7 @@ class TransformerAddNormalizationModule(AggregateNetModule):
 
 
 class TransformerPositionwiseFFNModule(AggregateNetModule):
-    def __init__(self, inputSize : int, hiddenSize : int, activationFuncSelector : Callable = None):
+    def __init__(self, inputSize : int, hiddenSize : int, activationFuncSelector : Optional[Callable] = None):
         self._activationFuncSelector = activationFuncSelector if activationFuncSelector is not None else (lambda: ReluLayer());
 
         super().__init__(
@@ -5045,7 +5045,7 @@ class TransformerPositionwiseFFNModule(AggregateNetModule):
 
 
 class TransformerEncoderBlock(AggregateNetModule, INetAttentionModule):
-    def __init__(self, inputSize : int, attentionHiddenSize : int, ffnHiddenSize : int, normalizedShape : Union[int, Tuple[int, ...]], headNum : int = 2, dropoutRatio : float = 0.0, ffnActivationFuncSelector : Callable = None):
+    def __init__(self, inputSize : int, attentionHiddenSize : int, ffnHiddenSize : int, normalizedShape : Union[int, Tuple[int, ...]], headNum : int = 2, dropoutRatio : float = 0.0, ffnActivationFuncSelector : Optional[Callable] = None):
         self._attentionModule = SelfAttentionModule(MultiHeadAttentionModule(DotProductAttentionModule(dropoutRatio = dropoutRatio), inputSize, inputSize, inputSize, (attentionHiddenSize, attentionHiddenSize, attentionHiddenSize, inputSize), headNum = headNum));
         self._addNormal1 = TransformerAddNormalizationModule(normalizedShape, dropoutRatio = dropoutRatio);
         self._positionwiseFFN = TransformerPositionwiseFFNModule(inputSize, ffnHiddenSize, activationFuncSelector = ffnActivationFuncSelector);
@@ -5086,7 +5086,7 @@ class TransformerEncoderBlock(AggregateNetModule, INetAttentionModule):
 
 
 class TransformerEncoder(AggregateNetModule, INetAttentionModule):
-    def __init__(self, inputSize: int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Callable = None):
+    def __init__(self, inputSize: int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Optional[Callable] = None):
         self._attentionWeight = None;
         self._positionalEncoding = SinePositionalEncodingModule(inputSize, maxLength = maxSequenceLength, dropoutRatio = dropoutRatio);
         self._blocks = [TransformerEncoderBlock(inputSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, dropoutRatio = dropoutRatio, ffnActivationFuncSelector = ffnActivationFuncSelector) for _ in range(blockNum)];
@@ -5126,7 +5126,7 @@ class TransformerEncoder(AggregateNetModule, INetAttentionModule):
 
 
 class TransformerEmbeddingEncoder(AggregateNetModule, INetAttentionModule):
-    def __init__(self, embeddingNum : int, embeddingSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Callable = None):
+    def __init__(self, embeddingNum : int, embeddingSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Optional[Callable] = None):
         self._embeddingScale = math.sqrt(embeddingSize);
         self._embedding = EmbeddingLayer(embeddingNum, embeddingSize);
         self._encoder = TransformerEncoder(embeddingSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, blockNum = blockNum, maxSequenceLength = maxSequenceLength, dropoutRatio = dropoutRatio, ffnActivationFuncSelector = ffnActivationFuncSelector);
@@ -5166,7 +5166,7 @@ class TransformerEmbeddingEncoder(AggregateNetModule, INetAttentionModule):
 
 
 class TransformerDecoderBlock(AggregateNetModule, INetAttentionModule):
-    def __init__(self, inputSize : int, encoderSize : int, attentionHiddenSize : int, ffnHiddenSize : int, normalizedShape : Union[int, Tuple[int, ...]], headNum : int = 2, dropoutRatio : float = 0.0, ffnActivationFuncSelector : Callable = None):
+    def __init__(self, inputSize : int, encoderSize : int, attentionHiddenSize : int, ffnHiddenSize : int, normalizedShape : Union[int, Tuple[int, ...]], headNum : int = 2, dropoutRatio : float = 0.0, ffnActivationFuncSelector : Optional[Callable] = None):
         self._innerAttentionModule = MultiHeadAttentionModule(DotProductAttentionModule(dropoutRatio = dropoutRatio), inputSize, inputSize, inputSize, (attentionHiddenSize, attentionHiddenSize, attentionHiddenSize, inputSize), headNum = headNum);
         self._addNormal1 = TransformerAddNormalizationModule(normalizedShape, dropoutRatio = dropoutRatio);
         self._crossAttentionModule = MultiHeadAttentionModule(DotProductAttentionModule(dropoutRatio = dropoutRatio), inputSize, encoderSize, encoderSize, (attentionHiddenSize, attentionHiddenSize, attentionHiddenSize, inputSize), headNum = headNum);
@@ -5228,7 +5228,7 @@ class TransformerDecoderBlock(AggregateNetModule, INetAttentionModule):
 
 
 class TransformerDecoder(AggregateNetModule, INetAttentionModule):
-    def __init__(self, inputSize: int, encoderSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Callable = None):
+    def __init__(self, inputSize: int, encoderSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Optional[Callable] = None):
         self._blockNum = blockNum;
         self._attentionWeight = None;
         self._positionalEncoding = SinePositionalEncodingModule(inputSize, maxLength = maxSequenceLength, dropoutRatio = dropoutRatio);
@@ -5295,7 +5295,7 @@ class TransformerDecoder(AggregateNetModule, INetAttentionModule):
 
 
 class TransformerEmbeddingDecoder(AggregateNetModule, INetAttentionModule):
-    def __init__(self, embeddingNum : int, embeddingSize : int, encoderSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Callable = None):
+    def __init__(self, embeddingNum : int, embeddingSize : int, encoderSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Optional[Callable] = None):
         self._embeddingScale = math.sqrt(embeddingSize);
         self._embedding = EmbeddingLayer(embeddingNum, embeddingSize);
         self._decoder = TransformerDecoder(embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, blockNum = blockNum, maxSequenceLength = maxSequenceLength, dropoutRatio = dropoutRatio, ffnActivationFuncSelector = ffnActivationFuncSelector);
@@ -5350,7 +5350,7 @@ class TransformerEmbeddingDecoder(AggregateNetModule, INetAttentionModule):
 
 # encode sequence to vector
 class AttentionPoolingLayer(AggregateNetModule, INetAttentionModule):
-    def __init__(self, inputSize : int, hiddenSize : Union[int, Tuple[int, ...], List[int]], activationFuncSelector : Callable = None):
+    def __init__(self, inputSize : int, hiddenSize : Union[int, Tuple[int, ...], List[int]], activationFuncSelector : Optional[Callable] = None):
         self._X = None;
         self._attentionWeight, self._innerWeight = None, None;
         self._activationFuncSelector = activationFuncSelector if activationFuncSelector is not None else (lambda x: TanhLayer());
@@ -5465,7 +5465,7 @@ class SelectByWeightNTModule(SelectByWeight1TModule):
 
 # additive attention weight for 1 time step
 class AdditiveAttentionWeight1TModule(AggregateNetModule):
-    def __init__(self, querySize : int, keySize : int, hiddenSize : int, Wq : np.ndarray = None, Wk : np.ndarray = None, wv : np.ndarray = None):
+    def __init__(self, querySize : int, keySize : int, hiddenSize : int, Wq : Optional[np.ndarray] = None, Wk : Optional[np.ndarray] = None, wv : Optional[np.ndarray] = None):
         self._qLayer = AffineLayer(querySize, hiddenSize, includeBias = False, W = Wq);
         self._kLayer = AffineLayer(keySize, hiddenSize, includeBias = False, W = Wk);
         self._vLayer = AffineLayer(hiddenSize, 1, includeBias = False, W = wv);
@@ -5506,7 +5506,7 @@ class AdditiveAttentionWeight1TModule(AggregateNetModule):
 
 # additive attention weight for N time step
 class AdditiveAttentionWeightNTModule(AdditiveAttentionWeight1TModule):
-    def __init__(self, querySize : int, keySize : int, hiddenSize : int, Wq : np.ndarray = None, Wk : np.ndarray = None, wv : np.ndarray = None):
+    def __init__(self, querySize : int, keySize : int, hiddenSize : int, Wq : Optional[np.ndarray] = None, Wk : Optional[np.ndarray] = None, wv : Optional[np.ndarray] = None):
         super().__init__(querySize, keySize, hiddenSize, Wq, Wk, wv);
 
         self._name = "AdditiveAttentionWeightNT";
@@ -5840,7 +5840,7 @@ class MaeAccuracyEvaluator(INetAccuracyEvaluator):
         return (self._rss / self._totalCount) if self._totalCount > 0 else None;
 
 
-    def fromLoss(self, lossValues : List[float] = None) -> bool:
+    def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
         return False;
 
 
@@ -5857,7 +5857,7 @@ class MaeAccuracyEvaluator(INetAccuracyEvaluator):
 
 
 class MseAccuracyEvaluator(INetAccuracyEvaluator):
-    def __init__(self, takeRoot : bool = False, takeLog : bool = False, logMinValue : float = None):
+    def __init__(self, takeRoot : bool = False, takeLog : bool = False, logMinValue : Optional[float] = None):
         self._takeRoot = takeRoot;
         self._takeLog = takeLog;
         self._logMinValue = logMinValue;
@@ -5893,7 +5893,7 @@ class MseAccuracyEvaluator(INetAccuracyEvaluator):
         return result;
 
 
-    def fromLoss(self, lossValues : List[float] = None) -> bool:
+    def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
         return False;
 
 
@@ -5938,7 +5938,7 @@ class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
         return self._rightCount / self._totalCount if self._totalCount > 0 else None;
 
 
-    def fromLoss(self, lossValues : List[float] = None) -> bool:
+    def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
         return False;
 
 
@@ -6030,7 +6030,7 @@ class GaussianVAE(NetModelBase):
         return M, softplus(V) + self._minStd;
 
 
-    def reparameterize(self, mu : np.ndarray, sigma : np.ndarray, epsilon : np.ndarray = None) -> np.ndarray:
+    def reparameterize(self, mu : np.ndarray, sigma : np.ndarray, epsilon : Optional[np.ndarray] = None) -> np.ndarray:
         N, L, H = len(mu), self._sampleSize, self._latentSize;
         self._z0 = np.random.randn(N, L, H).astype(defaultDType) if epsilon is None else epsilon;
         Z = self._z0 * np.expand_dims(sigma, axis = 1) + np.expand_dims(mu, axis = 1);
@@ -6171,7 +6171,7 @@ class BernoulliVAE(NetModelBase):
         return M, softplus(V) + self._minStd;
 
 
-    def reparameterize(self, mu: np.ndarray, sigma: np.ndarray, epsilon: np.ndarray = None) -> np.ndarray:
+    def reparameterize(self, mu: np.ndarray, sigma: np.ndarray, epsilon: Optional[np.ndarray] = None) -> np.ndarray:
         N, L, H = len(mu), self._sampleSize, self._latentSize;
         self._z0 = np.random.randn(N, L, H).astype(defaultDType) if epsilon is None else epsilon;
         Z = self._z0 * np.expand_dims(sigma, axis = 1) + np.expand_dims(mu, axis = 1);
