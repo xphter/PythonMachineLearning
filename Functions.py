@@ -14,7 +14,7 @@ import math;
 import collections;
 
 from ImportNumpy import *;
-from typing import Callable, Union, Tuple, List;
+from typing import Callable, Union, Tuple, List, Optional;
 
 
 @enum.unique
@@ -152,7 +152,7 @@ def swishGradient(Y : np.ndarray, S : np.ndarray, X : np.ndarray, beta : Union[f
 
 
 # M is a 0-1 or True-False mask array which has the same shape of X
-def softmax(X : np.ndarray, M : np.ndarray = None) -> np.ndarray:
+def softmax(X : np.ndarray, M : Optional[np.ndarray] = None) -> np.ndarray:
     if M is not None and X.shape != M.shape:
         raise ValueError("the shape of X and M are not same.");
 
@@ -196,7 +196,7 @@ def meanAbsoluteError(Y : np.ndarray, T : np.ndarray):
 
 # Y and T has the same shape
 # M is a 0-1 or True-False mask array represents whether each samples in Y are valid
-def crossEntropyError(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean, epsilon : float = 1e-8) -> Union[float, np.ndarray]:
+def crossEntropyError(Y : np.ndarray, T : np.ndarray, M : Optional[np.ndarray] = None, reductionType : LossReductionType = LossReductionType.Mean, epsilon : float = 1e-8) -> Union[float, np.ndarray]:
     if Y.shape != T.shape:
         raise ValueError("the shape of Y and T are not same.");
 
@@ -214,7 +214,7 @@ def crossEntropyError(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, red
 
 # Y and T has the same shape
 # M is a 0-1 or True-False mask array represents whether each samples in Y are valid
-def crossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
+def crossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : Optional[np.ndarray] = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
     dY = -(T / Y).astype(Y.dtype);
 
     if M is not None:
@@ -228,7 +228,7 @@ def crossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : np.ndarray = N
 
 # Y and T has the same shape
 # M is a 0-1 or True-False mask array represents whether each samples in Y are valid
-def softmaxWithCrossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
+def softmaxWithCrossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : Optional[np.ndarray] = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
     dX = (Y - T).astype(Y.dtype);
 
     if M is not None:
@@ -242,7 +242,7 @@ def softmaxWithCrossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : np.
 
 # Y and T has the same shape
 # M is a 0-1 or True-False mask array represents whether each samples in Y are valid
-def sigmoidWithCrossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
+def sigmoidWithCrossEntropyErrorGradient(Y : np.ndarray, T : np.ndarray, M : Optional[np.ndarray] = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
     dX = (Y - T).astype(Y.dtype);
 
     if M is not None:
@@ -290,7 +290,7 @@ def getDropoutMask(inputs : np.ndarray, dropoutRatio : float):
 
 # T was a label index array
 # M is a 0-1 or True-False mask array represents whether each samples in Y are valid
-def crossEntropyError1D(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean, epsilon : float = 1e-8) -> Union[float, np.ndarray]:
+def crossEntropyError1D(Y : np.ndarray, T : np.ndarray, M : Optional[np.ndarray] = None, reductionType : LossReductionType = LossReductionType.Mean, epsilon : float = 1e-8) -> Union[float, np.ndarray]:
     n = T.size;
     L = -np.log(Y.reshape(-1)[np.arange(n) * Y.shape[-1] + T.flatten()] + epsilon).reshape(T.shape);
 
@@ -307,7 +307,7 @@ def crossEntropyError1D(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, r
 
 # T was a label index array
 # M is a 0-1 or True-False mask array represents whether each samples in Y are valid
-def softmaxWithCrossEntropyErrorGradient1D(Y : np.ndarray, T : np.ndarray, M : np.ndarray = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
+def softmaxWithCrossEntropyErrorGradient1D(Y : np.ndarray, T : np.ndarray, M : Optional[np.ndarray] = None, reductionType : LossReductionType = LossReductionType.Mean) -> np.ndarray:
     n = T.size;
     dX = Y.flatten();
     dX[np.arange(n) * Y.shape[-1] + T.flatten()] -= 1;
@@ -349,7 +349,7 @@ def numericGradient(f : Callable, X : np.ndarray):
     h = 1e-4;
     grad = np.zeros_like(X);
 
-    it = np.nditer(X, flags = ["multi_index"], op_flags = ["readwrite"]);
+    it = np.nditer(X, flags = ["multi_index"], op_flags = [["readwrite"]]);
     while not it.finished:
         index = it.multi_index;
         temp = X[index];
