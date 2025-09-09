@@ -133,7 +133,7 @@ class INetParamDefinition(INetParam):
 class INetState(metaclass = abc.ABCMeta):
     @property
     @abc.abstractmethod
-    def value(self):
+    def value(self) -> Any:
         pass;
 
 
@@ -300,7 +300,7 @@ class INetModule(metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def copy(self, shareParams : bool = False):
+    def copy(self, shareParams : bool = False) -> "INetModule":
         pass;
 
 
@@ -405,7 +405,7 @@ class INetModel(INetModule, metaclass = abc.ABCMeta):
 class INetAttentionModule(INetModule, metaclass = abc.ABCMeta):
     @property
     @abc.abstractmethod
-    def attentionWeight(self) -> np.ndarray:
+    def attentionWeight(self) -> Optional[np.ndarray]:
         pass;
 
 
@@ -529,7 +529,7 @@ class NetValueState(INetState):
 
 
     @property
-    def value(self):
+    def value(self) -> Any:
         return self._value;
 
 
@@ -546,17 +546,17 @@ class NetValueState(INetState):
 
 class NetModuleBase(INetModule, metaclass = abc.ABCMeta):
     def __init__(self):
-        self._name = None;
+        self._name = "";
         self._context = NetContext();
         self._params : List[INetParamDefinition] = [];
         self._states: List[INetState] = [];
 
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__();
 
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self._name;
 
 
@@ -800,6 +800,7 @@ class NetFitResult(INetFitResult):
         self._finalTestLoss = finalTestLoss;
         self._finalTestAccuracy = finalTestAccuracy;
         self._accuracyName = accuracyName;
+
 
     @property
     def trainingLossData(self) -> List[float]:
@@ -1099,13 +1100,13 @@ class NetLrSchedulerBase(INetLrScheduler, metaclass = abc.ABCMeta):
 
 
 class FunctionalNetModule(NetModuleBase):
-    def __init__(self, name : str, forwardFunc : Callable, backwardFunc : Callable):
+    def __init__(self, name : str, forwardFunc : Callable[[np.ndarray], np.ndarray], backwardFunc : Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray]):
         super().__init__();
 
         self._name = name;
         self._forwardFunc = forwardFunc;
         self._backwardFunc = backwardFunc;
-        self._X, self._Y = None, None;
+        self._X, self._Y = np.empty(0), np.empty(0);
 
 
     def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
@@ -1147,7 +1148,7 @@ class PReluLayer(NetModuleBase):
     def __init__(self, beta : Optional[Union[float, np.ndarray]] = None, outputSize : Optional[int] = None):
         super().__init__();
 
-        self._X = None;
+        self._X = np.empty(0);
         self._name = "PReLU";
 
         if beta is not None:
@@ -1197,7 +1198,7 @@ class SoftplusLayer(NetModuleBase):
     def __init__(self):
         super().__init__();
 
-        self._X = None;
+        self._X = np.empty(0);
         self._name = "Softplus";
 
 
@@ -1219,9 +1220,9 @@ class SwishLayer(NetModuleBase):
     def __init__(self, beta : Optional[Union[float, np.ndarray]] = None, outputSize : Optional[int] = None):
         super().__init__();
 
-        self._X = None;
-        self._Y = None;
-        self._S  = None;
+        self._X = np.empty(0);
+        self._Y = np.empty(0);
+        self._S  = np.empty(0);
         self._name = "Swish";
 
         if beta is not None:
@@ -1240,7 +1241,7 @@ class SwishLayer(NetModuleBase):
         return self._beta;
 
 
-    def _setParams(self, params: List[NetParamDefinition]):
+    def _setParams(self, params: List[INetParamDefinition]):
         self._beta = params[0].value;
 
 
@@ -1271,8 +1272,8 @@ class SiluLayer(NetModuleBase):
     def __init__(self):
         super().__init__();
 
-        self._X = None;
-        self._S = None;
+        self._X = np.empty(0);
+        self._S = np.empty(0);
         self._name = "SiLU";
 
 
@@ -1295,8 +1296,8 @@ class GeluLayer(NetModuleBase):
     def __init__(self):
         super().__init__();
 
-        self._X = None;
-        self._G, self._F = None, None;
+        self._X = np.empty(0);
+        self._G, self._F = np.empty(0), np.empty(0);
         self._alpha, self._beta = math.sqrt(2.0 / math.pi), 0.044715;
         self._3beta = 3 * self._beta;
         self._name = "GELU";
@@ -1364,7 +1365,7 @@ class SigmoidLayer(NetModuleBase):
     def __init__(self):
         super().__init__();
 
-        self._Y = None;
+        self._Y = np.empty(0);
         self._name = "Sigmoid";
 
 
@@ -1386,7 +1387,7 @@ class TanhLayer(NetModuleBase):
     def __init__(self):
         super().__init__();
 
-        self._Y = None;
+        self._Y = np.empty(0);
         self._name = "Tanh";
 
 
@@ -1534,7 +1535,7 @@ class AffineLayer(NetModuleBase):
     def __init__(self, inputSize : int, outputSize : int, includeBias : bool = True, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None, weightHandler : Optional[INetParamHandler] = None):
         super().__init__();
 
-        self._X = None;
+        self._X = np.empty(0);
         self._shape = None;
         self._inputSize = inputSize;
         self._outputSize = outputSize;
@@ -1549,7 +1550,7 @@ class AffineLayer(NetModuleBase):
             self._params.append(NetParamDefinition("bias", self._bias, canDecay = False));
 
 
-    def _setParams(self, params: List[NetParamDefinition]):
+    def _setParams(self, params: List[INetParamDefinition]):
         self._weight, self._bias = params[0].value, params[1].value if self._includeBias else None;
 
 
@@ -1612,10 +1613,10 @@ class BatchNormalization1DLayer(NetModuleBase):
         self._evalBias = None;
         self._name = "BatchNormalization1D";
 
-        self._n = None;
-        self._XC = None;
-        self._std = None;
-        self._XHat = None;
+        self._n = 0;
+        self._XC = np.empty(0);
+        self._std = np.empty(0);
+        self._XHat = np.empty(0);
 
         self._gamma = np.ones(inputSize, dtype = defaultDType) if gamma is None else gamma;
         self._beta = np.zeros(inputSize, dtype = defaultDType) if beta is None else beta;
@@ -1630,7 +1631,7 @@ class BatchNormalization1DLayer(NetModuleBase):
         self._states.append(NetValueState(self._evalVar));
 
 
-    def _setParams(self, params: List[NetParamDefinition]):
+    def _setParams(self, params: List[INetParamDefinition]):
         self._gamma, self._beta = params[0].value, params[1].value;
 
 
@@ -1742,9 +1743,9 @@ class LayerNormalizationLayer(NetModuleBase):
             layerShape = (layerShape, );
         self._name = "LayerNormalization";
 
-        self._XC = None;
-        self._std = None;
-        self._XHat = None;
+        self._XC = np.empty(0);
+        self._std = np.empty(0);
+        self._XHat = np.empty(0);
         self._layerNdim = len(layerShape);
         self._layerAxis = tuple(-i for i in range(1, self._layerNdim + 1));
         self._layerSize = functools.reduce(lambda i, j: i * j, layerShape, 1);
@@ -1756,7 +1757,7 @@ class LayerNormalizationLayer(NetModuleBase):
         self._params.append(NetParamDefinition("bias", self._beta, canDecay = False));
 
 
-    def _setParams(self, params: List[NetParamDefinition]):
+    def _setParams(self, params: List[INetParamDefinition]):
         self._gamma, self._beta = params[0].value, params[1].value;
 
 
@@ -1807,7 +1808,7 @@ class MinMaxLayer(NetModuleBase):
 
         self._minValue = minValue;
         self._maxValue = maxValue;
-        self._M = None;
+        self._M = [];
         self._name = f"MinMax({minValue if minValue is not None else '-∞'} ≤ x ≤ {maxValue if maxValue is not None else '+∞'})";
 
 
@@ -1842,9 +1843,9 @@ class Convolution1DLayer(NetModuleBase):
 
         self._stride = stride;
         self._padding = (padding, padding) if isinstance(padding, int) else padding;
-        self._shape = None;
-        self._colX = None;
-        self._colW = None;
+        self._shape = tuple();
+        self._colX = np.empty(0);
+        self._colW = np.empty(0);
         self._name = f"Convolution1D {outputChannel}*{inputChannel}*{kernelSize}";
 
         self._weight = math.sqrt(2.0 / (inputChannel * kernelSize)) * np.random.randn(outputChannel, inputChannel, kernelSize).astype(defaultDType) if W is None else W;
@@ -1906,9 +1907,9 @@ class Convolution2DLayer(NetModuleBase):
         FH, FW = kernelSize[: 2] if isinstance(kernelSize, tuple) else (kernelSize, kernelSize);
         self._stride = stride;
         self._padding = padding;
-        self._shape = None;
-        self._colX = None;
-        self._colW = None;
+        self._shape = tuple();
+        self._colX = np.empty(0);
+        self._colW = np.empty(0);
         self._name = f"Convolution2D {outputChannel}*{inputChannel}*{FH}*{FW}";
 
         self._weight = math.sqrt(2.0 / (inputChannel * FH * FW)) * np.random.randn(outputChannel, inputChannel, FH, FW).astype(defaultDType) if W is None else W;
@@ -1970,7 +1971,7 @@ class MaxPooling2DLayer(NetModuleBase):
         self._PH, self._PW = poolingSize[: 2] if isinstance(poolingSize, tuple) else (poolingSize, poolingSize);
         self._stride = stride if stride is not None else (self._PH, self._PW);
         self._padding = padding;
-        self._shape = None;
+        self._shape = tuple();
         self._M = None;
         self._name = f"MaxPooling2D {self._PH}*{self._PW}";
 
@@ -2012,7 +2013,7 @@ class AvgPooling2DLayer(NetModuleBase):
         self._PH, self._PW = poolingSize[: 2] if isinstance(poolingSize, tuple) else (poolingSize, poolingSize);
         self._stride = stride if stride is not None else (self._PH, self._PW);
         self._padding = padding;
-        self._shape = None;
+        self._shape = tuple();
         self._M = 1.0 / (self._PH * self._PW) * np.ones(self._PH * self._PW, dtype = defaultDType);
         self._name = f"AvgPooling2D {self._PH}*{self._PW}";
 
@@ -2084,7 +2085,7 @@ class EmbeddingLayer(NetModuleBase):
         super().__init__();
 
         self._index = None;
-        self._shape = None;
+        self._shape = tuple();
         self._embeddingNum = embeddingNum;
         self._embeddingSize = embeddingSize;
         self._name = f"Embedding {embeddingNum}*{embeddingSize}";
@@ -2186,7 +2187,7 @@ class RnnCellBase(NetModuleBase, metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def _initParams(self, inputSize: int, hiddenSize: int, Wx: np.ndarray, Wh: np.ndarray, bx: np.ndarray, bh: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _initParams(self, inputSize: int, hiddenSize: int, Wx: Optional[np.ndarray], Wh: Optional[np.ndarray], bx: Optional[np.ndarray], bh: Optional[np.ndarray]) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         pass;
 
 
@@ -2217,13 +2218,13 @@ class RnnCell(RnnCellBase):
 
         super().__init__(inputSize, hiddenSize, Wx, Wh, bx, bh);
 
-        self._X, self._W = None, None;
+        self._X, self._W = np.empty(0), np.empty(0);
         self._xi = [inputSize];
         self._activationFunc = activationFunc if activationFunc is not None else TanhLayer();
         self._name = f"RNN Cell {inputSize}*{hiddenSize}";
 
 
-    def _initParams(self, inputSize : int, hiddenSize : int, Wx : np.ndarray, Wh : np.ndarray, bx : np.ndarray, bh : np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _initParams(self, inputSize : int, hiddenSize : int, Wx : Optional[np.ndarray], Wh : Optional[np.ndarray], bx : Optional[np.ndarray], bh : Optional[np.ndarray]) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, hiddenSize).astype(defaultDType) if Wx is None else Wx;
         weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, hiddenSize).astype(defaultDType) if Wh is None else Wh;
         biasX = np.zeros(hiddenSize, dtype = defaultDType) if bx is None else bx;
@@ -2262,14 +2263,14 @@ class GruCell(RnnCellBase):
     def __init__(self, inputSize : int, hiddenSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, bx : Optional[np.ndarray] = None, bh : Optional[np.ndarray] = None):
         super().__init__(inputSize, hiddenSize, Wx, Wh, bx, bh);
 
-        self._Xg, self._Xa = None, None;
-        self._Wg, self._Wa = None, None;
-        self._H, self._G, self._R, self._Z, self._A = None, None, None, None, None;
+        self._Xg, self._Xa = np.empty(0), np.empty(0);
+        self._Wg, self._Wa = np.empty(0), np.empty(0);
+        self._H, self._G, self._R, self._Z, self._A = np.empty(0), np.empty(0), np.empty(0), np.empty(0), np.empty(0);
         self._gi, self._ri, self._xi = [2 * hiddenSize], [hiddenSize], [inputSize];
         self._name = f"GRU Cell {inputSize}*{hiddenSize}";
 
 
-    def _initParams(self, inputSize: int, hiddenSize: int, Wx: np.ndarray, Wh: np.ndarray, bx: np.ndarray, bh: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _initParams(self, inputSize: int, hiddenSize: int, Wx: Optional[np.ndarray], Wh: Optional[np.ndarray], bx: Optional[np.ndarray], bh: Optional[np.ndarray]) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, 3 * hiddenSize).astype(defaultDType) if Wx is None else Wx;
         weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, 3 * hiddenSize).astype(defaultDType) if Wh is None else Wh;
         biasX = np.zeros(3 * hiddenSize, dtype = defaultDType) if bx is None else bx;
@@ -2339,13 +2340,13 @@ class LstmCell(RnnCellBase):
     def __init__(self, inputSize : int, hiddenSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, bx : Optional[np.ndarray] = None, bh : Optional[np.ndarray] = None):
         super().__init__(inputSize, hiddenSize, Wx, Wh, bx, bh);
 
-        self._X, self._W, self._C = None, None, None;
-        self._F, self._I, self._O, self._G, self._S, self._tanhYC = None, None, None, None, None, None;
+        self._X, self._W, self._C = np.empty(0), np.empty(0), np.empty(0);
+        self._F, self._I, self._O, self._G, self._S, self._tanhYC = np.empty(0), np.empty(0), np.empty(0), np.empty(0), np.empty(0), np.empty(0);
         self._xi, self._si, self._gi = [self._inputSize], [3 * self._hiddenSize], [self._hiddenSize, 2 * self._hiddenSize];
         self._name = f"LSTM Cell {inputSize}*{hiddenSize}";
 
 
-    def _initParams(self, inputSize : int, hiddenSize : int, Wx : np.ndarray, Wh : np.ndarray, bx : np.ndarray, bh : np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _initParams(self, inputSize : int, hiddenSize : int, Wx : Optional[np.ndarray], Wh : Optional[np.ndarray], bx : Optional[np.ndarray], bh : Optional[np.ndarray]) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, 4 * hiddenSize).astype(defaultDType) if Wx is None else Wx;
         weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, 4 * hiddenSize).astype(defaultDType) if Wh is None else Wh;
         biasX = np.zeros(4 * hiddenSize, dtype = defaultDType) if bx is None else bx;
@@ -2425,7 +2426,7 @@ class RnnLayerBase(NetModuleBase, metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def _initParams(self, inputSize : int, hiddenSize : int, Wx : np.ndarray, Wh : np.ndarray, bx : np.ndarray, bh : np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _initParams(self, inputSize : int, hiddenSize : int, Wx : Optional[np.ndarray], Wh : Optional[np.ndarray], bx : Optional[np.ndarray], bh : Optional[np.ndarray]) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         pass;
 
 
@@ -2450,26 +2451,26 @@ class RnnLayerBase(NetModuleBase, metaclass = abc.ABCMeta):
 
 
 class RnnLayer(RnnLayerBase):
-    def __init__(self, inputSize : int, hiddenSize : int, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, bx : Optional[np.ndarray] = None, bh : Optional[np.ndarray] = None, activationFuncSelector : Optional[Callable] = None):
+    def __init__(self, inputSize : int, hiddenSize : int, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, bx : Optional[np.ndarray] = None, bh : Optional[np.ndarray] = None, activationFuncSelector : Optional[Callable[[], INetModel]] = None):
         super().__init__(inputSize, hiddenSize, stateful, returnSequence, returnState, Wx, Wh, bx, bh);
 
         self._H = None;
         self._dH = None;
         self._sequenceLength = 0;
         self._foreignState = False;
-        self._activationFuncSelector = activationFuncSelector if activationFuncSelector is not None else (lambda: TanhLayer());
+        self._activationFuncSelector : Callable[[], INetModel] = activationFuncSelector if activationFuncSelector is not None else (lambda: TanhLayer()); # type: ignore
         self._name = f"RNN {inputSize}*{hiddenSize}";
 
-        self._Xs, self._W = None, None;
+        self._Xs, self._W = np.empty(0), np.empty(0);
         self._activationFuncs : List[INetModel] = [];
 
 
     def _setContext(self, context : INetContext):
         for af in self._activationFuncs:
-            af.context = value;
+            af.context = context;
 
 
-    def _initParams(self, inputSize : int, hiddenSize : int, Wx : np.ndarray, Wh : np.ndarray, bx : np.ndarray, bh : np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _initParams(self, inputSize : int, hiddenSize : int, Wx : Optional[np.ndarray], Wh : Optional[np.ndarray], bx : Optional[np.ndarray], bh : Optional[np.ndarray]) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, hiddenSize).astype(defaultDType) if Wx is None else Wx;
         weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, hiddenSize).astype(defaultDType) if Wh is None else Wh;
         biasX = np.zeros(hiddenSize, dtype = defaultDType) if bx is None else bx;
@@ -2479,7 +2480,7 @@ class RnnLayer(RnnLayerBase):
 
 
     @property
-    def dH(self) -> np.ndarray:
+    def dH(self) -> Optional[np.ndarray]:
         return self._dH;
 
 
@@ -2487,7 +2488,7 @@ class RnnLayer(RnnLayerBase):
         self._H = None;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]: # type: ignore
         Xs = data[0];
         self._foreignState = len(data) > 1;
         self._sequenceLength, N = Xs.shape[: 2];
@@ -2498,9 +2499,11 @@ class RnnLayer(RnnLayerBase):
         if self._foreignState:
             self._H = data[1];
         else:
-            if not self._stateful or self._H is None:
-                self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
-
+            if not self._stateful:
+                self._H = None;
+        
+        if self._H is None:
+            self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
 
         self._Xs, Ys = [], [];
         self._W = np.concatenate((self._weightX, self._weightH), axis = 0);
@@ -2577,12 +2580,12 @@ class GruLayer(RnnLayerBase):
         self._name = f"GRU {inputSize}*{hiddenSize}";
 
         self._Xgs, self._Xas = [], [];
-        self._Wg, self._Wa = None, None;
+        self._Wg, self._Wa = np.empty(0), np.empty(0);
         self._Hs, self._Gs, self._Rs, self._Zs, self._As = [], [], [], [], [];
         self._gi, self._ri, self._xi = [2 * hiddenSize], [hiddenSize], [inputSize];
 
 
-    def _initParams(self, inputSize : int, hiddenSize : int, Wx : np.ndarray, Wh : np.ndarray, bx : np.ndarray, bh : np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _initParams(self, inputSize : int, hiddenSize : int, Wx : Optional[np.ndarray], Wh : Optional[np.ndarray], bx : Optional[np.ndarray], bh : Optional[np.ndarray]) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, 3 * hiddenSize).astype(defaultDType) if Wx is None else Wx;
         weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, 3 * hiddenSize).astype(defaultDType) if Wh is None else Wh;
         biasX = np.zeros(3 * hiddenSize, dtype = defaultDType) if bx is None else bx;
@@ -2592,7 +2595,7 @@ class GruLayer(RnnLayerBase):
 
 
     @property
-    def dH(self) -> np.ndarray:
+    def dH(self) -> Optional[np.ndarray]:
         return self._dH;
 
 
@@ -2600,7 +2603,7 @@ class GruLayer(RnnLayerBase):
         self._H = None;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]: # type: ignore
         Xs = data[0];
         self._foreignState = len(data) > 1;
         self._sequenceLength, N = Xs.shape[: 2];
@@ -2608,8 +2611,11 @@ class GruLayer(RnnLayerBase):
         if self._foreignState:
             self._H = data[1];
         else:
-            if not self._stateful or self._H is None:
-                self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
+            if not self._stateful:
+                self._H = None;
+        
+        if self._H is None:
+            self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
 
         W = np.concatenate((self._weightX, self._weightH), axis = 0);
         b = self._biasX + self._biasH;
@@ -2671,8 +2677,8 @@ class GruLayer(RnnLayerBase):
         dXs = [];
         dWg = np.zeros_like(self._Wg);
         dWa = np.zeros_like(self._Wa);
-        dbg = np.zeros(2 * self._hiddenSize, dtype = self._H.dtype);
-        dba = np.zeros(self._hiddenSize, dtype = self._H.dtype);
+        dbg = np.zeros(2 * self._hiddenSize, dtype = self._H.dtype); # type: ignore
+        dba = np.zeros(self._hiddenSize, dtype = self._H.dtype); # type: ignore
         WgT, WaT = self._Wg.T, self._Wa.T;
 
         for t in reversed(range(self._sequenceLength)):
@@ -2733,12 +2739,12 @@ class LstmLayer(RnnLayerBase):
         self._foreignState = False;
         self._name = f"LSTM {inputSize}*{hiddenSize}";
 
-        self._Xs, self._W, self._Cs = [], None, [];
+        self._Xs, self._W, self._Cs = [], np.empty(0), [];
         self._Fs, self._Is, self._Os, self._Gs, self._Ss, self._tanhYCs = [], [], [], [], [], [];
         self._xi, self._si, self._gi = [self._inputSize], [3 * self._hiddenSize], [self._hiddenSize, 2 * self._hiddenSize];
 
 
-    def _initParams(self, inputSize : int, hiddenSize : int, Wx : np.ndarray, Wh : np.ndarray, bx : np.ndarray, bh : np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _initParams(self, inputSize : int, hiddenSize : int, Wx : Optional[np.ndarray], Wh : Optional[np.ndarray], bx : Optional[np.ndarray], bh : Optional[np.ndarray]) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         weightX = math.sqrt(2.0 / (inputSize + hiddenSize)) * np.random.randn(inputSize, 4 * hiddenSize).astype(defaultDType) if Wx is None else Wx;
         weightH = math.sqrt(1.0 / hiddenSize) * np.random.randn(hiddenSize, 4 * hiddenSize).astype(defaultDType) if Wh is None else Wh;
         biasX = np.zeros(4 * hiddenSize, dtype = defaultDType) if bx is None else bx;
@@ -2748,12 +2754,12 @@ class LstmLayer(RnnLayerBase):
 
 
     @property
-    def dH(self) -> np.ndarray:
+    def dH(self) -> Optional[np.ndarray]:
         return self._dH;
 
 
     @property
-    def dC(self) -> np.ndarray:
+    def dC(self) -> Optional[np.ndarray]:
         return self._dC;
 
 
@@ -2761,7 +2767,7 @@ class LstmLayer(RnnLayerBase):
         self._H, self._C = None, None;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]: # type: ignore
         Xs = data[0];
         self._foreignState = len(data) > 1;
         self._sequenceLength, N = Xs.shape[: 2];
@@ -2769,9 +2775,13 @@ class LstmLayer(RnnLayerBase):
         if self._foreignState:
             self._H, self._C = data[1], data[2];
         else:
-            if not self._stateful or self._H is None:
-                self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
-                self._C = np.zeros((N, self._hiddenSize), Xs.dtype);
+            if not self._stateful:
+                self._H, self._C = None, None;
+        
+        if self._H is None:
+            self._H = np.zeros((N, self._hiddenSize), Xs.dtype);
+        if self._C is None:
+            self._C = np.zeros((N, self._hiddenSize), Xs.dtype);
 
         self._W = np.concatenate((self._weightX, self._weightH), axis = 0);
         b = self._biasX + self._biasH;
@@ -2877,505 +2887,508 @@ class LstmLayer(RnnLayerBase):
         self._H, self._C = H, C;
 
 
-'''
-dropout mechanism: https://arxiv.org/abs/1603.05118 <Recurrent Dropout without Memory Loss>
-'''
-class LstmCell2(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None, inputDropout : float = 0, recurrentDropout : float = 0):
-        super().__init__();
+# '''
+# dropout mechanism: https://arxiv.org/abs/1603.05118 <Recurrent Dropout without Memory Loss>
+# '''
+# class LstmCell2(NetModuleBase):
+#     def __init__(self, inputSize : int, outputSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None, inputDropout : float = 0, recurrentDropout : float = 0):
+#         super().__init__();
 
-        self._X, self._H, self._C = None, None, None;
-        self._F, self._G, self._I, self._O = None, None, None, None;
-        self._YC, self._tanhYC, self._YH = None, None, None;
-        self._inputSize = inputSize;
-        self._outputSize = outputSize;
-        self._name = f"LSTM Cell {inputSize}*{outputSize}";
+#         self._X, self._H, self._C = None, None, None;
+#         self._F, self._G, self._I, self._O = None, None, None, None;
+#         self._YC, self._tanhYC, self._YH = None, None, None;
+#         self._inputSize = inputSize;
+#         self._outputSize = outputSize;
+#         self._name = f"LSTM Cell {inputSize}*{outputSize}";
 
-        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 4 * outputSize).astype(defaultDType) if Wx is None else Wx;
-        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 4 * outputSize).astype(defaultDType) if Wh is None else Wh;
-        self._bias = np.zeros(4 * outputSize, dtype = defaultDType) if b is None else b;
-        self._inputDropout = inputDropout;
-        self._recurrentDropout = recurrentDropout;
-        self._inputDropoutMask = None;
-        self._recurrentDropoutMask = None;
+#         self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 4 * outputSize).astype(defaultDType) if Wx is None else Wx;
+#         self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 4 * outputSize).astype(defaultDType) if Wh is None else Wh;
+#         self._bias = np.zeros(4 * outputSize, dtype = defaultDType) if b is None else b;
+#         self._inputDropout = inputDropout;
+#         self._recurrentDropout = recurrentDropout;
+#         self._inputDropoutMask = None;
+#         self._recurrentDropoutMask = None;
 
-        self._params.append(NetParamDefinition("weightX", self._weightX));
-        self._params.append(NetParamDefinition("weightH", self._weightH));
-        self._params.append(NetParamDefinition("bias", self._bias, canDecay = False));
+#         self._params.append(NetParamDefinition("weightX", self._weightX));
+#         self._params.append(NetParamDefinition("weightH", self._weightH));
+#         self._params.append(NetParamDefinition("bias", self._bias, canDecay = False));
 
 
-    def _setParams(self, value: List[np.ndarray]):
-        self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
+#     def _setParams(self, value: List[np.ndarray]):
+#         self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
 
 
-    def _reset(self):
-        self.setInputDropoutMask();
-        self.setRecurrentDropoutMask();
+#     def _reset(self):
+#         self.setInputDropoutMask();
+#         self.setRecurrentDropoutMask();
 
 
-    @property
-    def weightX(self) -> np.ndarray:
-        return self._weightX;
+#     @property
+#     def weightX(self) -> np.ndarray:
+#         return self._weightX;
 
 
-    @property
-    def weightH(self) -> np.ndarray:
-        return self._weightH;
+#     @property
+#     def weightH(self) -> np.ndarray:
+#         return self._weightH;
 
 
-    @property
-    def bias(self) -> np.ndarray:
-        return self._bias;
+#     @property
+#     def bias(self) -> np.ndarray:
+#         return self._bias;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
-        self._X, self._H, self._C = data;
+#     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+#         self._X, self._H, self._C = data;
 
-        if self._inputDropoutMask is None:
-            self._inputDropoutMask = getDropoutMask(self._H, self._inputDropout);
-        if self._recurrentDropoutMask is None:
-            self._recurrentDropoutMask = getDropoutMask(self._C, self._recurrentDropout);
+#         if self._inputDropoutMask is None:
+#             self._inputDropoutMask = getDropoutMask(self._H, self._inputDropout);
+#         if self._recurrentDropoutMask is None:
+#             self._recurrentDropoutMask = getDropoutMask(self._C, self._recurrentDropout);
 
-        if self.context.isTrainingMode:
-            A = self._X @ self._weightX + (self._inputDropoutMask * self._H) @ self._weightH + self._bias;
-        else:
-            A = self._X @ self._weightX + ((1 - self._inputDropout) * self._H) @ self._weightH + self._bias;
-        self._F, self._I, self._O, self._G = tuple(np.hsplit(A, 4));
-        self._F, self._I, self._O, self._G = sigmoid(self._F), sigmoid(self._I), sigmoid(self._O), tanh(self._G);
+#         if self.context.isTrainingMode:
+#             A = self._X @ self._weightX + (self._inputDropoutMask * self._H) @ self._weightH + self._bias;
+#         else:
+#             A = self._X @ self._weightX + ((1 - self._inputDropout) * self._H) @ self._weightH + self._bias;
+#         self._F, self._I, self._O, self._G = tuple(np.hsplit(A, 4));
+#         self._F, self._I, self._O, self._G = sigmoid(self._F), sigmoid(self._I), sigmoid(self._O), tanh(self._G);
 
-        if self.context.isTrainingMode:
-            self._YC = self._C * self._F + self._recurrentDropoutMask * self._G * self._I;
-        else:
-            self._YC = self._C * self._F + (1 - self._recurrentDropout) * self._G * self._I;
-        self._tanhYC = tanh(self._YC);
-        self._YH = self._tanhYC * self._O;
+#         if self.context.isTrainingMode:
+#             self._YC = self._C * self._F + self._recurrentDropoutMask * self._G * self._I;
+#         else:
+#             self._YC = self._C * self._F + (1 - self._recurrentDropout) * self._G * self._I;
+#         self._tanhYC = tanh(self._YC);
+#         self._YH = self._tanhYC * self._O;
 
-        return self._YH, self._YC;
+#         return self._YH, self._YC;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
-        dYH, dYC = dout;
+#     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+#         dYH, dYC = dout;
 
-        dYC += dYH * self._O * tanhGradient(self._tanhYC);
-        dF, dG, dI, dO = dYC * self._C, dYC * self._I * self._recurrentDropoutMask, dYC * self._G * self._recurrentDropoutMask, dYH * self._tanhYC;
-        dF *= sigmoidGradient(self._F);
-        dG *= tanhGradient(self._G);
-        dI *= sigmoidGradient(self._I);
-        dO *= sigmoidGradient(self._O);
-        dA = np.hstack((dF, dI, dO, dG));
+#         dYC += dYH * self._O * tanhGradient(self._tanhYC);
+#         dF, dG, dI, dO = dYC * self._C, dYC * self._I * self._recurrentDropoutMask, dYC * self._G * self._recurrentDropoutMask, dYH * self._tanhYC;
+#         dF *= sigmoidGradient(self._F);
+#         dG *= tanhGradient(self._G);
+#         dI *= sigmoidGradient(self._I);
+#         dO *= sigmoidGradient(self._O);
+#         dA = np.hstack((dF, dI, dO, dG));
 
-        dWx = self._X.T @ dA;
-        dWh = (self._inputDropoutMask * self._H).T @ dA;
-        db = np.sum(dA, axis = 0);
+#         dWx = self._X.T @ dA;
+#         dWh = (self._inputDropoutMask * self._H).T @ dA;
+#         db = np.sum(dA, axis = 0);
 
-        dX = dA @ self._weightX.T;
-        dH = (dA @ self._weightH.T) * self._inputDropoutMask;
-        dC = dYC * self._F;
+#         dX = dA @ self._weightX.T;
+#         dH = (dA @ self._weightH.T) * self._inputDropoutMask;
+#         dC = dYC * self._F;
 
-        self._params[0].grad[...] = dWx;
-        self._params[1].grad[...] = dWh;
-        self._params[2].grad[...] = db;
+#         self._params[0].grad[...] = dWx;
+#         self._params[1].grad[...] = dWh;
+#         self._params[2].grad[...] = db;
 
-        return dX, dH, dC;
+#         return dX, dH, dC;
 
 
-    def setInputDropoutMask(self, mask : Optional[np.ndarray] = None):
-        self._inputDropoutMask = mask;
+#     def setInputDropoutMask(self, mask : Optional[np.ndarray] = None):
+#         self._inputDropoutMask = mask;
 
 
-    def setRecurrentDropoutMask(self, mask : Optional[np.ndarray] = None):
-        self._recurrentDropoutMask = mask;
+#     def setRecurrentDropoutMask(self, mask : Optional[np.ndarray] = None):
+#         self._recurrentDropoutMask = mask;
 
 
-class LstmLayer2(NetModuleBase):
-    def __init__(self, inputSize : int, outputSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, inputDropout : float = 0, recurrentDropout : float = 0):
-        super().__init__();
+# class LstmLayer2(NetModuleBase):
+#     def __init__(self, inputSize : int, outputSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, inputDropout : float = 0, recurrentDropout : float = 0):
+#         super().__init__();
 
-        self._T = 0;
-        self._H, self._C = None, None;
-        self._dH, self._dC = None, None;
-        self._returnSequences = returnSequences;
-        self._returnState = returnState;
-        self._inputState = False;
-        self._stateful = stateful;
-        self._stepwise = stepwise;
-        self._stepIndex = 0;
-        self._inputSize = inputSize;
-        self._outputSize = outputSize;
-        self._name = f"LSTM {inputSize}*{outputSize}";
+#         self._T = 0;
+#         self._H, self._C = None, None;
+#         self._dH, self._dC = None, None;
+#         self._returnSequences = returnSequences;
+#         self._returnState = returnState;
+#         self._inputState = False;
+#         self._stateful = stateful;
+#         self._stepwise = stepwise;
+#         self._stepIndex = 0;
+#         self._inputSize = inputSize;
+#         self._outputSize = outputSize;
+#         self._name = f"LSTM {inputSize}*{outputSize}";
 
-        self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 4 * outputSize).astype(defaultDType) if Wx is None else Wx;
-        self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 4 * outputSize).astype(defaultDType) if Wh is None else Wh;
-        self._bias = np.zeros(4 * outputSize, dtype = defaultDType) if b is None else b;
-        self._inputDropout = inputDropout;
-        self._recurrentDropout = recurrentDropout;
-        self._inputDropoutMask = None;
-        self._recurrentDropoutMask = None;
-        self._lstmModules : List[LstmCell] = [];
+#         self._weightX = math.sqrt(2.0 / inputSize) * np.random.randn(inputSize, 4 * outputSize).astype(defaultDType) if Wx is None else Wx;
+#         self._weightH = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 4 * outputSize).astype(defaultDType) if Wh is None else Wh;
+#         self._bias = np.zeros(4 * outputSize, dtype = defaultDType) if b is None else b;
+#         self._inputDropout = inputDropout;
+#         self._recurrentDropout = recurrentDropout;
+#         self._inputDropoutMask = None;
+#         self._recurrentDropoutMask = None;
+#         self._lstmModules : List[LstmCell] = [];
 
-        self._params.append(NetParamDefinition("weightX", self._weightX));
-        self._params.append(NetParamDefinition("weightH", self._weightH));
-        self._params.append(NetParamDefinition("bias", self._bias, canDecay = False));
+#         self._params.append(NetParamDefinition("weightX", self._weightX));
+#         self._params.append(NetParamDefinition("weightH", self._weightH));
+#         self._params.append(NetParamDefinition("bias", self._bias, canDecay = False));
 
 
-    def _setContext(self, context : INetContext):
-        for cell in self._lstmModules:
-            cell.context = value;
+#     def _setContext(self, context : INetContext):
+#         for cell in self._lstmModules:
+#             cell.context = value;
 
 
-    def _setParams(self, value: List[np.ndarray]):
-        self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
-        for cell in self._lstmModules:
-            cell.params = value;
+#     def _setParams(self, value: List[np.ndarray]):
+#         self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
+#         for cell in self._lstmModules:
+#             cell.params = value;
 
 
-    def _reset(self):
-        self._H, self._C = None, None;
-        self.resetStepState();
+#     def _reset(self):
+#         self._H, self._C = None, None;
+#         self.resetStepState();
 
-        for cell in self._lstmModules:
-            cell.reset();
+#         for cell in self._lstmModules:
+#             cell.reset();
 
 
-    def _getInputState(self, *data: np.ndarray):
-        if len(data) > 1:
-            return True, data[1], data[2];
-        else:
-            return False, None, None;
+#     def _getInputState(self, *data: np.ndarray):
+#         if len(data) > 1:
+#             return True, data[1], data[2];
+#         else:
+#             return False, None, None;
 
 
-    def _createCell(self) -> LstmCell:
-        cell = LstmCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias, inputDropout = self._inputDropout, recurrentDropout = self._recurrentDropout);
-        cell.context = self.context;
-        cell.setInputDropoutMask(self._inputDropoutMask);
-        cell.setRecurrentDropoutMask(self._recurrentDropoutMask);
-        return cell;
+#     def _createCell(self) -> LstmCell:
+#         cell = LstmCell(self._inputSize, self._outputSize, self._weightX, self._weightH, self._bias, inputDropout = self._inputDropout, recurrentDropout = self._recurrentDropout);
+#         cell.context = self.context;
+#         cell.setInputDropoutMask(self._inputDropoutMask);
+#         cell.setRecurrentDropoutMask(self._recurrentDropoutMask);
+#         return cell;
 
 
-    def _forwardStep(self, t : int, *data : np.ndarray):
-        X = data[0];
-        self._H, self._C = self._lstmModules[t].forward(X, self._H, self._C);
+#     def _forwardStep(self, t : int, *data : np.ndarray):
+#         X = data[0];
+#         self._H, self._C = self._lstmModules[t].forward(X, self._H, self._C);
 
 
-    def _backwardStep(self, t : int, *dout: np.ndarray) -> Tuple[np.ndarray]:
-        dY = dout[0];
-        lstm = self._lstmModules[t];
-        dX, self._dH, self._dC = lstm.backward(dY + self._dH, self._dC);
+#     def _backwardStep(self, t : int, *dout: np.ndarray) -> Tuple[np.ndarray]:
+#         dY = dout[0];
+#         lstm = self._lstmModules[t];
+#         dX, self._dH, self._dC = lstm.backward(dY + self._dH, self._dC);
 
-        for i in range(len(lstm.grads)):
-            self._grads[i] += lstm.grads[i];
+#         for i in range(len(lstm.grads)):
+#             self._grads[i] += lstm.grads[i];
 
-        return dX, ;
+#         return dX, ;
 
 
-    def _forwardAll(self, *data : np.ndarray) -> np.ndarray:
-        X = data[0];
-        N, T = X.shape[: 2];
+#     def _forwardAll(self, *data : np.ndarray) -> np.ndarray:
+#         X = data[0];
+#         N, T = X.shape[: 2];
 
-        Y = np.zeros((N, T, self._outputSize), dtype = X.dtype);
-        for t in range(T):
-            self._forwardStep(t, X[:, t]);
-            Y[:, t] = self._H;
+#         Y = np.zeros((N, T, self._outputSize), dtype = X.dtype);
+#         for t in range(T):
+#             self._forwardStep(t, X[:, t]);
+#             Y[:, t] = self._H;
 
-        return Y;
+#         return Y;
 
 
-    def _backwardAll(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dY = dout[0];
-        N, T = len(dY), self._T;
-        dX = np.zeros((N, T, self._inputSize), dtype = dY.dtype);
+#     def _backwardAll(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+#         dY = dout[0];
+#         N, T = len(dY), self._T;
+#         dX = np.zeros((N, T, self._inputSize), dtype = dY.dtype);
 
-        for t in reversed(range(T)):
-            dX[:, t], = self._backwardStep(t, dY[:, t]);
+#         for t in reversed(range(T)):
+#             dX[:, t], = self._backwardStep(t, dY[:, t]);
 
-        return dX, ;
+#         return dX, ;
 
 
-    @property
-    def weightX(self) -> np.ndarray:
-        return self._weightX;
+#     @property
+#     def weightX(self) -> np.ndarray:
+#         return self._weightX;
 
 
-    @property
-    def weightH(self) -> np.ndarray:
-        return self._weightH;
+#     @property
+#     def weightH(self) -> np.ndarray:
+#         return self._weightH;
 
 
-    @property
-    def bias(self) -> np.ndarray:
-        return self._bias;
+#     @property
+#     def bias(self) -> np.ndarray:
+#         return self._bias;
 
 
-    @property
-    def dH(self) -> np.ndarray:
-        return self._dH;
+#     @property
+#     def dH(self) -> np.ndarray:
+#         return self._dH;
 
 
-    @property
-    def dC(self) -> np.ndarray:
-        return self._dC;
+#     @property
+#     def dC(self) -> np.ndarray:
+#         return self._dC;
 
 
-    # def _reset(self):
-    #     self._H, self._C = None, None;
-    #     self.resetStepState();
+#     # def _reset(self):
+#     #     self._H, self._C = None, None;
+#     #     self.resetStepState();
 
 
-    # input: X, H, C
-    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
-        X = data[0];
-        N = len(X);
+#     # input: X, H, C
+#     def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
+#         X = data[0];
+#         N = len(X);
 
-        if not self._stepwise or self._stepIndex == 0:
-            if not self._stateful or self._H is None:
-                self._H = np.zeros((N, self._outputSize), dtype = X.dtype);
-            if not self._stateful or self._C is None:
-                self._C = np.zeros((N, self._outputSize), dtype = X.dtype);
+#         if not self._stepwise or self._stepIndex == 0:
+#             if not self._stateful or self._H is None:
+#                 self._H = np.zeros((N, self._outputSize), dtype = X.dtype);
+#             if not self._stateful or self._C is None:
+#                 self._C = np.zeros((N, self._outputSize), dtype = X.dtype);
 
-            # only used in unit test!
-            # if self._inputDropoutMask is None:
-            #     self._inputDropoutMask = getDropoutMask(self._H, self._inputDropout);
-            # if self._recurrentDropoutMask is None:
-            #     self._recurrentDropoutMask = getDropoutMask(self._C, self._recurrentDropout);
+#             # only used in unit test!
+#             # if self._inputDropoutMask is None:
+#             #     self._inputDropoutMask = getDropoutMask(self._H, self._inputDropout);
+#             # if self._recurrentDropoutMask is None:
+#             #     self._recurrentDropoutMask = getDropoutMask(self._C, self._recurrentDropout);
 
-            self._inputDropoutMask = getDropoutMask(self._H, self._inputDropout);
-            self._recurrentDropoutMask = getDropoutMask(self._C, self._recurrentDropout);
+#             self._inputDropoutMask = getDropoutMask(self._H, self._inputDropout);
+#             self._recurrentDropoutMask = getDropoutMask(self._C, self._recurrentDropout);
 
-            for cell in self._lstmModules:
-                cell.setInputDropoutMask(self._inputDropoutMask);
-                cell.setRecurrentDropoutMask(self._recurrentDropoutMask);
+#             for cell in self._lstmModules:
+#                 cell.setInputDropoutMask(self._inputDropoutMask);
+#                 cell.setRecurrentDropoutMask(self._recurrentDropoutMask);
 
-        self._inputState, H, C = self._getInputState(*data);
-        if self._inputState:
-            self._H = H if H is not None else np.zeros((N, self._outputSize), dtype = X.dtype);
-            self._C = C if C is not None else np.zeros((N, self._outputSize), dtype = X.dtype);
+#         self._inputState, H, C = self._getInputState(*data);
+#         if self._inputState:
+#             self._H = H if H is not None else np.zeros((N, self._outputSize), dtype = X.dtype);
+#             self._C = C if C is not None else np.zeros((N, self._outputSize), dtype = X.dtype);
 
-        if not self._stepwise:
-            self._T = T = X.shape[1];
+#         if not self._stepwise:
+#             self._T = T = X.shape[1];
 
-            if len(self._lstmModules) < T:
-                self._lstmModules.extend([self._createCell() for _ in range(T - len(self._lstmModules))]);
+#             if len(self._lstmModules) < T:
+#                 self._lstmModules.extend([self._createCell() for _ in range(T - len(self._lstmModules))]);
 
-            Y = self._forwardAll(*data);
-            if not self._returnSequences:
-                Y = Y[:, -1];
-        else:
-            while len(self._lstmModules) < self._stepIndex + 1:
-                self._lstmModules.append(self._createCell());
+#             Y = self._forwardAll(*data);
+#             if not self._returnSequences:
+#                 Y = Y[:, -1];
+#         else:
+#             while len(self._lstmModules) < self._stepIndex + 1:
+#                 self._lstmModules.append(self._createCell());
 
-            self._forwardStep(self._stepIndex, *data);
-            self._stepIndex += 1;
+#             self._forwardStep(self._stepIndex, *data);
+#             self._stepIndex += 1;
 
-            Y = self._H;
+#             Y = self._H;
 
-        return (Y, self._H, self._C) if self._returnState else (Y, );
+#         return (Y, self._H, self._C) if self._returnState else (Y, );
 
 
-    # input: dY, dH, dC
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dY = dout[0];
+#     # input: dY, dH, dC
+#     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+#         dY = dout[0];
 
-        if not self._stepwise or self._stepIndex == len(self._lstmModules):
-            # truncated BPTT
-            self._dH = np.zeros_like(self._H);
-            self._dC = np.zeros_like(self._H);
-            # for i in range(len(self._grads)):
-            #     self._grads[i][...] = 0;
+#         if not self._stepwise or self._stepIndex == len(self._lstmModules):
+#             # truncated BPTT
+#             self._dH = np.zeros_like(self._H);
+#             self._dC = np.zeros_like(self._H);
+#             # for i in range(len(self._grads)):
+#             #     self._grads[i][...] = 0;
 
-        if self._returnState:
-            self._dH += dout[1];
-            self._dC += dout[2];
+#         if self._returnState:
+#             self._dH += dout[1];
+#             self._dC += dout[2];
 
-        if not self._stepwise:
-            N, T = len(dY), self._T;
+#         if not self._stepwise:
+#             N, T = len(dY), self._T;
 
-            if not self._returnSequences:
-                dH = dY;
-                dY = np.zeros((N, T, dY.shape[-1]), dtype = dY.dtype);
-                dY[:, -1] = dH;
+#             if not self._returnSequences:
+#                 dH = dY;
+#                 dY = np.zeros((N, T, dY.shape[-1]), dtype = dY.dtype);
+#                 dY[:, -1] = dH;
 
-            din = self._backwardAll(*((dY, ) + dout[1:]));
-        else:
-            self._stepIndex -= 1;
-            din = self._backwardStep(self._stepIndex, *((dY, ) + dout[1:]));
+#             din = self._backwardAll(*((dY, ) + dout[1:]));
+#         else:
+#             self._stepIndex -= 1;
+#             din = self._backwardStep(self._stepIndex, *((dY, ) + dout[1:]));
 
-        if self._inputState:
-            if not self._stepwise:
-                din += (self._dH, self._dC);
-            else:
-                din += (np.copy(self._dH), np.copy(self._dC));
-                self._dH[...] = 0;
-                self._dC[...] = 0;
+#         if self._inputState:
+#             if not self._stepwise:
+#                 din += (self._dH, self._dC);
+#             else:
+#                 din += (np.copy(self._dH), np.copy(self._dC));
+#                 self._dH[...] = 0;
+#                 self._dC[...] = 0;
 
-        return din;
+#         return din;
 
 
-    def setState(self, H : np.ndarray, C : Optional[np.ndarray] = None):
-        self._H, self._C = H, C;
+#     def setState(self, H : np.ndarray, C : Optional[np.ndarray] = None):
+#         self._H, self._C = H, C;
 
 
-    def resetStepState(self):
-        if self._stepwise:
-            self._stepIndex = 0;
+#     def resetStepState(self):
+#         if self._stepwise:
+#             self._stepIndex = 0;
 
 
-    # only used in unit test!
-    def setInputDropoutMask(self, mask : Optional[np.ndarray] = None):
-        self._inputDropoutMask = mask;
+#     # only used in unit test!
+#     def setInputDropoutMask(self, mask : Optional[np.ndarray] = None):
+#         self._inputDropoutMask = mask;
 
-        for cell in self._lstmModules:
-            cell.setInputDropoutMask(self._inputDropoutMask);
+#         for cell in self._lstmModules:
+#             cell.setInputDropoutMask(self._inputDropoutMask);
 
 
-    # only used in unit test!
-    def setRecurrentDropoutMask(self, mask : Optional[np.ndarray] = None):
-        self._recurrentDropoutMask = mask;
+#     # only used in unit test!
+#     def setRecurrentDropoutMask(self, mask : Optional[np.ndarray] = None):
+#         self._recurrentDropoutMask = mask;
 
-        for cell in self._lstmModules:
-            cell.setRecurrentDropoutMask(self._recurrentDropoutMask);
+#         for cell in self._lstmModules:
+#             cell.setRecurrentDropoutMask(self._recurrentDropoutMask);
 
 
-class BahdanauAttentionLstmLayer(LstmLayer):
-    def __init__(self, inputSize : int, outputSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None, Wq : Optional[np.ndarray] = None, Wk : Optional[np.ndarray] = None, wv : Optional[np.ndarray] = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, inputDropout : float = 0, recurrentDropout : float = 0):
-        super().__init__(outputSize + inputSize, outputSize, Wx, Wh, b, returnSequences, returnState, stateful, stepwise, inputDropout, recurrentDropout);
+# class BahdanauAttentionLstmLayer(LstmLayer):
+#     def __init__(self, inputSize : int, outputSize : int, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None, Wq : Optional[np.ndarray] = None, Wk : Optional[np.ndarray] = None, wv : Optional[np.ndarray] = None, returnSequences : bool = False, returnState : bool = False, stateful : bool = False, stepwise = False, inputDropout : float = 0, recurrentDropout : float = 0):
+#         super().__init__(outputSize + inputSize, outputSize, Wx, Wh, b, returnSequences, returnState, stateful, stepwise, inputDropout, recurrentDropout);
 
-        self._shapeK = None;
-        self._attentionWeight = None;
-        self._name = f"BahdanauAttentionLSTM {inputSize}*{outputSize}";
+#         self._shapeK = None;
+#         self._attentionWeight = None;
+#         self._name = f"BahdanauAttentionLSTM {inputSize}*{outputSize}";
 
-        self._weightQ = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize).astype(defaultDType) if Wq is None else Wq;
-        self._weightK = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize).astype(defaultDType) if Wk is None else Wk;
-        self._weightV = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 1).astype(defaultDType) if wv is None else wv;
-        self._attentionModules : List[QKVAttentionLayer] = [];
+#         self._weightQ = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize).astype(defaultDType) if Wq is None else Wq;
+#         self._weightK = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, outputSize).astype(defaultDType) if Wk is None else Wk;
+#         self._weightV = math.sqrt(2.0 / outputSize) * np.random.randn(outputSize, 1).astype(defaultDType) if wv is None else wv;
+#         self._attentionModules : List[QKVAttentionLayer] = [];
 
-        weights = [self._weightQ, self._weightK, self._weightV];
-        self._params.extend(weights);
-        self._grads.extend([np.zeros_like(w) for w in weights]);
+#         weights = [self._weightQ, self._weightK, self._weightV];
+#         self._params.extend(weights);
+#         self._grads.extend([np.zeros_like(w) for w in weights]);
 
 
-    def _setContext(self, context : INetContext):
-        super()._setContext(context);
+#     def _setContext(self, context : INetContext):
+#         super()._setContext(context);
 
-        for m in self._attentionModules:
-            m.context = value;
+#         for m in self._attentionModules:
+#             m.context = value;
 
 
-    def _setParams(self, value: List[np.ndarray]):
-        self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
-        self._weightQ, self._weightK, self._weightV = value[3], value[4], value[5];
+#     def _setParams(self, value: List[np.ndarray]):
+#         self._weightX, self._weightH, self._bias = value[0], value[1], value[2];
+#         self._weightQ, self._weightK, self._weightV = value[3], value[4], value[5];
 
-        for cell in self._lstmModules:
-            cell.params = (self._weightX, self._weightH, self._bias);
+#         for cell in self._lstmModules:
+#             cell.params = (self._weightX, self._weightH, self._bias);
 
-        for m in self._attentionModules:
-            m.params = (self._weightQ, self._weightK, self._weightV);
+#         for m in self._attentionModules:
+#             m.params = (self._weightQ, self._weightK, self._weightV);
 
 
-    def _reset(self):
-        super()._reset();
+#     def _reset(self):
+#         super()._reset();
 
-        for m in self._attentionModules:
-            m.reset();
+#         for m in self._attentionModules:
+#             m.reset();
 
 
-    def _getInputState(self, *data: np.ndarray):
-        if len(data) > 2:
-            return True, data[2], data[3];
-        else:
-            return False, None, None;
+#     def _getInputState(self, *data: np.ndarray):
+#         if len(data) > 2:
+#             return True, data[2], data[3];
+#         else:
+#             return False, None, None;
 
 
-    def _createAttention(self):
-        layer = QKVAttentionLayer(AdditiveAttentionWeight1TModule(self._outputSize, self._outputSize, self._outputSize, Wq = self._weightQ, Wk = self._weightK, wv = self._weightV), SelectByWeight1TModule());
-        layer.context = self.context;
-        return layer;
+#     def _createAttention(self):
+#         layer = QKVAttentionLayer(AdditiveAttentionWeight1TModule(self._outputSize, self._outputSize, self._outputSize, Wq = self._weightQ, Wk = self._weightK, wv = self._weightV), SelectByWeight1TModule());
+#         layer.context = self.context;
+#         return layer;
 
 
-    def _forwardStep(self, t : int, *data : np.ndarray):
-        X, K = data[: 2];
+#     def _forwardStep(self, t : int, *data : np.ndarray):
+#         X, K = data[: 2];
 
-        lstm = self._lstmModules[t];
-        attention = self._attentionModules[t];
+#         lstm = self._lstmModules[t];
+#         attention = self._attentionModules[t];
 
-        context = attention.forward(self._H, K, K)[0];
-        self._attentionWeight.append(attention.attentionWeight);
-        self._H, self._C = lstm.forward(np.concatenate((context, X), axis = -1), self._H, self._C);
+#         context = attention.forward(self._H, K, K)[0];
+#         self._attentionWeight.append(attention.attentionWeight);
+#         self._H, self._C = lstm.forward(np.concatenate((context, X), axis = -1), self._H, self._C);
 
 
-    def _backwardStep(self, t : int, *dout: np.ndarray) -> Tuple[np.ndarray]:
-        dY = dout[0];
+#     def _backwardStep(self, t : int, *dout: np.ndarray) -> Tuple[np.ndarray]:
+#         dY = dout[0];
 
-        lstm = self._lstmModules[t];
-        attention = self._attentionModules[t];
+#         lstm = self._lstmModules[t];
+#         attention = self._attentionModules[t];
 
-        dX, self._dH, self._dC = lstm.backward(dY + self._dH, self._dC);
-        dContext = dX[:, : self._outputSize];
-        dQ, dK, dV = attention.backward(dContext);
-        self._dH += dQ;
+#         dX, self._dH, self._dC = lstm.backward(dY + self._dH, self._dC);
+#         dContext = dX[:, : self._outputSize];
+#         dQ, dK, dV = attention.backward(dContext);
+#         self._dH += dQ;
 
-        grads = lstm.grads + attention.grads;
-        for i in range(len(grads)):
-            self._grads[i] += grads[i];
+#         grads = lstm.grads + attention.grads;
+#         for i in range(len(grads)):
+#             self._grads[i] += grads[i];
 
-        return dX[:, self._outputSize:], dK + dV;
+#         return dX[:, self._outputSize:], dK + dV;
 
 
-    def _forwardAll(self, *data : np.ndarray) -> np.ndarray:
-        X, K = data[: 2];
-        N, T = X.shape[: 2];
-        Y = np.zeros((N, T, self._outputSize), dtype = X.dtype);
+#     def _forwardAll(self, *data : np.ndarray) -> np.ndarray:
+#         X, K = data[: 2];
+#         N, T = X.shape[: 2];
+#         Y = np.zeros((N, T, self._outputSize), dtype = X.dtype);
 
-        for t in range(T):
-            self._forwardStep(t, X[:, t], K);
-            Y[:, t] = self._H;
+#         for t in range(T):
+#             self._forwardStep(t, X[:, t], K);
+#             Y[:, t] = self._H;
 
-        return Y;
+#         return Y;
 
 
-    def _backwardAll(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dY = dout[0];
-        N, T = len(dY), self._T;
-        dX = np.zeros((N, T, self._inputSize - self._outputSize), dtype = dY.dtype);
-        dK = np.zeros(self._shapeK, dtype = dY.dtype);
+#     def _backwardAll(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+#         dY = dout[0];
+#         N, T = len(dY), self._T;
+#         dX = np.zeros((N, T, self._inputSize - self._outputSize), dtype = dY.dtype);
+#         dK = np.zeros(self._shapeK, dtype = dY.dtype);
 
-        for t in reversed(range(T)):
-            dX[:, t], dKS = self._backwardStep(t, dY[:, t]);
-            dK += dKS;
+#         for t in reversed(range(T)):
+#             dX[:, t], dKS = self._backwardStep(t, dY[:, t]);
+#             dK += dKS;
 
-        return dX, dK;
+#         return dX, dK;
 
 
-    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
-        X, K = data[: 2];
-        self._shapeK = K.shape;
+#     def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
+#         X, K = data[: 2];
+#         self._shapeK = K.shape;
 
-        if not self._stepwise or self._stepIndex == 0:
-            self._attentionWeight = [];
+#         if not self._stepwise or self._stepIndex == 0:
+#             self._attentionWeight = [];
 
-        if not self._stepwise:
-            T = X.shape[1];
+#         if not self._stepwise:
+#             T = X.shape[1];
 
-            if len(self._attentionModules) < T:
-                self._attentionModules = [self._createAttention() for _ in range(T - len(self._attentionModules))];
-        else:
-            while len(self._attentionModules) < self._stepIndex + 1:
-                self._attentionModules.append(self._createAttention());
+#             if len(self._attentionModules) < T:
+#                 self._attentionModules = [self._createAttention() for _ in range(T - len(self._attentionModules))];
+#         else:
+#             while len(self._attentionModules) < self._stepIndex + 1:
+#                 self._attentionModules.append(self._createAttention());
 
-        return super().forward(*data);
+#         return super().forward(*data);
 
 
-    @property
-    def attentionWeight(self) -> np.ndarray:
-        return np.array(self._attentionWeight).transpose(1, 0, 2);
+#     @property
+#     def attentionWeight(self) -> np.ndarray:
+#         return np.array(self._attentionWeight).transpose(1, 0, 2);
 
 
 # rnnSelector(inputSize, hiddenSize, stateful, returnSequence, returnState) -> RnnLayerBase
 class StackRnnLayer(AggregateNetModule):
-    def __init__(self, inputSize : int, hiddenSize : int, rnnSelector : Callable, layersNum : int = 2, dropoutRatio : float = 0.0, stateful : bool = True, returnSequence : bool = True, returnState : bool = False):
+    def __init__(self, inputSize : int, hiddenSize : int, rnnSelector : Callable[[int, int, bool, bool, bool], RnnLayerBase], layersNum : int = 2, dropoutRatio : float = 0.0, stateful : bool = True, returnSequence : bool = True, returnState : bool = False):
         if not returnSequence and not returnState:
             raise ValueError("returnSequence and returnState are both false");
 
-        modules, self._rnnModules, self._dropoutModules = [], [], [];
+        modules : List[INetModule] = [];
+        self._rnnModules : List[INetModule] = [];
+        self._dropoutModules : List[INetModule] = [];
+
         for l in range(layersNum):
             modules.append(rnnSelector(inputSize if l == 0 else hiddenSize, hiddenSize, stateful, True, True));
             self._rnnModules.append(modules[-1]);
@@ -3395,14 +3408,14 @@ class StackRnnLayer(AggregateNetModule):
         self._returnState = returnState;
 
         self._Ys = None;
-        self._hiddenStates = None;
+        self._hiddenStates = ();
         self._dStates = None;
         self._foreignState = False;
         self._name = f"StackRnnLayer {inputSize}*{'*'.join([str(hiddenSize)] * layersNum)}";
 
 
     # input X, states: [L, N, H]
-    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]: # type: ignore
         Xs = data[0];
         self._foreignState = len(data) > 1;
 
@@ -3458,14 +3471,20 @@ class StackRnnLayer(AggregateNetModule):
             dInputStates.extend(dInputs[1: ]);
 
         statesCount = len(self._hiddenStates);
-        self._dStates = tuple(np.array(dInputStates[-statesCount + i::-statesCount]) for i in range(statesCount)) if self._foreignState else None;
 
-        return (dXs, ) + self._dStates if self._foreignState else (dXs, );
+        if self._foreignState:
+            self._dStates = tuple(np.array(dInputStates[-statesCount + i::-statesCount]) for i in range(statesCount));
+        
+            return (dXs, ) + self._dStates;
+        else:
+            self._dStates = None;
+
+            return (dXs, );
 
 
 # rnnSelector(inputSize, hiddenSize, stateful, returnSequence, returnState) -> RnnLayerBase
 class BiRnnLayer(AggregateNetModule):
-    def __init__(self, inputSize : int, hiddenSize : int, rnnSelector : Callable, stateful : bool = True, returnSequence : bool = True, returnState : bool = False):
+    def __init__(self, inputSize : int, hiddenSize : int, rnnSelector : Callable[[int, int, bool, bool, bool], RnnLayerBase], stateful : bool = True, returnSequence : bool = True, returnState : bool = False):
         self._forwardRnn : INetModule = rnnSelector(inputSize, hiddenSize, stateful, True, True);
         self._backwardRnn : INetModule = rnnSelector(inputSize, hiddenSize, stateful, True, True);
 
@@ -3478,7 +3497,7 @@ class BiRnnLayer(AggregateNetModule):
         self._returnState = returnState;
 
         self._Ys = None;
-        self._hiddenStates = None;
+        self._hiddenStates = ();
         self._dStates = None;
         self._foreignState = False;
         self._name = f"BiRNN {inputSize}*{2 * hiddenSize}";
@@ -3494,7 +3513,7 @@ class BiRnnLayer(AggregateNetModule):
         return self._backwardRnn;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]: # type: ignore
         Xs = data[0];
         self._foreignState = len(data) > 1;
         inputStates = data[1:] if self._foreignState else None;
@@ -3532,9 +3551,15 @@ class BiRnnLayer(AggregateNetModule):
         dBackwardInputs = self._backwardRnn.backward(dYs[..., self._hiddenSize: ][::-1], *tuple(item[..., self._hiddenSize: ] for item in dOutputStates));
 
         dXs = dForwardInputs[0] + dBackwardInputs[0][::-1];
-        self._dStates = tuple(np.concatenate((fs, bs), axis = -1) for fs, bs in zip(dForwardInputs[1: ], dBackwardInputs[1: ])) if self._foreignState else None;
 
-        return (dXs, ) + self._dStates if self._foreignState else (dXs, );
+        if self._foreignState:
+            self._dStates = tuple(np.concatenate((fs, bs), axis = -1) for fs, bs in zip(dForwardInputs[1: ], dBackwardInputs[1: ]));
+        
+            return (dXs, ) + self._dStates;
+        else:
+            self._dStates = None;
+            
+            return (dXs, );
 
 
 class CorpusNegativeSampler:
@@ -3710,7 +3735,7 @@ class SoftmaxLayer(NetModuleBase):
     def __init__(self):
         super().__init__();
 
-        self._Y = None;
+        self._Y = np.empty(0);
         self._M = None;
         self._name = "Softmax";
 
@@ -3736,7 +3761,7 @@ class ConcatenationLayer(NetModuleBase):
     def __init__(self):
         super().__init__();
 
-        self._index = None;
+        self._index = np.empty(0);
         self._name = "Concatenation";
 
 
@@ -3759,8 +3784,8 @@ class CrossEntropyLoss(NetLossBase):
     def __init__(self, reductionType : LossReductionType = LossReductionType.Mean):
         super().__init__();
 
-        self._Y = None;
-        self._T = None;
+        self._Y = np.empty(0);
+        self._T = np.empty(0);
         self._M = None;
         self._reductionType = reductionType;
 
@@ -3769,12 +3794,12 @@ class CrossEntropyLoss(NetLossBase):
         if len(data) > 2:
             self._Y, self._M, self._T = data[: 3];
         else:
-            self._Y, self._T = data[: 2];
+            self._Y, self._T = data[: 2]; # type: ignore
             self._M = None;
 
         self._loss = crossEntropyError(self._Y, self._T, self._M, self._reductionType);
 
-        return self._loss;
+        return self._loss; # type: ignore
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
@@ -3785,8 +3810,8 @@ class SoftmaxWithCrossEntropyLoss(NetLossBase):
     def __init__(self, reductionType : LossReductionType = LossReductionType.Mean):
         super().__init__();
 
-        self._Y = None;
-        self._T = None;
+        self._Y = np.empty(0);
+        self._T = np.empty(0);
         self._M = None;
         self._reductionType = reductionType;
 
@@ -3795,13 +3820,13 @@ class SoftmaxWithCrossEntropyLoss(NetLossBase):
         if len(data) > 2:
             X, self._M, self._T = data[: 3];
         else:
-            X, self._T = data[: 2];
+            X, self._T = data[: 2]; # type: ignore
             self._M = None;
 
         self._Y = softmax(X);
         self._loss = crossEntropyError(self._Y, self._T, self._M, self._reductionType);
 
-        return self._loss;
+        return self._loss; # type: ignore
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
@@ -3812,8 +3837,8 @@ class SoftmaxWithCrossEntropy1DLoss(NetLossBase):
     def __init__(self, reductionType : LossReductionType = LossReductionType.Mean):
         super().__init__();
 
-        self._Y = None;
-        self._T = None;
+        self._Y = np.empty(0);
+        self._T = np.empty(0);
         self._M = None;
         self._reductionType = reductionType;
 
@@ -3822,13 +3847,13 @@ class SoftmaxWithCrossEntropy1DLoss(NetLossBase):
         if len(data) > 2:
             X, self._M, self._T = data[: 3];
         else:
-            X, self._T = data[: 2];
+            X, self._T = data[: 2]; # type: ignore
             self._M = None;
 
         self._Y = softmax(X);
         self._loss = crossEntropyError1D(self._Y, self._T, self._M, self._reductionType);
 
-        return self._loss;
+        return self._loss; # type: ignore
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
@@ -3845,9 +3870,9 @@ class SequenceSoftmaxWithCrossEntropy1DLoss(SoftmaxWithCrossEntropy1DLoss):
     def forward(self, *data: np.ndarray) -> float:
         X, validLength, T = data;
         M = getLossMaskByValidLength(T.shape[-1], validLength) if validLength is not None else None;
-        L = super().forward(X, M, T);
+        L = super().forward(X, M, T); # type: ignore
 
-        n = np.sum(M);
+        n = np.sum(M) if M is not None else X.size // X.shape[-1];
         loss = float(np.sum(L) / n);
 
         self._n = n;
@@ -3865,8 +3890,8 @@ class SigmoidWithCrossEntropyLoss(NetLossBase):
     def __init__(self, reductionType : LossReductionType = LossReductionType.Mean):
         super().__init__();
 
-        self._Y = None;
-        self._T = None;
+        self._Y = np.empty(0);
+        self._T = np.empty(0);
         self._M = None;
         self._reductionType = reductionType;
 
@@ -3875,7 +3900,7 @@ class SigmoidWithCrossEntropyLoss(NetLossBase):
         if len(data) > 2:
             X, self._M, self._T = data[: 3];
         else:
-            X, self._T = data[: 2];
+            X, self._T = data[: 2]; # type: ignore
             self._M = None;
 
         self._Y = sigmoid(X);
@@ -3885,7 +3910,7 @@ class SigmoidWithCrossEntropyLoss(NetLossBase):
         self._loss = crossEntropyError(np.concatenate((Y2, 1 - Y2), axis = -1),
                                        np.concatenate((T2, 1 - T2), axis = -1), self._M, self._reductionType);
 
-        return self._loss;
+        return self._loss; # type: ignore
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
@@ -3896,8 +3921,8 @@ class IdentityWithMeanSquareLoss(NetLossBase):
     def __init__(self):
         super().__init__();
 
-        self._Y = None;
-        self._T = None;
+        self._Y = np.empty(0);
+        self._T = np.empty(0);
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -3917,7 +3942,7 @@ class IdentityWithMeanAbsoluteLoss(NetLossBase):
     def __init__(self):
         super().__init__();
 
-        self._Y, self._T = None, None;
+        self._Y, self._T = np.empty(0), np.empty(0);
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -3940,7 +3965,7 @@ class IdentityWithHuberLoss(NetLossBase):
         super().__init__();
 
         self._delta = np.array(max(0.0, float(delta)), dtype = defaultDType);
-        self._Y, self._T = None, None;
+        self._Y, self._T = np.empty(0), np.empty(0);
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -3963,9 +3988,9 @@ class SumWithMeanSquareLoss(NetLossBase):
     def __init__(self):
         super().__init__();
 
-        self._X = None;
-        self._Y = None;
-        self._T = None;
+        self._X = np.empty(0);
+        self._Y = np.empty(0);
+        self._T = np.empty(0);
         # self._shape = None;
 
 
@@ -4070,68 +4095,68 @@ class _ParametersShareInfo:
         return f"[{self.target}] += [{self.index}]{'.T' if self.isTranspose else ''}";
 
 
-class ParametersShare(INetOptimizer):
-    def __init__(self, optimizer : INetOptimizer):
-        self._optimizer = optimizer;
-        self._sharesInfo: Optional[List[_ParametersShareInfo]] = None;
+# class ParametersShare(INetOptimizer):
+#     def __init__(self, optimizer : INetOptimizer):
+#         self._optimizer = optimizer;
+#         self._sharesInfo: Optional[List[_ParametersShareInfo]] = None;
 
 
-    @property
-    def learningRate(self) -> float:
-        return self._optimizer.learningRate;
+#     @property
+#     def learningRate(self) -> float:
+#         return self._optimizer.learningRate;
 
 
-    @learningRate.setter
-    def learningRate(self, value: float):
-        self._optimizer.learningRate = value;
+#     @learningRate.setter
+#     def learningRate(self, value: float):
+#         self._optimizer.learningRate = value;
 
 
-    def _find(self, params : List[np.ndarray]):
-        L = len(params);
-        sharesInfo = [];
-        params = params[:];
+#     def _find(self, params : List[np.ndarray]):
+#         L = len(params);
+#         sharesInfo = [];
+#         params = params[:];
 
-        for i in range(L - 1):
-            if (p1 := params[i]) is None:
-                continue;
+#         for i in range(L - 1):
+#             if (p1 := params[i]) is None:
+#                 continue;
 
-            for j in range(i + 1, L):
-                if (p2 := params[j]) is None:
-                    continue;
+#             for j in range(i + 1, L):
+#                 if (p2 := params[j]) is None:
+#                     continue;
 
-                if p1 is p2:
-                    # p1 == p2
-                    sharesInfo.append(_ParametersShareInfo(j, i));
-                    params[j] = None;
-                elif p1.ndim == 2 and p2.ndim == 2 and (p1 is p2.base or p2 is p1.base):
-                    # p1 == p2.T or p1.T == p2
-                    s1, s2 = p1.shape, p2.shape;
+#                 if p1 is p2:
+#                     # p1 == p2
+#                     sharesInfo.append(_ParametersShareInfo(j, i));
+#                     params[j] = None;
+#                 elif p1.ndim == 2 and p2.ndim == 2 and (p1 is p2.base or p2 is p1.base):
+#                     # p1 == p2.T or p1.T == p2
+#                     s1, s2 = p1.shape, p2.shape;
 
-                    if s1[0] == s2[1] and s1[1] == s2[0]:
-                        if p1 is p2.base:
-                            sharesInfo.append(_ParametersShareInfo(j, i, isTranspose = True));
-                            params[j] = None;
-                        else:
-                            sharesInfo.append(_ParametersShareInfo(i, j, isTranspose = True));
-                            params[i] = None;
-                            break;
+#                     if s1[0] == s2[1] and s1[1] == s2[0]:
+#                         if p1 is p2.base:
+#                             sharesInfo.append(_ParametersShareInfo(j, i, isTranspose = True));
+#                             params[j] = None;
+#                         else:
+#                             sharesInfo.append(_ParametersShareInfo(i, j, isTranspose = True));
+#                             params[i] = None;
+#                             break;
 
-        self._sharesInfo = sorted(sharesInfo, key = lambda item: item.index, reverse = True);
+#         self._sharesInfo = sorted(sharesInfo, key = lambda item: item.index, reverse = True);
 
 
-    def updateStep(self, params : List[np.ndarray], grads : List[np.ndarray]):
-        L = len(params);
-        params, grads = params[:], grads[:];
+#     def updateStep(self, params : List[np.ndarray], grads : List[np.ndarray]):
+#         L = len(params);
+#         params, grads = params[:], grads[:];
 
-        if self._sharesInfo is None:
-            self._find(params);
+#         if self._sharesInfo is None:
+#             self._find(params);
 
-        for info in self._sharesInfo:
-            grads[info.target] += (grads[info.index].T if info.isTranspose else grads[info.index]);
-            params.pop(info.index);
-            grads.pop(info.index);
+#         for info in self._sharesInfo:
+#             grads[info.target] += (grads[info.index].T if info.isTranspose else grads[info.index]);
+#             params.pop(info.index);
+#             grads.pop(info.index);
 
-        self._optimizer.updateStep(params, grads);
+#         self._optimizer.updateStep(params, grads);
 
 
 class GradientsClipping(INetOptimizer):
@@ -4263,6 +4288,7 @@ class AdaDelta(NetOptimizerBase):
     def _onUpdate(self, params : List[INetParamDefinition]):
         if self._v is None:
             self._v = [np.zeros_like(p.value) for p in params];
+        if self._d is None:
             self._d = [np.zeros_like(p.value) for p in params];
 
         for v, d, p in zip(self._v, self._d, params):
@@ -4375,7 +4401,7 @@ class LinearNetLrScheduler(NetLrSchedulerBase):
     def epochStep(self, epoch : int):
         if epoch < self._minEpoch:
             self._currentLr = self._startLr;
-        elif epoch <= self._maxEpoch:
+        elif epoch <= self._maxEpoch: # type: ignore
             self._currentLr = self._startLr + self._lrDelta * (epoch - self._minEpoch);
         else:
             self._currentLr = self._endLr;
@@ -4405,9 +4431,9 @@ class MultiStepNetLrScheduler(NetLrSchedulerBase):
 class CosineNetLrScheduler(NetLrSchedulerBase):
     def __init__(self, baseLr : float, minLr : float, minEpoch : int = 0, maxEpoch : int = 5):
         if baseLr <= minLr:
-            raise Value("baseLr <= minLr");
+            raise ValueError("baseLr <= minLr");
         if maxEpoch is None:
-            raise Value("maxEpoch is None");
+            raise ValueError("maxEpoch is None");
 
         super().__init__(baseLr, minEpoch = minEpoch, maxEpoch = maxEpoch);
 
@@ -4417,8 +4443,8 @@ class CosineNetLrScheduler(NetLrSchedulerBase):
     def epochStep(self, epoch : int):
         if epoch < self._minEpoch:
             self._currentLr = self._baseLr;
-        elif epoch <= self._maxEpoch:
-            self._currentLr = self._minLr + (self._baseLr - self._minLr) * 0.5 * (1 + math.cos(math.pi * (epoch - self._minEpoch) / (self._maxEpoch - self._minEpoch)));
+        elif epoch <= self._maxEpoch: # type: ignore
+            self._currentLr = self._minLr + (self._baseLr - self._minLr) * 0.5 * (1 + math.cos(math.pi * (epoch - self._minEpoch) / (self._maxEpoch - self._minEpoch))); # type: ignore
         else:
             self._currentLr = self._minLr;
 
@@ -4428,7 +4454,7 @@ class CyclicNetLrScheduler(NetLrSchedulerBase):
         if scheduler is None:
             raise ValueError("scheduler is None");
         if cycleSize <= 0:
-            raise Value("cycleSize <= 0");
+            raise ValueError("cycleSize <= 0");
 
         super().__init__(baseLr, minEpoch = minEpoch, maxEpoch = maxEpoch);
 
@@ -4485,10 +4511,11 @@ class AggregateScaler(IDataScaler):
             self._scalers[i].params = value[i];
 
 
-    def fit(self, X : np.ndarray):
+    def fit(self, X : np.ndarray) -> np.ndarray:
         Y = X;
         for scaler in self._scalers:
             Y = scaler.fit(Y);
+        return Y;
 
 
     def transform(self, X : np.ndarray) -> np.ndarray:
@@ -4511,7 +4538,7 @@ class AggregateScaler(IDataScaler):
 
 class ScalerBase(IDataScaler):
     def __init__(self):
-        self._ndim = None;
+        self._ndim = 0;
         self._fitted = False;
 
 
@@ -4599,9 +4626,9 @@ class MinMaxScaler(ScalerBase):
         self._minRange = minRange * 1.0;
         self._maxRange = maxRange * 1.0;
         self._rangeDelta = maxRange - minRange;
-        self._minValue = None;
-        self._maxValue = None;
-        self._valueDelta = None;
+        self._minValue = np.empty(0);
+        self._maxValue = np.empty(0);
+        self._valueDelta = np.empty(0);
 
 
     def _getParams(self) -> List:
@@ -4635,8 +4662,8 @@ class StandardScaler(ScalerBase):
     def __init__(self, takeMedian : bool = False):
         super().__init__();
 
-        self._mu = None;
-        self._sigma = None;
+        self._mu = np.empty(0);
+        self._sigma = np.empty(0);
         self._takeMedian = takeMedian;
 
 
@@ -4673,7 +4700,7 @@ class DiffScaler(ScalerBase):
     def __init__(self, interval : int = 1):
         super().__init__();
 
-        self._X = None;
+        self._X = np.empty(0);
         self._interval = interval;
 
 
@@ -4714,8 +4741,8 @@ class AdditiveAttentionModule(AggregateNetModule, INetAttentionModule):
         self._dropoutLayer = DropoutLayer(dropoutRatio);
         super().__init__(self._dropoutLayer);
 
-        self._Q, self._K, self._V, self._A = None, None, None, None;
-        self._attentionWeight, self._dropoutWeight = None, None;
+        self._Q, self._K, self._V, self._A = np.empty(0), np.empty(0), np.empty(0), np.empty(0);
+        self._attentionWeight, self._dropoutWeight = np.empty(0), np.empty(0);
         self._name = f"AdditiveAttention {hiddenSize}";
 
         self._weightQ = math.sqrt(2.0 / querySize) * np.random.randn(querySize, hiddenSize).astype(defaultDType) if Wq is None else Wq;
@@ -4734,7 +4761,7 @@ class AdditiveAttentionModule(AggregateNetModule, INetAttentionModule):
 
 
     @property
-    def attentionWeight(self) -> np.ndarray:
+    def attentionWeight(self) -> Optional[np.ndarray]:
         return self._attentionWeight;
 
 
@@ -4792,8 +4819,8 @@ class DotProductAttentionModule(AggregateNetModule, INetAttentionModule):
         self._dropoutLayer = DropoutLayer(dropoutRatio);
         super().__init__(self._dropoutLayer);
 
-        self._Q, self._K, self._V, self._A, self._scale = None, None, None, None, 1;
-        self._attentionWeight, self._dropoutWeight = None, None;
+        self._Q, self._K, self._V, self._A, self._scale = None, None, np.empty(0), None, 1;
+        self._attentionWeight, self._dropoutWeight = np.empty(0), np.empty(0);
         self._name = f"DotProductAttention";
 
 
@@ -4845,7 +4872,7 @@ class MultiHeadAttentionModule(AggregateNetModule, INetAttentionModule):
 
         self._headNum = headNum;
         self._headShape = (headNum, -1);
-        self._Q, self._K, self._V, self._C = None, None, None, None;
+        self._Q, self._K, self._V, self._C = np.empty(0), np.empty(0), np.empty(0), np.empty(0);
         self._name = f"MultiHeadAttention({headNum} {attentionModule})";
 
         self._weightQ = math.sqrt(2.0 / querySize) * np.random.randn(querySize, headNum * queryHiddenSize).astype(defaultDType) if Wq is None else Wq;
@@ -4860,7 +4887,7 @@ class MultiHeadAttentionModule(AggregateNetModule, INetAttentionModule):
 
 
     @property
-    def attentionWeight(self) -> np.ndarray:
+    def attentionWeight(self) -> Optional[np.ndarray]:
         return self._attentionModule.attentionWeight;
 
 
@@ -4894,7 +4921,7 @@ class MultiHeadAttentionModule(AggregateNetModule, INetAttentionModule):
         KH = self._reshapeInput(KH);
         VH = self._reshapeInput(VH);
 
-        self._C, = self._attentionModule.forward(QH, KH, VH, M);
+        self._C, = self._attentionModule.forward(QH, KH, VH, M); # type: ignore
         self._C = np.swapaxes(self._C, -2, -3);
         self._C = self._C.reshape(self._C.shape[: -2] + (-1, ));
         Y = self._C @ self._weightO;
@@ -4938,7 +4965,7 @@ class SelfAttentionModule(AggregateNetModule, INetAttentionModule):
 
 
     @property
-    def attentionWeight(self) -> np.ndarray:
+    def attentionWeight(self) -> Optional[np.ndarray]:
         return self._attentionModule.attentionWeight;
 
 
@@ -4948,7 +4975,7 @@ class SelfAttentionModule(AggregateNetModule, INetAttentionModule):
         X = data[0];
         M = data[1] if len(data) > 1 else None;  # softmax mask
 
-        Y, = self._attentionModule.forward(X, X, X, M);
+        Y, = self._attentionModule.forward(X, X, X, M); # type: ignore
 
         return Y, ;
 
@@ -5056,7 +5083,7 @@ class TransformerEncoderBlock(AggregateNetModule, INetAttentionModule):
 
 
     @property
-    def attentionWeight(self) -> np.ndarray:
+    def attentionWeight(self) -> Optional[np.ndarray]:
         return self._attentionModule.attentionWeight;
 
 
@@ -5066,7 +5093,7 @@ class TransformerEncoderBlock(AggregateNetModule, INetAttentionModule):
         X = data[0];
         M = data[1] if len(data) > 1 else None;  # softmax mask
 
-        F1, = self._attentionModule.forward(X, M);
+        F1, = self._attentionModule.forward(X, M); # type: ignore
         Y1, = self._addNormal1.forward(X, F1);
         F2, = self._positionwiseFFN.forward(Y1);
         Y, = self._addNormal2.forward(Y1, F2);
@@ -5096,7 +5123,7 @@ class TransformerEncoder(AggregateNetModule, INetAttentionModule):
 
 
     @property
-    def attentionWeight(self) -> np.ndarray:
+    def attentionWeight(self) -> Optional[np.ndarray]:
         return self._attentionWeight;
 
 
@@ -5110,7 +5137,7 @@ class TransformerEncoder(AggregateNetModule, INetAttentionModule):
 
         Y = PX;
         for block in self._blocks:
-            Y, = block.forward(Y, M);
+            Y, = block.forward(Y, M); # type: ignore
 
         self._attentionWeight = np.array([item.attentionWeight for item in self._blocks]);
         return Y, ;
@@ -5136,7 +5163,7 @@ class TransformerEmbeddingEncoder(AggregateNetModule, INetAttentionModule):
 
 
     @property
-    def attentionWeight(self) -> np.ndarray:
+    def attentionWeight(self) -> Optional[np.ndarray]:
         return self._encoder.attentionWeight;
 
 
@@ -5150,7 +5177,7 @@ class TransformerEmbeddingEncoder(AggregateNetModule, INetAttentionModule):
         M = getAttentionMaskByValidLength(sequenceLength, sequenceLength, validLength, onlyBatch = True) if validLength is not None else None;
 
         EX, = self._embedding.forward(X);
-        Y, = self._encoder.forward(EX * self._embeddingScale, M);
+        Y, = self._encoder.forward(EX * self._embeddingScale, M); # type: ignore
 
         return Y, ;
 
@@ -5179,7 +5206,7 @@ class TransformerDecoderBlock(AggregateNetModule, INetAttentionModule):
 
 
     @property
-    def attentionWeight(self) -> np.ndarray:
+    def attentionWeight(self) -> Optional[np.ndarray]:
         return self._crossAttentionModule.attentionWeight;
 
 
@@ -5199,9 +5226,9 @@ class TransformerDecoderBlock(AggregateNetModule, INetAttentionModule):
         else:
             decoderM = None;
 
-        F1, = self._innerAttentionModule.forward(Q, K, V, decoderM);
+        F1, = self._innerAttentionModule.forward(Q, K, V, decoderM); # type: ignore
         Y1, = self._addNormal1.forward(Q, F1);
-        F2, = self._crossAttentionModule.forward(Y1, encoderY, encoderY, encoderM);
+        F2, = self._crossAttentionModule.forward(Y1, encoderY, encoderY, encoderM); # type: ignore
         Y2, = self._addNormal2.forward(Y1, F2);
         F3, = self._positionwiseFFN.forward(Y2);
         Y, = self._addNormal3.forward(Y2, F3);
@@ -5229,6 +5256,9 @@ class TransformerDecoderBlock(AggregateNetModule, INetAttentionModule):
 
 class TransformerDecoder(AggregateNetModule, INetAttentionModule):
     def __init__(self, inputSize: int, encoderSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Optional[Callable] = None):
+        if blockNum < 1:
+            raise ValueError("blockNum < 1");
+
         self._blockNum = blockNum;
         self._attentionWeight = None;
         self._positionalEncoding = SinePositionalEncodingModule(inputSize, maxLength = maxSequenceLength, dropoutRatio = dropoutRatio);
@@ -5239,7 +5269,7 @@ class TransformerDecoder(AggregateNetModule, INetAttentionModule):
 
 
     @property
-    def attentionWeight(self) -> np.ndarray:
+    def attentionWeight(self) -> Optional[np.ndarray]:
         return self._attentionWeight;
 
 
@@ -5251,7 +5281,7 @@ class TransformerDecoder(AggregateNetModule, INetAttentionModule):
 
         Y, = self._positionalEncoding.forward(X);
         for block in self._blocks:
-            Y, = block.forward(Y, Y, Y, encoderY, encoderM);
+            Y, = block.forward(Y, Y, Y, encoderY, encoderM); # type: ignore
 
         self._attentionWeight = np.array([item.attentionWeight for item in self._blocks]);
         return Y, ;
@@ -5271,7 +5301,7 @@ class TransformerDecoder(AggregateNetModule, INetAttentionModule):
 
         dX, = self._positionalEncoding.backward(dY);
 
-        return dX, dEncoderY;
+        return dX, dEncoderY; # type: ignore
 
 
     def predict(self, *data : np.ndarray, blockInputs : List[Optional[np.ndarray]]) -> Tuple[np.ndarray, ...]:
@@ -5289,7 +5319,7 @@ class TransformerDecoder(AggregateNetModule, INetAttentionModule):
                 K = np.concatenate((K, Y), axis = -2);
             blockInputs[i] = K;
 
-            Y, = self._blocks[i].forward(Y, K, K, encoderY, encoderM);
+            Y, = self._blocks[i].forward(Y, K, K, encoderY, encoderM); # type: ignore
 
         return Y, ;
 
@@ -5305,7 +5335,7 @@ class TransformerEmbeddingDecoder(AggregateNetModule, INetAttentionModule):
 
 
     @property
-    def attentionWeight(self) -> np.ndarray:
+    def attentionWeight(self) -> Optional[np.ndarray]:
         return self._decoder.attentionWeight;
 
 
@@ -5321,7 +5351,7 @@ class TransformerEmbeddingDecoder(AggregateNetModule, INetAttentionModule):
         encoderM = getAttentionMaskByValidLength(decoderSequenceLength, encoderSequenceLength, encoderValidLength, onlyBatch = True) if encoderValidLength is not None else None;
 
         EX, = self._embedding.forward(X);
-        Y, = self._decoder.forward(EX * self._embeddingScale, encoderY, encoderM);
+        Y, = self._decoder.forward(EX * self._embeddingScale, encoderY, encoderM); # type: ignore
 
         return Y, ;
 
@@ -5345,15 +5375,15 @@ class TransformerEmbeddingDecoder(AggregateNetModule, INetAttentionModule):
         encoderM = getAttentionMaskByValidLength(decoderSequenceLength, encoderSequenceLength, encoderValidLength, onlyBatch = True) if encoderValidLength is not None else None;
 
         EX, = self._embedding.forward(X);
-        return self._decoder.predict(EX * self._embeddingScale, encoderY, encoderM, blockInputs = blockInputs);
+        return self._decoder.predict(EX * self._embeddingScale, encoderY, encoderM, blockInputs = blockInputs); # type: ignore
 
 
 # encode sequence to vector
 class AttentionPoolingLayer(AggregateNetModule, INetAttentionModule):
-    def __init__(self, inputSize : int, hiddenSize : Union[int, Tuple[int, ...], List[int]], activationFuncSelector : Optional[Callable] = None):
+    def __init__(self, inputSize : int, hiddenSize : Union[int, Tuple[int, ...], List[int]], activationFuncSelector : Optional[Callable[[int], INetModule]] = None):
         self._X = None;
-        self._attentionWeight, self._innerWeight = None, None;
-        self._activationFuncSelector = activationFuncSelector if activationFuncSelector is not None else (lambda x: TanhLayer());
+        self._attentionWeight, self._innerWeight = np.empty(0), None;
+        self._activationFuncSelector = activationFuncSelector if activationFuncSelector is not None else (lambda size: TanhLayer());
 
         modules = [];
         lastHiddenSize = 0;
@@ -5376,7 +5406,7 @@ class AttentionPoolingLayer(AggregateNetModule, INetAttentionModule):
 
 
     @property
-    def attentionWeight(self) -> np.ndarray:
+    def attentionWeight(self) -> Optional[np.ndarray]:
         return self._attentionWeight;
 
 
@@ -5411,218 +5441,218 @@ class AttentionPoolingLayer(AggregateNetModule, INetAttentionModule):
         return dX, ;
 
 
-# select value by weights for 1 time step
-class SelectByWeight1TModule(NetModuleBase):
-    def __init__(self):
-        super().__init__();
+# # select value by weights for 1 time step
+# class SelectByWeight1TModule(NetModuleBase):
+#     def __init__(self):
+#         super().__init__();
 
-        self._V = None;
-        self._W = None;
-        self._name = "SelectByWeight1T";
+#         self._V = None;
+#         self._W = None;
+#         self._name = "SelectByWeight1T";
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        # W: weights, N1 ... Nm * T1, V: values, N1 ...Nm * T1 * V
-        W, V = data;
-        self._V, self._W = V, np.expand_dims(W, axis = -1);
-        Y = np.sum(self._V * self._W, axis = -2);
+#     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+#         # W: weights, N1 ... Nm * T1, V: values, N1 ...Nm * T1 * V
+#         W, V = data;
+#         self._V, self._W = V, np.expand_dims(W, axis = -1);
+#         Y = np.sum(self._V * self._W, axis = -2);
 
-        return Y, ;
+#         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dY = np.repeat(np.expand_dims(dout[0], axis = -2), self._V.shape[-2], axis = -2);
-        dV = dY * self._W;
-        dW = np.sum(dY * self._V, axis = -1);
+#     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+#         dY = np.repeat(np.expand_dims(dout[0], axis = -2), self._V.shape[-2], axis = -2);
+#         dV = dY * self._W;
+#         dW = np.sum(dY * self._V, axis = -1);
 
-        return dW, dV;
+#         return dW, dV;
 
 
-# select value by weights for N time step
-class SelectByWeightNTModule(SelectByWeight1TModule):
-    def __init__(self):
-        super().__init__();
+# # select value by weights for N time step
+# class SelectByWeightNTModule(SelectByWeight1TModule):
+#     def __init__(self):
+#         super().__init__();
 
-        self._name = "SelectByWeightNT";
+#         self._name = "SelectByWeightNT";
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        # W: weights, N1 ... Nm * T2 * T1, V: values, N1 ...Nm * T1 * D
-        W, V = data;
-        self._V, self._W = np.expand_dims(V, axis = -3), np.expand_dims(W, axis = -1);
-        Y = np.sum(self._V * self._W, axis = -2);
+#     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+#         # W: weights, N1 ... Nm * T2 * T1, V: values, N1 ...Nm * T1 * D
+#         W, V = data;
+#         self._V, self._W = np.expand_dims(V, axis = -3), np.expand_dims(W, axis = -1);
+#         Y = np.sum(self._V * self._W, axis = -2);
 
-        return Y, ;
+#         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dY = np.repeat(np.expand_dims(dout[0], axis = -2), self._V.shape[-2], axis = -2);
-        dV = np.sum(dY * self._W, axis = -3);
-        dW = np.sum(dY * self._V, axis = -1);
+#     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+#         dY = np.repeat(np.expand_dims(dout[0], axis = -2), self._V.shape[-2], axis = -2);
+#         dV = np.sum(dY * self._W, axis = -3);
+#         dW = np.sum(dY * self._V, axis = -1);
 
-        return dW, dV;
+#         return dW, dV;
 
 
-# additive attention weight for 1 time step
-class AdditiveAttentionWeight1TModule(AggregateNetModule):
-    def __init__(self, querySize : int, keySize : int, hiddenSize : int, Wq : Optional[np.ndarray] = None, Wk : Optional[np.ndarray] = None, wv : Optional[np.ndarray] = None):
-        self._qLayer = AffineLayer(querySize, hiddenSize, includeBias = False, W = Wq);
-        self._kLayer = AffineLayer(keySize, hiddenSize, includeBias = False, W = Wk);
-        self._vLayer = AffineLayer(hiddenSize, 1, includeBias = False, W = wv);
-        self._softmax = SoftmaxLayer();
+# # additive attention weight for 1 time step
+# class AdditiveAttentionWeight1TModule(AggregateNetModule):
+#     def __init__(self, querySize : int, keySize : int, hiddenSize : int, Wq : Optional[np.ndarray] = None, Wk : Optional[np.ndarray] = None, wv : Optional[np.ndarray] = None):
+#         self._qLayer = AffineLayer(querySize, hiddenSize, includeBias = False, W = Wq);
+#         self._kLayer = AffineLayer(keySize, hiddenSize, includeBias = False, W = Wk);
+#         self._vLayer = AffineLayer(hiddenSize, 1, includeBias = False, W = wv);
+#         self._softmax = SoftmaxLayer();
 
-        super().__init__(self._qLayer, self._kLayer, self._vLayer, self._softmax);
+#         super().__init__(self._qLayer, self._kLayer, self._vLayer, self._softmax);
 
-        self._H = None;
-        self._name = "AdditiveAttentionWeight1T";
+#         self._H = None;
+#         self._name = "AdditiveAttentionWeight1T";
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        # Q: queries, N1 ... Nm * Q, K: keys, N1 ...Nm * T1 * K
-        Q, K = data;
+#     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+#         # Q: queries, N1 ... Nm * Q, K: keys, N1 ...Nm * T1 * K
+#         Q, K = data;
 
-        QY = self._qLayer.forward(Q)[0];
-        KY = self._kLayer.forward(K)[0];
+#         QY = self._qLayer.forward(Q)[0];
+#         KY = self._kLayer.forward(K)[0];
 
-        QY = np.expand_dims(QY, axis = -2);
-        self._H = tanh(QY + KY);
-        S = self._vLayer.forward(self._H)[0];
-        S = np.squeeze(S, axis = -1);
-        Y = self._softmax.forward(S)[0];
+#         QY = np.expand_dims(QY, axis = -2);
+#         self._H = tanh(QY + KY);
+#         S = self._vLayer.forward(self._H)[0];
+#         S = np.squeeze(S, axis = -1);
+#         Y = self._softmax.forward(S)[0];
 
-        return Y, ;
+#         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dS = self._softmax.backward(*dout)[0];
-        dS = np.expand_dims(dS, axis = -1);
-        dH = self._vLayer.backward(dS)[0];
-        dH = dH * tanhGradient(self._H);
-        dQ = self._qLayer.backward(np.sum(dH, axis = -2))[0];
-        dK = self._kLayer.backward(dH)[0];
+#     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+#         dS = self._softmax.backward(*dout)[0];
+#         dS = np.expand_dims(dS, axis = -1);
+#         dH = self._vLayer.backward(dS)[0];
+#         dH = dH * tanhGradient(self._H);
+#         dQ = self._qLayer.backward(np.sum(dH, axis = -2))[0];
+#         dK = self._kLayer.backward(dH)[0];
 
-        return dQ, dK;
+#         return dQ, dK;
 
 
-# additive attention weight for N time step
-class AdditiveAttentionWeightNTModule(AdditiveAttentionWeight1TModule):
-    def __init__(self, querySize : int, keySize : int, hiddenSize : int, Wq : Optional[np.ndarray] = None, Wk : Optional[np.ndarray] = None, wv : Optional[np.ndarray] = None):
-        super().__init__(querySize, keySize, hiddenSize, Wq, Wk, wv);
+# # additive attention weight for N time step
+# class AdditiveAttentionWeightNTModule(AdditiveAttentionWeight1TModule):
+#     def __init__(self, querySize : int, keySize : int, hiddenSize : int, Wq : Optional[np.ndarray] = None, Wk : Optional[np.ndarray] = None, wv : Optional[np.ndarray] = None):
+#         super().__init__(querySize, keySize, hiddenSize, Wq, Wk, wv);
 
-        self._name = "AdditiveAttentionWeightNT";
+#         self._name = "AdditiveAttentionWeightNT";
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        # Q: queries, N1 ... Nm * T2 * Q, K: keys, N1 ...Nm * T1 * K
-        Q, K = data;
+#     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+#         # Q: queries, N1 ... Nm * T2 * Q, K: keys, N1 ...Nm * T1 * K
+#         Q, K = data;
 
-        QY = self._qLayer.forward(Q)[0];
-        KY = self._kLayer.forward(K)[0];
+#         QY = self._qLayer.forward(Q)[0];
+#         KY = self._kLayer.forward(K)[0];
 
-        QY = np.expand_dims(QY, axis = -2);
-        KY = np.expand_dims(KY, axis = -3);
-        self._H = tanh(QY + KY);
-        S = self._vLayer.forward(self._H)[0];
-        S = np.squeeze(S, axis = -1);
-        Y = self._softmax.forward(S)[0];
+#         QY = np.expand_dims(QY, axis = -2);
+#         KY = np.expand_dims(KY, axis = -3);
+#         self._H = tanh(QY + KY);
+#         S = self._vLayer.forward(self._H)[0];
+#         S = np.squeeze(S, axis = -1);
+#         Y = self._softmax.forward(S)[0];
 
-        return Y, ;
+#         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dS = self._softmax.backward(*dout)[0];
-        dS = np.expand_dims(dS, axis = -1);
-        dH = self._vLayer.backward(dS)[0];
-        dH = dH * tanhGradient(self._H);
-        dQ = self._qLayer.backward(np.sum(dH, axis = -2))[0];
-        dK = self._kLayer.backward(np.sum(dH, axis = -3))[0];
+#     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+#         dS = self._softmax.backward(*dout)[0];
+#         dS = np.expand_dims(dS, axis = -1);
+#         dH = self._vLayer.backward(dS)[0];
+#         dH = dH * tanhGradient(self._H);
+#         dQ = self._qLayer.backward(np.sum(dH, axis = -2))[0];
+#         dK = self._kLayer.backward(np.sum(dH, axis = -3))[0];
 
-        return dQ, dK;
+#         return dQ, dK;
 
 
-# dot-product attention weight for 1 time step
-class DotProductAttentionWeight1TModule(NetModuleBase):
-    def __init__(self):
-        super().__init__();
+# # dot-product attention weight for 1 time step
+# class DotProductAttentionWeight1TModule(NetModuleBase):
+#     def __init__(self):
+#         super().__init__();
 
-        self._K = None;
-        self._Q = None;
-        self._softmax = SoftmaxLayer();
-        self._name = "DotProductAttentionWeight1T";
+#         self._K = None;
+#         self._Q = None;
+#         self._softmax = SoftmaxLayer();
+#         self._name = "DotProductAttentionWeight1T";
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        # Q: queries, N1 ... Nm * D, K: keys, N1 ...Nm * T1 * D
-        Q, K = data;
-        self._K, self._Q = K, np.expand_dims(Q, axis = -2);
-        Y = self._softmax.forward(np.sum(self._K * self._Q, axis = -1) / math.sqrt(Q.shape[-1]))[0];
+#     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+#         # Q: queries, N1 ... Nm * D, K: keys, N1 ...Nm * T1 * D
+#         Q, K = data;
+#         self._K, self._Q = K, np.expand_dims(Q, axis = -2);
+#         Y = self._softmax.forward(np.sum(self._K * self._Q, axis = -1) / math.sqrt(Q.shape[-1]))[0];
 
-        return Y, ;
+#         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dY = self._softmax.backward(*dout)[0] / math.sqrt(self._Q.shape[-1]);
-        dY = np.repeat(np.expand_dims(dY, axis = -1), self._Q.shape[-1], axis = -1);
-        dK = dY * self._Q;
-        dQ = np.sum(dY * self._K, axis = -2);
+#     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+#         dY = self._softmax.backward(*dout)[0] / math.sqrt(self._Q.shape[-1]);
+#         dY = np.repeat(np.expand_dims(dY, axis = -1), self._Q.shape[-1], axis = -1);
+#         dK = dY * self._Q;
+#         dQ = np.sum(dY * self._K, axis = -2);
 
-        return dQ, dK;
+#         return dQ, dK;
 
 
-# dot-product attention weight for N time step
-class DotProductAttentionWeightNTModule(DotProductAttentionWeight1TModule):
-    def __init__(self):
-        super().__init__();
+# # dot-product attention weight for N time step
+# class DotProductAttentionWeightNTModule(DotProductAttentionWeight1TModule):
+#     def __init__(self):
+#         super().__init__();
 
-        self._name = "DotProductAttentionWeightNT";
+#         self._name = "DotProductAttentionWeightNT";
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        # Q: queries, N1 ... Nm * T2 * D, K: keys N1 ...Nm * T1 * D
-        Q, K = data;
-        self._K, self._Q = np.expand_dims(K, axis = -3), np.expand_dims(Q, axis = -2);
-        Y = self._softmax.forward(np.sum(self._K * self._Q, axis = -1) / math.sqrt(Q.shape[-1]))[0];
+#     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+#         # Q: queries, N1 ... Nm * T2 * D, K: keys N1 ...Nm * T1 * D
+#         Q, K = data;
+#         self._K, self._Q = np.expand_dims(K, axis = -3), np.expand_dims(Q, axis = -2);
+#         Y = self._softmax.forward(np.sum(self._K * self._Q, axis = -1) / math.sqrt(Q.shape[-1]))[0];
 
-        return Y, ;
+#         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dY = self._softmax.backward(*dout)[0] / math.sqrt(self._Q.shape[-1]);
-        dY = np.repeat(np.expand_dims(dY, axis = -1), self._Q.shape[-1], axis = -1);
-        dK = np.sum(dY * self._Q, axis = -3);
-        dQ = np.sum(dY * self._K, axis = -2);
+#     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+#         dY = self._softmax.backward(*dout)[0] / math.sqrt(self._Q.shape[-1]);
+#         dY = np.repeat(np.expand_dims(dY, axis = -1), self._Q.shape[-1], axis = -1);
+#         dK = np.sum(dY * self._Q, axis = -3);
+#         dQ = np.sum(dY * self._K, axis = -2);
 
-        return dQ, dK;
+#         return dQ, dK;
 
 
-class QKVAttentionLayer(AggregateNetModule):
-    def __init__(self, weightModule : INetModule, selectModule : INetModule):
-        super().__init__(weightModule, selectModule);
+# class QKVAttentionLayer(AggregateNetModule):
+#     def __init__(self, weightModule : INetModule, selectModule : INetModule):
+#         super().__init__(weightModule, selectModule);
 
-        self._attentionWeight = None;
-        self._weightModule = weightModule;
-        self._selectModule = selectModule;
-        self._name = "QKVAttention";
+#         self._attentionWeight = None;
+#         self._weightModule = weightModule;
+#         self._selectModule = selectModule;
+#         self._name = "QKVAttention";
 
 
-    @property
-    def attentionWeight(self) -> np.ndarray:
-        return self._attentionWeight;
+#     @property
+#     def attentionWeight(self) -> np.ndarray:
+#         return self._attentionWeight;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        Q, K, V = data;
-        self._attentionWeight = self._weightModule.forward(Q, K)[0];
-        Y = self._selectModule.forward(self._attentionWeight, V)[0];
+#     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+#         Q, K, V = data;
+#         self._attentionWeight = self._weightModule.forward(Q, K)[0];
+#         Y = self._selectModule.forward(self._attentionWeight, V)[0];
 
-        return Y, ;
+#         return Y, ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        dW, dV = self._selectModule.backward(*dout);
-        dQ, dK = self._weightModule.backward(dW);
+#     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+#         dW, dV = self._selectModule.backward(*dout);
+#         dQ, dK = self._weightModule.backward(dW);
 
-        return dQ, dK, dV;
+#         return dQ, dK, dV;
 
 
 class BinaryChoiceModule(NetModuleBase):
@@ -5644,7 +5674,7 @@ class BinaryChoiceModule(NetModuleBase):
         self._p = value;
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X1, X2 = data;
 
         if self._p == 1:
@@ -5657,70 +5687,70 @@ class BinaryChoiceModule(NetModuleBase):
         return (X1 if self._select1 else X2), ;
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
 
-        return (dY, 0) if self._select1 else (0, dY);
+        return (dY, 0) if self._select1 else (0, dY); # type: ignore
 
 
-# Note: the module must have no inner connection in each step!
-class RepeatedWrapper(NetModuleBase):
-    def __init__(self, target : INetModule):
-        super().__init__();
+# # Note: the module must have no inner connection in each step!
+# class RepeatedWrapper(NetModuleBase):
+#     def __init__(self, target : INetModule):
+#         super().__init__();
 
-        self._modules = [];
-        self._target = target;
-        self._stepIndex = 0;
-        self._name = f"Repeated{str(self._target)}";
+#         self._modules = [];
+#         self._target = target;
+#         self._stepIndex = 0;
+#         self._name = f"Repeated{str(self._target)}";
 
-        self._params.extend(target.params);
-        self._grads.extend(target.grads);
-
-
-    def _setContext(self, context : INetContext):
-        self._target.context = context;
-
-        for m in self._modules:
-            m.context = value;
+#         self._params.extend(target.params);
+#         self._grads.extend(target.grads);
 
 
-    def _setParams(self, value: List[np.ndarray]):
-        self._target.params = value;
-        for m in self._modules:
-            m.params = value;
+#     def _setContext(self, context : INetContext):
+#         self._target.context = context;
+
+#         for m in self._modules:
+#             m.context = value;
 
 
-    def _reset(self):
-        self._stepIndex = 0;
-        self._target.reset();
-        for m in self._modules:
-            m.reset();
+#     def _setParams(self, value: List[np.ndarray]):
+#         self._target.params = value;
+#         for m in self._modules:
+#             m.params = value;
 
 
-    def _copyMembers(self, module : INetModule, shareParams : bool):
-        raise NotImplementedError();
+#     def _reset(self):
+#         self._stepIndex = 0;
+#         self._target.reset();
+#         for m in self._modules:
+#             m.reset();
 
 
-    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
-        while len(self._modules) < self._stepIndex + 1:
-            self._modules.append(self._target.copy(True));
-
-        Y = self._modules[self._stepIndex].forward(*data);
-        self._stepIndex += 1;
-
-        return Y;
+#     def _copyMembers(self, module : INetModule, shareParams : bool):
+#         raise NotImplementedError();
 
 
-    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
-        self._stepIndex -= 1;
+#     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray]:
+#         while len(self._modules) < self._stepIndex + 1:
+#             self._modules.append(self._target.copy(True));
 
-        module = self._modules[self._stepIndex];
-        dX = module.backward(*dout);
+#         Y = self._modules[self._stepIndex].forward(*data);
+#         self._stepIndex += 1;
 
-        for i in range(len(self._grads)):
-            self._grads[i] += module.grads[i];
+#         return Y;
 
-        return dX;
+
+#     def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray]:
+#         self._stepIndex -= 1;
+
+#         module = self._modules[self._stepIndex];
+#         dX = module.backward(*dout);
+
+#         for i in range(len(self._grads)):
+#             self._grads[i] += module.grads[i];
+
+#         return dX;
 
 
 class GeneratorDataIterator(IDataIterator):
@@ -6044,7 +6074,7 @@ class GaussianVAE(NetModelBase):
         return E, softplus(U) + self._minStd;
 
 
-    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
         X, epsilon = data if len(data) > 1 else (data[0], None);
         M, V = self.encode(X);
         Z = self.reparameterize(M, V, epsilon = epsilon);
@@ -6055,7 +6085,7 @@ class GaussianVAE(NetModelBase):
         return X, M, V, E, U;
 
 
-    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
         dX, dM, dV, dE, dU = dout;
 
         dZ = self._decoder.backward(np.concatenate((dE, dU * softplusGradient(Y = self._U)), axis = -1))[0];
@@ -6187,7 +6217,7 @@ class BernoulliVAE(NetModelBase):
         return Y;
 
 
-    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray]:
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
         X, epsilon = data if len(data) > 1 else (data[0], None);
         M, V = self.encode(X);
         Z = self.reparameterize(M, V, epsilon = epsilon);
@@ -6198,7 +6228,7 @@ class BernoulliVAE(NetModelBase):
         return X, M, V, Y;
 
 
-    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray]:
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
         dX, dM, dV, dY = dout;
 
         dZ = self._decoder.backward(dY)[0];
