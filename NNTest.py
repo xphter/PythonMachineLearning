@@ -2093,7 +2093,7 @@ def unitTest():
     print(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} start to unit test\n");
 
     # testSGD_Numba();
-    testSeq2col_Numba();
+    # testSeq2col_Numba();
 
     # testPerformance();
     # testFunctionalNetModuleGradient1();
@@ -2192,7 +2192,7 @@ def unitTest():
     # testBatchNormalization1DLayer1();
     # testBatchNormalization1DLayer2();
     # testBatchNormalization1DLayerGradient1();
-    # testBatchNormalizationLayer1DGradient2();
+    testBatchNormalizationLayer1DGradient2();
     # testLayerNormalizationLayer1();
     # testLayerNormalizationLayerGradient1();
     # testLayerNormalizationLayerGradient2();
@@ -2432,7 +2432,7 @@ def testFunctionalNetModuleGradient1():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"FunctionalNetModule, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"FunctionalNetModule, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -2512,7 +2512,7 @@ def testSigmoidGradient1():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"SigmoidLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SigmoidLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -2523,7 +2523,7 @@ def testSigmoidGradient2():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"SigmoidLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SigmoidLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -2656,7 +2656,7 @@ def testSoftmaxLayerGradient1():
     Y, = m.forward(X);
     dX1, = m.backward(dY);
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0] * dY), X);
-    print(f"SoftmaxLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -2669,7 +2669,7 @@ def testSoftmaxLayerGradient2():
     Y, = m.forward(X, M);
     dX1, = m.backward(dY);
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0] * dY), X);
-    print(f"SoftmaxLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -2682,45 +2682,45 @@ def testSoftmaxLayerGradient3():
     Y, = m.forward(X, M);
     dX1, = m.backward(dY);
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0] * dY), X);
-    print(f"SoftmaxLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testIdentityWithMeanAbsoluteLossGradient1():
-    N = 320;
+    N = 32;
     X, T = np.random.randn(N), np.random.randn(N);
     m = IdentityWithMeanAbsoluteLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"IdentityWithMeanAbsoluteLoss, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"IdentityWithMeanAbsoluteLoss, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testIdentityWithMeanAbsoluteLossGradient2():
-    N, D = 320, 24;
+    N, D = 32, 24;
     X, T = np.random.randn(N, D), np.random.randn(N, D);
     m = IdentityWithMeanAbsoluteLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"IdentityWithMeanAbsoluteLoss, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"IdentityWithMeanAbsoluteLoss, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testIdentityWithMeanAbsoluteLossGradient3():
-    N, C, D = 320, 24, 10;
+    N, C, D = 32, 24, 10;
     X, T = np.random.randn(N, C, D), np.random.randn(N, C, D);
     m = IdentityWithMeanAbsoluteLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"IdentityWithMeanAbsoluteLoss, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"IdentityWithMeanAbsoluteLoss, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testCrossEntropyLossGradient1():
-    N, C = 320, 24;
+    N, C = 32, 24;
     X, T = np.random.randn(N, C), np.zeros((N, C));
     Y = softmax(X);
     T[np.arange(N), np.argmax(X, axis = -1)] = 1;
@@ -2728,12 +2728,12 @@ def testCrossEntropyLossGradient1():
     loss = m.forward(Y, T);
     dY1 = m.backward()[0];
     dYN = numericGradient(lambda x: m.forward(x, T), Y);
-    print(f"CrossEntropyLoss, numericGradient1, dY error: {np.sum(np.abs(dY1 - dYN))}");
+    print(f"CrossEntropyLoss, numericGradient1 {getErrorText('dY error', dY1, dYN)}");
     print("\n");
 
 
 def testCrossEntropyLossGradient2():
-    N, D, C = 320, 10, 24;
+    N, D, C = 32, 10, 24;
     X, T = np.random.randn(N, D, C), np.zeros((N, D, C));
     index = np.argmax(X.reshape(-1, C), axis = -1);
     Y = softmax(X);
@@ -2742,12 +2742,12 @@ def testCrossEntropyLossGradient2():
     loss = m.forward(Y, T);
     dY1 = m.backward()[0];
     dYN = numericGradient(lambda x: m.forward(x, T), Y);
-    print(f"CrossEntropyLoss, numericGradient2, dY error: {np.sum(np.abs(dY1 - dYN))}");
+    print(f"CrossEntropyLoss, numericGradient2 {getErrorText('dY error', dY1, dYN)}");
     print("\n");
 
 
 def testCrossEntropyLossGradient3():
-    N, C = 320, 24;
+    N, C = 32, 24;
     X, T = np.random.randn(N, C), np.zeros((N, C));
     Y = softmax(X);
     T[np.arange(N), np.argmax(X, axis = -1)] = 1;
@@ -2756,12 +2756,12 @@ def testCrossEntropyLossGradient3():
     loss = m.forward(Y, M, T);
     dY1 = m.backward()[0];
     dYN = numericGradient(lambda x: m.forward(x, M, T), Y);
-    print(f"CrossEntropyLoss, numericGradient3, dY error: {np.sum(np.abs(dY1 - dYN))}");
+    print(f"CrossEntropyLoss, numericGradient3 {getErrorText('dY error', dY1, dYN)}");
     print("\n");
 
 
 def testCrossEntropyLossGradient4():
-    N, D, C = 320, 10, 24;
+    N, D, C = 32, 10, 24;
     X, T = np.random.randn(N, D, C), np.zeros((N, D, C));
     index = np.argmax(X.reshape(-1, C), axis = -1);
     Y = softmax(X);
@@ -2771,12 +2771,12 @@ def testCrossEntropyLossGradient4():
     loss = m.forward(Y, M, T);
     dY1 = m.backward()[0];
     dYN = numericGradient(lambda x: m.forward(x, M, T), Y);
-    print(f"CrossEntropyLoss, numericGradient4, dY error: {np.sum(np.abs(dY1 - dYN))}");
+    print(f"CrossEntropyLoss, numericGradient4 {getErrorText('dY error', dY1, dYN)}");
     print("\n");
 
 
 def testCrossEntropyLossGradient5():
-    N, D, C = 320, 10, 24;
+    N, D, C = 32, 10, 24;
     X, T = np.random.randn(N, D, C), np.zeros((N, D, C));
     index = np.argmax(X.reshape(-1, C), axis = -1);
     Y = softmax(X);
@@ -2786,12 +2786,12 @@ def testCrossEntropyLossGradient5():
     loss = m.forward(Y, M, T);
     dY1 = m.backward()[0];
     dYN = numericGradient(lambda x: m.forward(x, M, T), Y);
-    print(f"CrossEntropyLoss, numericGradient5, dY error: {np.sum(np.abs(dY1 - dYN))}");
+    print(f"CrossEntropyLoss, numericGradient5 {getErrorText('dY error', dY1, dYN)}");
     print("\n");
 
 
 def testCrossEntropyLossGradient6():
-    N, D, C = 320, 10, 24;
+    N, D, C = 32, 10, 24;
     X, T = np.random.randn(N, D, C), np.zeros((N, D, C));
     index = np.argmax(X.reshape(-1, C), axis = -1);
     Y = softmax(X);
@@ -2801,24 +2801,24 @@ def testCrossEntropyLossGradient6():
     loss = np.sum(m.forward(Y, M, T));
     dY1 = m.backward()[0];
     dYN = numericGradient(lambda x: np.sum(m.forward(x, M, T)), Y);
-    print(f"CrossEntropyLoss, numericGradient6, dY error: {np.sum(np.abs(dY1 - dYN))}");
+    print(f"CrossEntropyLoss, numericGradient6 {getErrorText('dY error', dY1, dYN)}");
     print("\n");
 
 
 def testSoftmaxWithCrossEntropyLossGradient1():
-    N, C = 320, 24;
+    N, C = 32, 24;
     X, T = np.random.randn(N, C), np.zeros((N, C));
     T[np.arange(N), np.argmax(X, axis = -1)] = 1;
     m = SoftmaxWithCrossEntropyLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"SoftmaxWithCrossEntropyLoss, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxWithCrossEntropyLoss, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSoftmaxWithCrossEntropyLossGradient2():
-    N, D, C = 320, 24, 10;
+    N, D, C = 32, 24, 10;
     X, T = np.random.randn(N, D, C), np.zeros((N, D, C));
     index = np.argmax(X.reshape(-1, C), axis = -1);
     T.reshape(-1, C)[np.arange(N * D), index] = 1;
@@ -2826,12 +2826,12 @@ def testSoftmaxWithCrossEntropyLossGradient2():
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"SoftmaxWithCrossEntropyLoss, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxWithCrossEntropyLoss, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSoftmaxWithCrossEntropyLossGradient3():
-    N, C = 320, 24;
+    N, C = 32, 24;
     X, T = np.random.randn(N, C), np.zeros((N, C));
     T[np.arange(N), np.argmax(X, axis = -1)] = 1;
     M = np.random.randn(N) > 0;
@@ -2839,12 +2839,12 @@ def testSoftmaxWithCrossEntropyLossGradient3():
     loss = m.forward(X, M, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, M, T), X);
-    print(f"SoftmaxWithCrossEntropyLoss, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxWithCrossEntropyLoss, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSoftmaxWithCrossEntropyLossGradient4():
-    N, D, C = 320, 24, 10;
+    N, D, C = 32, 24, 10;
     X, T = np.random.randn(N, D, C), np.zeros((N, D, C));
     index = np.argmax(X.reshape(-1, C), axis = -1);
     T.reshape(-1, C)[np.arange(N * D), index] = 1;
@@ -2853,12 +2853,12 @@ def testSoftmaxWithCrossEntropyLossGradient4():
     loss = m.forward(X, M, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, M, T), X);
-    print(f"SoftmaxWithCrossEntropyLoss, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxWithCrossEntropyLoss, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSoftmaxWithCrossEntropyLossGradient5():
-    N, C = 320, 24;
+    N, C = 32, 24;
     X, T = np.random.randn(N, C), np.zeros((N, C));
     T[np.arange(N), np.argmax(X, axis = -1)] = 1;
     M = np.random.randn(N) > 0;
@@ -2866,12 +2866,12 @@ def testSoftmaxWithCrossEntropyLossGradient5():
     loss = m.forward(X, M, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, M, T), X);
-    print(f"SoftmaxWithCrossEntropyLoss, numericGradient5, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxWithCrossEntropyLoss, numericGradient5 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSoftmaxWithCrossEntropyLossGradient6():
-    N, D, C = 320, 24, 10;
+    N, D, C = 32, 24, 10;
     X, T = np.random.randn(N, D, C), np.zeros((N, D, C));
     index = np.argmax(X.reshape(-1, C), axis = -1);
     T.reshape(-1, C)[np.arange(N * D), index] = 1;
@@ -2880,147 +2880,147 @@ def testSoftmaxWithCrossEntropyLossGradient6():
     loss = np.sum(m.forward(X, M, T));
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M, T)), X);
-    print(f"SoftmaxWithCrossEntropyLoss, numericGradient6, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxWithCrossEntropyLoss, numericGradient6 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSigmoidWithCrossEntropyLossGradient1():
-    N = 320;
+    N = 32;
     X, T = np.random.randn(N), np.random.choice(np.arange(2), size = N, replace = True);
     m = SigmoidWithCrossEntropyLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"SigmoidWithCrossEntropyLoss, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SigmoidWithCrossEntropyLoss, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSigmoidWithCrossEntropyLossGradient2():
-    N, D = 320, 24;
+    N, D = 32, 24;
     X, T = np.random.randn(N, D), np.random.choice(np.arange(2), size = (N, D), replace = True);
     m = SigmoidWithCrossEntropyLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"SigmoidWithCrossEntropyLoss, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SigmoidWithCrossEntropyLoss, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSigmoidWithCrossEntropyLossGradient3():
-    N = 320;
+    N = 32;
     X, T = np.random.randn(N), np.random.choice(np.arange(2), size = N, replace = True);
     M = np.random.randn(N) > 0;
     m = SigmoidWithCrossEntropyLoss();
     loss = m.forward(X, M, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, M, T), X);
-    print(f"SigmoidWithCrossEntropyLoss, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SigmoidWithCrossEntropyLoss, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSigmoidWithCrossEntropyLossGradient4():
-    N, D = 320, 24;
+    N, D = 32, 24;
     X, T = np.random.randn(N, D), np.random.choice(np.arange(2), size = (N, D), replace = True);
     M = np.random.randn(N, D) > 0;
     m = SigmoidWithCrossEntropyLoss();
     loss = m.forward(X, M, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, M, T), X);
-    print(f"SigmoidWithCrossEntropyLoss, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SigmoidWithCrossEntropyLoss, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSigmoidWithCrossEntropyLossGradient5():
-    N = 320;
+    N = 32;
     X, T = np.random.randn(N), np.random.choice(np.arange(2), size = N, replace = True);
     M = np.random.randn(N) > 0;
     m = SigmoidWithCrossEntropyLoss(reductionType = LossReductionType.Sum);
     loss = m.forward(X, M, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, M, T), X);
-    print(f"SigmoidWithCrossEntropyLoss, numericGradient5, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SigmoidWithCrossEntropyLoss, numericGradient5 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSigmoidWithCrossEntropyLossGradient6():
-    N, D = 320, 24;
+    N, D = 32, 24;
     X, T = np.random.randn(N, D), np.random.choice(np.arange(2), size = (N, D), replace = True);
     M = np.random.randn(N, D) > 0;
     m = SigmoidWithCrossEntropyLoss(reductionType = LossReductionType.No);
     loss = np.sum(m.forward(X, M, T));
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M, T)), X);
-    print(f"SigmoidWithCrossEntropyLoss, numericGradient6, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SigmoidWithCrossEntropyLoss, numericGradient6 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSoftmaxWithCrossEntropy1DLossGradient1():
-    N, C = 320, 24;
+    N, C = 32, 24;
     X, T = np.random.randn(N, C), np.random.choice(np.arange(C), N, replace = True);
     m = SoftmaxWithCrossEntropy1DLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSoftmaxWithCrossEntropy1DLossGradient2():
-    N, D, C = 320, 24, 10;
+    N, D, C = 32, 24, 10;
     X, T = np.random.randn(N, D, C), np.random.choice(np.arange(C), size = (N, D), replace = True);
     m = SoftmaxWithCrossEntropy1DLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSoftmaxWithCrossEntropy1DLossGradient3():
-    N, C = 320, 24;
+    N, C = 32, 24;
     X, T = np.random.randn(N, C), np.random.choice(np.arange(C), N, replace = True);
     M = np.random.randn(N) > 0;
     m = SoftmaxWithCrossEntropy1DLoss();
     loss = m.forward(X, M, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, M, T), X);
-    print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSoftmaxWithCrossEntropy1DLossGradient4():
-    N, D, C = 320, 24, 10;
+    N, D, C = 32, 24, 10;
     X, T = np.random.randn(N, D, C), np.random.choice(np.arange(C), size = (N, D), replace = True);
     M = np.random.randn(N, D) > 0;
     m = SoftmaxWithCrossEntropy1DLoss();
     loss = m.forward(X, M, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, M, T), X);
-    print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSoftmaxWithCrossEntropy1DLossGradient5():
-    N, C = 320, 24;
+    N, C = 32, 24;
     X, T = np.random.randn(N, C), np.random.choice(np.arange(C), N, replace = True);
     M = np.random.randn(N) > 0;
     m = SoftmaxWithCrossEntropy1DLoss(reductionType = LossReductionType.Sum);
     loss = m.forward(X, M, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, M, T), X);
-    print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient5, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient5 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSoftmaxWithCrossEntropy1DLossGradient6():
-    N, D, C = 320, 24, 10;
+    N, D, C = 32, 24, 10;
     X, T = np.random.randn(N, D, C), np.random.choice(np.arange(C), size = (N, D), replace = True);
     M = np.random.randn(N, D) > 0;
     m = SoftmaxWithCrossEntropy1DLoss(reductionType = LossReductionType.No);
     loss = np.sum(m.forward(X, M, T));
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M, T)), X);
-    print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient6, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftmaxWithCrossEntropy1DLoss, numericGradient6 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 def testSequenceSoftmaxWithCrossEntropy1DLossGradient1():
@@ -3031,62 +3031,62 @@ def testSequenceSoftmaxWithCrossEntropy1DLossGradient1():
     loss = m.forward(X, validLen, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, validLen, T), X);
-    print(f"SequenceSoftmaxWithCrossEntropy1DLoss, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SequenceSoftmaxWithCrossEntropy1DLoss, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testIdentityWithMeanSquareLossGradient1():
-    N = 320;
+    N = 32;
     X, T = np.random.randn(N), np.random.randn(N);
     m = IdentityWithMeanSquareLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"IdentityWithMeanSquareLoss, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"IdentityWithMeanSquareLoss, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testIdentityWithMeanSquareLossGradient2():
-    N, D = 320, 24;
+    N, D = 32, 24;
     X, T = np.random.randn(N, D), np.random.randn(N, D);
     m = IdentityWithMeanSquareLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"IdentityWithMeanSquareLoss, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"IdentityWithMeanSquareLoss, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testIdentityWithMeanSquareLossGradient3():
-    N, C, D = 320, 24, 10;
+    N, C, D = 32, 24, 10;
     X, T = np.random.randn(N, C, D), np.random.randn(N, C, D);
     m = IdentityWithMeanSquareLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"IdentityWithMeanSquareLoss, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"IdentityWithMeanSquareLoss, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSumWithMeanSquareLossGradient1():
-    N, D = 320, 24;
+    N, D = 32, 24;
     X, T = np.random.randn(N, D), np.random.randn(N, 1);
     m = SumWithMeanSquareLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"SumWithMeanSquareLoss, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SumWithMeanSquareLoss, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testSumWithMeanSquareLossGradient2():
-    N, C, D = 320, 24, 10;
+    N, C, D = 32, 24, 10;
     X, T = np.random.randn(N, C, D), np.random.randn(N, C, 1);
     m = SumWithMeanSquareLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"SumWithMeanSquareLoss, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SumWithMeanSquareLoss, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3100,7 +3100,7 @@ def testPReluLayerGradient1():
     dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dBetaN = numericGradient(lambda x: np.sum(PReluLayer(beta = x).forward(X)[0]), beta);
-    print(f"PReluLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print(f"PReluLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
@@ -3114,7 +3114,7 @@ def testPReluLayerGradient2():
     dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dBetaN = numericGradient(lambda x: np.sum(PReluLayer(beta = x).forward(X)[0]), beta);
-    print(f"PReluLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print(f"PReluLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
@@ -3128,7 +3128,7 @@ def testPReluLayerGradient3():
     dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dBetaN = numericGradient(lambda x: np.sum(PReluLayer(beta = x).forward(X)[0]), beta);
-    print(f"PReluLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print(f"PReluLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
@@ -3151,7 +3151,7 @@ def testSoftplusLayerGradient1():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"SoftplusLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftplusLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3162,7 +3162,7 @@ def testSoftplusLayerGradient2():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"SoftplusLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftplusLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3173,7 +3173,7 @@ def testSoftplusLayerGradient3():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"SoftplusLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SoftplusLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3187,7 +3187,7 @@ def testSwishLayerGradient1():
     dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = x).forward(X)[0]), beta);
-    print(f"SwishLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print(f"SwishLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
@@ -3201,7 +3201,7 @@ def testSwishLayerGradient2():
     dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = x).forward(X)[0]), beta);
-    print(f"SwishLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print(f"SwishLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
@@ -3215,7 +3215,7 @@ def testSwishLayerGradient3():
     dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = x).forward(X)[0]), beta);
-    print(f"SwishLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print(f"SwishLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
@@ -3226,7 +3226,7 @@ def testSiluLayerGradient1():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"SiluLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SiluLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3241,7 +3241,7 @@ def testSiluLayerGradient2():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"SiluLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SiluLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3252,7 +3252,7 @@ def testGeluLayerGradient1():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"GeluLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"GeluLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3267,7 +3267,7 @@ def testGeluLayerGradient2():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"GeluLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"GeluLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3323,7 +3323,7 @@ def testMaxoutLayerGradient1():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"MaxoutLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"MaxoutLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3335,7 +3335,7 @@ def testMaxoutLayerGradient2():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"MaxoutLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"MaxoutLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3347,43 +3347,43 @@ def testMaxoutLayerGradient3():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"MaxoutLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"MaxoutLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testIdentityWithHuberLossGradient1():
-    N = 320;
+    N = 32;
     X = np.random.randn(N);
     T = np.random.randn(N);
     m = IdentityWithHuberLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"IdentityWithHuberLoss, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"IdentityWithHuberLoss, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testIdentityWithHuberLossGradient2():
-    N, D = 320, 24;
+    N, D = 32, 24;
     X = np.random.randn(N, D);
     T = np.random.randn(N, D);
     m = IdentityWithHuberLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"IdentityWithHuberLoss, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"IdentityWithHuberLoss, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
 def testIdentityWithHuberLossGradient3():
-    N, C, D = 320, 24, 10;
+    N, C, D = 32, 24, 10;
     X = np.random.randn(N, C, D);
     T = np.random.randn(N, C, D);
     m = IdentityWithHuberLoss();
     loss = m.forward(X, T);
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
-    print(f"IdentityWithHuberLoss, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"IdentityWithHuberLoss, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3537,7 +3537,7 @@ def testConvolution2DLayer1():
                 for k in range(FN):
                     Y2[n, k, j, i] = np.sum(x * Weight[k]) + bias[k];
 
-    print(f"Convolution2DLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"Convolution2DLayer, value1 {getErrorText('Y error', Y1, Y2)}");
     print("\n");
 
 
@@ -3554,7 +3554,7 @@ def testConvolution2DLayerGradient1():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = x, b = bias).forward(X)[0]), Weight);
     dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = Weight, b = x).forward(X)[0]), bias);
-    print(f"Convolution2DLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print(f"Convolution2DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
@@ -3571,7 +3571,7 @@ def testConvolution2DLayerGradient2():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = x, b = bias).forward(X)[0]), Weight);
     dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = Weight, b = x).forward(X)[0]), bias);
-    print(f"Convolution2DLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print(f"Convolution2DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
@@ -3588,7 +3588,7 @@ def testConvolution2DLayerGradient3():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = x, b = bias).forward(X)[0]), Weight);
     dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = Weight, b = x).forward(X)[0]), bias);
-    print(f"Convolution2DLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dW error: {np.sum(np.abs(dW1 - dWN))}, db error: {np.sum(np.abs(db1 - dbN))}");
+    print(f"Convolution2DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
@@ -3617,7 +3617,7 @@ def testMaxPooling2DLayer1():
                     dPX[n, c, j * S[0] + idx // PW, i * S[1] + idx % PW] += 1;
     dX2 = dPX[:, :, P[0]: H + P[0], P[2]: W + P[2]];
 
-    print(f"MaxPooling2DLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}, dX error: {np.sum(np.abs(dX1 - dX2))}");
+    print(f"MaxPooling2DLayer, value1 {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)}");
     print("\n");
 
 
@@ -3631,7 +3631,7 @@ def testMaxPooling2DLayerGradient1():
     dX1 = m.backward(np.ones_like(Y))[0];
     m.context.isTrainingMode = False;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"MaxPooling2DLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"MaxPooling2DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3645,7 +3645,7 @@ def testMaxPooling2DLayerGradient2():
     dX1 = m.backward(np.ones_like(Y))[0];
     m.context.isTrainingMode = False;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"MaxPooling2DLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"MaxPooling2DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3659,7 +3659,7 @@ def testMaxPooling2DLayerGradient3():
     dX1 = m.backward(np.ones_like(Y))[0];
     m.context.isTrainingMode = False;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"MaxPooling2DLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"MaxPooling2DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3678,7 +3678,7 @@ def testMaxPooling2DLayerGradient4():
     dX1 = m.backward(np.ones_like(Y))[0];
     m.context.isTrainingMode = False;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"MaxPooling2DLayer, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"MaxPooling2DLayer, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3706,7 +3706,7 @@ def testAvgPooling2DLayer1():
                     dPX[n, c, j * S[0]: j * S[0] + PH, i * S[1]: i * S[1] + PW] += dm;
     dX2 = dPX[:, :, P[0]: H + P[0], P[2]: W + P[2]];
 
-    print(f"AvgPooling2DLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}, dX error: {np.sum(np.abs(dX1 - dX2))}");
+    print(f"AvgPooling2DLayer, value1 {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)}");
     print("\n");
 
 
@@ -3718,7 +3718,7 @@ def testAvgPooling2DLayerGradient1():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"AvgPooling2DLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"AvgPooling2DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3730,7 +3730,7 @@ def testAvgPooling2DLayerGradient2():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"AvgPooling2DLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"AvgPooling2DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3742,7 +3742,7 @@ def testAvgPooling2DLayerGradient3():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"AvgPooling2DLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"AvgPooling2DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3759,7 +3759,7 @@ def testAvgPooling2DLayerGradient4():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"AvgPooling2DLayer, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"AvgPooling2DLayer, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3807,6 +3807,7 @@ def testBatchNormalization1DLayer1():
     Y2, = m2.forward(X32);
 
     print(f"BatchNormalization1DLayer, value1 {getErrorText('Y error', Y1, Y2)}");
+    print("\n");
 
 
 def testBatchNormalization1DLayer2():
@@ -3856,6 +3857,7 @@ def testBatchNormalization1DLayer2():
     Y2, = m2.forward(X32);
 
     print(f"BatchNormalization1DLayer, value2 {getErrorText('Y error', Y1, Y2)}");
+    print("\n");
 
 
 def testBatchNormalization1DLayerGradient1():
@@ -3876,28 +3878,31 @@ def testBatchNormalization1DLayerGradient1():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dGammaN = numericGradient(lambda x: np.sum(createModel(D, x, beta).forward(X)[0]), gamma);
     dBetaN = numericGradient(lambda x: np.sum(createModel(D, gamma, x).forward(X)[0]), beta);
-    print(f"BatchNormalization1DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}{getErrorText('dGamma error', dGamma1, dGammaN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
+    print(f"BatchNormalization1DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)} {getErrorText('dGamma error', dGamma1, dGammaN)} {getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
 def testBatchNormalizationLayer1DGradient2():
-    def createModel(inputSize, g, b) -> BatchNormalization1DLayer:
-        layer = BatchNormalization1DLayer(inputSize, gamma = g, beta = b);
+    def createModel(inputSize, g, b, c) -> BatchNormalization1DLayer:
+        layer = SequentialContainer(
+            BatchNormalization1DLayer(inputSize, gamma = g, beta = b),
+            FunctionalNetModule("*C", lambda x: x * c, lambda x, y, dy: dy * c)
+        );
         layer.context.isTrainingMode = True;
         return layer;
 
-    N, D = 256, 256;
-    X = np.random.randn(N, D);
+    N, D = 32, 256;
+    X, C = np.random.randn(N, D), np.random.randn(N, D);
     gamma = np.random.randn(D);
     beta = np.random.randn(D);
-    m = createModel(D, gamma, beta);
+    m = createModel(D, gamma, beta, C);
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dGamma1, dBeta1 = m.params[0].grad, m.params[1].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dGammaN = numericGradient(lambda x: np.sum(createModel(D, x, beta).forward(X)[0]), gamma);
-    dBetaN = numericGradient(lambda x: np.sum(createModel(D, gamma, x).forward(X)[0]), beta);
-    print(f"BatchNormalization1DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}{getErrorText('dGamma error', dGamma1, dGammaN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
+    dGammaN = numericGradient(lambda x: np.sum(createModel(D, x, beta, C).forward(X)[0]), gamma);
+    dBetaN = numericGradient(lambda x: np.sum(createModel(D, gamma, x, C).forward(X)[0]), beta);
+    print(f"BatchNormalization1DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)} {getErrorText('dGamma error', dGamma1, dGammaN)} {getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
@@ -3942,7 +3947,7 @@ def testLayerNormalizationLayerGradient1():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dGammaN = numericGradient(lambda x: np.sum(LayerNormalizationLayer(C, gamma = x, beta = beta).forward(X)[0]), gamma);
     dBetaN = numericGradient(lambda x: np.sum(LayerNormalizationLayer(C, gamma = gamma, beta = x).forward(X)[0]), beta);
-    print(f"LayerNormalizationLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dGamma error: {np.sum(np.abs(dGamma1 - dGammaN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print(f"LayerNormalizationLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)} {getErrorText('dGamma error', dGamma1, dGammaN)} {getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
@@ -3957,7 +3962,7 @@ def testLayerNormalizationLayerGradient2():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dGammaN = numericGradient(lambda x: np.sum(LayerNormalizationLayer(C, gamma = x, beta = beta).forward(X)[0]), gamma);
     dBetaN = numericGradient(lambda x: np.sum(LayerNormalizationLayer(C, gamma = gamma, beta = x).forward(X)[0]), beta);
-    print(f"LayerNormalizationLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dGamma error: {np.sum(np.abs(dGamma1 - dGammaN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print(f"LayerNormalizationLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)} {getErrorText('dGamma error', dGamma1, dGammaN)} {getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
@@ -3972,7 +3977,7 @@ def testLayerNormalizationLayerGradient3():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dGammaN = numericGradient(lambda x: np.sum(LayerNormalizationLayer((C, H, W), gamma = x, beta = beta).forward(X)[0]), gamma);
     dBetaN = numericGradient(lambda x: np.sum(LayerNormalizationLayer((C, H, W), gamma = gamma, beta = x).forward(X)[0]), beta);
-    print(f"LayerNormalizationLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dGamma error: {np.sum(np.abs(dGamma1 - dGammaN))}, dBeta error: {np.sum(np.abs(dBeta1 - dBetaN))}");
+    print(f"LayerNormalizationLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)} {getErrorText('dGamma error', dGamma1, dGammaN)} {getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
@@ -3984,7 +3989,7 @@ def testMinMaxLayerGradient1():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"MinMaxLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"MinMaxLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -3996,7 +4001,7 @@ def testMinMaxLayerGradient2():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"MinMaxLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"MinMaxLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -4008,7 +4013,7 @@ def testMinMaxLayerGradient3():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"MinMaxLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"MinMaxLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -4022,7 +4027,7 @@ def testMinMaxLayerGradient4():
     dX1, dX2 = m.backward(np.ones_like(Y1), np.ones_like(Y2));
     dX1N = numericGradient(lambda x: np.sum(np.add(*m.forward(x, X2))), X1);
     dX2N = numericGradient(lambda x: np.sum(np.add(*m.forward(X1, x))), X2);
-    print(f"MinMaxLayer, numericGradient4, dX1 error: {np.sum(np.abs(dX1 - dX1N))}, dX2 error: {np.sum(np.abs(dX2 - dX2N))}");
+    print(f"MinMaxLayer, numericGradient4 {getErrorText('dX1 error', dX1, dX1N)} {getErrorText('dX2 error', dX2, dX2N)}");
     print("\n");
 
 
@@ -4036,7 +4041,7 @@ def testMinMaxLayerGradient5():
     dX1, dX2 = m.backward(np.ones_like(Y1), np.ones_like(Y2));
     dX1N = numericGradient(lambda x: np.sum(np.add(*m.forward(x, X2))), X1);
     dX2N = numericGradient(lambda x: np.sum(np.add(*m.forward(X1, x))), X2);
-    print(f"MinMaxLayer, numericGradient5, dX1 error: {np.sum(np.abs(dX1 - dX1N))}, dX2 error: {np.sum(np.abs(dX2 - dX2N))}");
+    print(f"MinMaxLayer, numericGradient5 {getErrorText('dX1 error', dX1, dX1N)} {getErrorText('dX2 error', dX2, dX2N)}");
     print("\n");
 
 
@@ -4050,7 +4055,7 @@ def testMinMaxLayerGradient6():
     dX1, dX2 = m.backward(np.ones_like(Y1), np.ones_like(Y2));
     dX1N = numericGradient(lambda x: np.sum(np.add(*m.forward(x, X2))), X1);
     dX2N = numericGradient(lambda x: np.sum(np.add(*m.forward(X1, x))), X2);
-    print(f"MinMaxLayer, numericGradient6, dX1 error: {np.sum(np.abs(dX1 - dX1N))}, dX2 error: {np.sum(np.abs(dX2 - dX2N))}");
+    print(f"MinMaxLayer, numericGradient6 {getErrorText('dX1 error', dX1, dX1N)} {getErrorText('dX2 error', dX2, dX2N)}");
     print("\n");
 
 
@@ -4135,7 +4140,7 @@ def testAdditiveResidualBlockGradient1():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"AdditiveResidualBlock, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"AdditiveResidualBlock, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -4149,7 +4154,7 @@ def testAdditiveResidualBlockGradient2():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"AdditiveResidualBlock, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"AdditiveResidualBlock, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -4164,7 +4169,7 @@ def testAdditiveResidualBlockGradient3():
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"AdditiveResidualBlock, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"AdditiveResidualBlock, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -4213,7 +4218,7 @@ def testRnnCell1():
     m = RnnCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
     Y2, = m.forward(X, H);
 
-    print(f"RnnCell1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"RnnCell1, value1 {getErrorText('Y error', Y1, Y2)}");
     print("\n");
 
 
@@ -4233,7 +4238,7 @@ def testRnnCellGradient1():
     dWhN = numericGradient(lambda x: np.sum(RnnCell(inputSize, hiddenSize, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X, H)[0]), Wh);
     dbxN = numericGradient(lambda x: np.sum(RnnCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X, H)[0]), bx);
     dbhN = numericGradient(lambda x: np.sum(RnnCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X, H)[0]), bh);
-    print(f"RnnCell, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbxN error: {np.sum(np.abs(dbx1 - dbxN))}, dbhN error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"RnnCell, numericGradient1 {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4252,7 +4257,7 @@ def testRnnLayer1():
     m = RnnLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
     Y2, = m.forward(Xs);
 
-    print(f"RnnLayer, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"RnnLayer, value1 {getErrorText('Y error', Y1, Y2)}");
     print("\n");
 
 
@@ -4272,7 +4277,7 @@ def testRnnLayerGradient1_Sequence():
     dWhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
     dbxN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
     dbhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
-    print(f"RnnLayer, numericGradient1, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"RnnLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4292,7 +4297,7 @@ def testRnnLayerGradient2_Sequence():
     dWhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda: ReluLayer(), stateful = False, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
     dbxN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda: ReluLayer(), stateful = False, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
     dbhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda: ReluLayer(), stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
-    print(f"RnnLayer, numericGradient2, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"RnnLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4312,7 +4317,7 @@ def testRnnLayerGradient3_State():
     dWhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
     dbxN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
     dbhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
-    print(f"RnnLayer, numericGradient3, State, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"RnnLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4332,7 +4337,7 @@ def testRnnLayerGradient4_Sequence_State():
     dWhN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)), Wh);
     dbxN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)), bx);
     dbhN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)), bh);
-    print(f"RnnLayer, numericGradient4, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"RnnLayer, numericGradient4, Sequence and State {getErrorText('dX error', dX1, dXN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4352,7 +4357,7 @@ def testRnnLayerGradient5_Foreign_Sequence_State():
     dWhN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X, H)), Wh);
     dbxN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X, H)), bx);
     dbhN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X, H)), bh);
-    print(f"RnnLayer, numericGradient5, Foreign, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"RnnLayer, numericGradient5 {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4374,7 +4379,7 @@ def testGruCell1():
                 bx = np.concatenate((bxr, bxz, bxh), axis = -1), bh = np.concatenate((bhr, bhz, bhh), axis = -1));
     Y2, = m.forward(X, H);
 
-    print(f"GruCell1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"GruCell1, value1 {getErrorText('Y error', Y1, Y2)}");
     print("\n");
 
 
@@ -4394,7 +4399,7 @@ def testGruCellGradient1():
     dWhN = numericGradient(lambda x: np.sum(GruCell(inputSize, hiddenSize, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X, H)[0]), Wh);
     dbxN = numericGradient(lambda x: np.sum(GruCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X, H)[0]), bx);
     dbhN = numericGradient(lambda x: np.sum(GruCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X, H)[0]), bh);
-    print(f"GruCell, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"GruCell, numericGradient1 {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4436,7 +4441,7 @@ def testGruLayer1():
     dbx2 = layer.params[2].grad;
     dbh2 = layer.params[3].grad;
 
-    print(f"GruLayer1, Y error: {np.sum(np.abs(Y1 - Y2))}, dX error: {np.sum(np.abs(dXs1 - dXs2))}, dH error: {np.sum(np.abs(dH1 - dH2))}, dWx error: {np.sum(np.abs(dWx1 - dWx2))}, dWh error: {np.sum(np.abs(dWh1 - dWh2))}, dbx error: {np.sum(np.abs(dbx1 - dbx2))}, dbh error: {np.sum(np.abs(dbh1 - dbh2))}");
+    print(f"GruLayer, value1 {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dXs1, dXs2)} {getErrorText('dH error', dH1, dH2)} {getErrorText('dWx error', dWx1, dWx2)} {getErrorText('dWh error', dWh1, dWh2)} {getErrorText('dbx error', dbx1, dbx2)} {getErrorText('dbh error', dbh1, dbh2)}");
 
     print("\n");
 
@@ -4457,7 +4462,7 @@ def testGruLayerGradient1_Sequence():
     dWhN = numericGradient(lambda x: np.sum(GruLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
     dbxN = numericGradient(lambda x: np.sum(GruLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
     dbhN = numericGradient(lambda x: np.sum(GruLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
-    print(f"GruLayer, numericGradient1, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"GruLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4477,7 +4482,7 @@ def testGruLayerGradient2_State():
     dWhN = numericGradient(lambda x: np.sum(GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
     dbxN = numericGradient(lambda x: np.sum(GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
     dbhN = numericGradient(lambda x: np.sum(GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
-    print(f"GruLayer, numericGradient2, State, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"GruLayer, numericGradient2, State {getErrorText('dX error', dX1, dXN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4497,7 +4502,7 @@ def testGruLayerGradient3_Sequence_State():
     dWhN = numericGradient(lambda x: sumAll(*GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)), Wh);
     dbxN = numericGradient(lambda x: sumAll(*GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)), bx);
     dbhN = numericGradient(lambda x: sumAll(*GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)), bh);
-    print(f"GruLayer, numericGradient3, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"GruLayer, numericGradient3, Sequence and State {getErrorText('dX error', dX1, dXN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4518,7 +4523,7 @@ def testGruLayerGradient4_Foreign_Sequence_State():
     dWhN = numericGradient(lambda x: sumAll(*GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X, H)), Wh);
     dbxN = numericGradient(lambda x: sumAll(*GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X, H)), bx);
     dbhN = numericGradient(lambda x: sumAll(*GruLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X, H)), bh);
-    print(f"GruLayer, numericGradient4, Foreign, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"GruLayer, numericGradient4, Foreign, Sequence and State {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4542,7 +4547,7 @@ def testLstmCell1():
                  bx = np.concatenate((bxf, bxi, bxo, bxh), axis = -1), bh = np.concatenate((bhf, bhi, bho, bhh), axis = -1));
     YH2, YC2 = m.forward(X, H, C);
 
-    print(f"LstmCell1, H error: {np.sum(np.abs(YH1 - YH2))}, C error: {np.sum(np.abs(YC1 - YC2))}");
+    print(f"LstmCell, value1 {getErrorText('H error', YH1, YH2)} {getErrorText('C error', YC1, YC2)}");
     print("\n");
 
 
@@ -4562,7 +4567,7 @@ def testLstmCellGradient1():
     dWhN = numericGradient(lambda x: sumAll(*LstmCell(inputSize, hiddenSize, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X, H, C)), Wh);
     dbxN = numericGradient(lambda x: sumAll(*LstmCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X, H, C)), bx);
     dbhN = numericGradient(lambda x: sumAll(*LstmCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X, H, C)), bh);
-    print(f"LstmCell, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"LstmCell, numericGradient1 {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dC error', dC1, dCN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4657,7 +4662,7 @@ def testLstmLayer1():
     dbx2 = layer.params[2].grad;
     dbh2 = layer.params[3].grad;
 
-    print(f"LstmLayer1, Y error: {np.sum(np.abs(Y1 - Y2))}, H error: {np.sum(np.abs(H1 - H2))}, C error: {np.sum(np.abs(C1 - C2))}, dX error: {np.sum(np.abs(dXs1 - dXs2))}, dH error: {np.sum(np.abs(dH1 - dH2))}, dC error: {np.sum(np.abs(dC1 - dC2))}, dWx error: {np.sum(np.abs(dWx1 - dWx2))}, dWh error: {np.sum(np.abs(dWh1 - dWh2))}, dbx error: {np.sum(np.abs(dbx1 - dbx2))}, dbh error: {np.sum(np.abs(dbh1 - dbh2))}");
+    print(f"LstmLayer, value1 {getErrorText('Y error', Y1, Y2)} {getErrorText('H error', H1, H2)} {getErrorText('C error', C1, C2)} {getErrorText('dX error', dXs1, dXs2)} {getErrorText('dH error', dH1, dH2)} {getErrorText('dC error', dC1, dC2)} {getErrorText('dWx error', dWx1, dWx2)} {getErrorText('dWh error', dWh1, dWh2)} {getErrorText('dbx error', dbx1, dbx2)} {getErrorText('dbh error', dbh1, dbh2)}");
 
     print("\n");
 
@@ -4678,7 +4683,7 @@ def testLstmLayerGradient1_Sequence():
     dWhN = numericGradient(lambda x: np.sum(LstmLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
     dbxN = numericGradient(lambda x: np.sum(LstmLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
     dbhN = numericGradient(lambda x: np.sum(LstmLayer(inputSize, hiddenSize, stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
-    print(f"LstmLayer, numericGradient1, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"LstmLayer, numericGradient1, Sequence {getErrorText('dX error', dX1, dXN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4698,7 +4703,7 @@ def testLstmLayerGradient2_State():
     dWhN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)), Wh);
     dbxN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)), bx);
     dbhN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = False, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)), bh);
-    print(f"LstmLayer, numericGradient2, State, dX error: {np.sum(np.abs(dX1 - dXN))}, , dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"LstmLayer, numericGradient2, State {getErrorText('dX error', dX1, dXN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4718,7 +4723,7 @@ def testLstmLayerGradient3_Sequence_State():
     dWhN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)), Wh);
     dbxN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)), bx);
     dbhN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)), bh);
-    print(f"LstmLayer, numericGradient3, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"LstmLayer, numericGradient3, Sequence and State {getErrorText('dX error', dX1, dXN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -4740,7 +4745,7 @@ def testLstmLayerGradient4_Foreign_Sequence_State():
     dWhN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X, H, C)), Wh);
     dbxN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X, H, C)), bx);
     dbhN = numericGradient(lambda x: sumAll(*LstmLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X, H, C)), bh);
-    print(f"LstmLayer, numericGradient4, Foreign, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}, dWx error: {np.sum(np.abs(dWx1 - dWxN))}, dWh error: {np.sum(np.abs(dWh1 - dWhN))}, dbx error: {np.sum(np.abs(dbx1 - dbxN))}, dbh error: {np.sum(np.abs(dbh1 - dbhN))}");
+    print(f"LstmLayer, numericGradient4, Foreign, Sequence and State {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dC error', dC1, dCN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
 
@@ -5082,7 +5087,7 @@ def testBiRnnLayerGradient1_Gru_InnerState_Sequence():
     Y, = m.forward(X);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
-    print(f"BiRnnLayer, numericGradient1, Gru, InnerState, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"BiRnnLayer, numericGradient1, Gru, InnerState, Sequence {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "BiRnnLayer, numericGradient1, Gru, InnerState, Sequence", X);
     print("\n");
 
@@ -5095,7 +5100,7 @@ def testBiRnnLayerGradient2_Gru_InnerState_State():
     S, = m.forward(X);
     dX1, = m.backward(np.ones_like(S));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
-    print(f"BiRnnLayer, numericGradient2, Gru, InnerState, State, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"BiRnnLayer, numericGradient2, Gru, InnerState, State {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "BiRnnLayer, numericGradient2, Gru, InnerState, State", X);
     print("\n");
 
@@ -5108,7 +5113,7 @@ def testBiRnnLayerGradient3_Gru_InnerState_Sequence_State():
     Y, S = m.forward(X);
     dX1, = m.backward(np.ones_like(Y), np.ones_like(S));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
-    print(f"BiRnnLayer, numericGradient3, Gru, InnerState, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"BiRnnLayer, numericGradient3, Gru, InnerState, Sequence and State {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "BiRnnLayer, numericGradient3, Gru, InnerState, Sequence and State", X);
     print("\n");
 
@@ -5122,7 +5127,7 @@ def testBiRnnLayerGradient4_Gru_ForeignState_Sequence():
     dX1, dH1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x)), H);
-    print(f"BiRnnLayer, numericGradient4, Gru, ForeignState, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}");
+    print(f"BiRnnLayer, numericGradient4, Gru, ForeignState, Sequence {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)}");
     testModuleGradient(m, "BiRnnLayer, numericGradient4, Gru, ForeignState, Sequence", X, H);
     print("\n");
 
@@ -5136,7 +5141,7 @@ def testBiRnnLayerGradient5_Gru_ForeignState_State():
     dX1, dH1 = m.backward(np.ones_like(S));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x)), H);
-    print(f"BiRnnLayer, numericGradient5, Gru, ForeignState, State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}");
+    print(f"BiRnnLayer, numericGradient5, Gru, ForeignState, State {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)}");
     testModuleGradient(m, "BiRnnLayer, numericGradient5, Gru, ForeignState, State", X, H);
     print("\n");
 
@@ -5150,7 +5155,7 @@ def testBiRnnLayerGradient6_Gru_ForeignState_Sequence_State():
     dX1, dH1 = m.backward(np.ones_like(Y), np.ones_like(S));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x)), H);
-    print(f"BiRnnLayer, numericGradient6, Gru, ForeignState, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}");
+    print(f"BiRnnLayer, numericGradient6, Gru, ForeignState, Sequence and State {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)}");
     testModuleGradient(m, "BiRnnLayer, numericGradient6, Gru, ForeignState, Sequence and State", X, H);
     print("\n");
 
@@ -5163,7 +5168,7 @@ def testBiRnnLayerGradient7_LstmLayer_InnerState_Sequence():
     Y, = m.forward(X);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
-    print(f"BiRnnLayer, numericGradient7, Lstm, InnerState, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"BiRnnLayer, numericGradient7, Lstm, InnerState, Sequence {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "BiRnnLayer, numericGradient7, Lstm, InnerState, Sequence", X);
     print("\n");
 
@@ -5176,7 +5181,7 @@ def testBiRnnLayerGradient8_LstmLayer_InnerState_State():
     S, C = m.forward(X);
     dX1, = m.backward(np.ones_like(S), np.ones_like(C));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
-    print(f"BiRnnLayer, numericGradient8, Lstm, InnerState, State, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"BiRnnLayer, numericGradient8, Lstm, InnerState, State {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "BiRnnLayer, numericGradient8, Lstm, InnerState, State", X);
     print("\n");
 
@@ -5189,7 +5194,7 @@ def testBiRnnLayerGradient9_LstmLayer_InnerState_Sequence_State():
     Y, S, C = m.forward(X);
     dX1, = m.backward(np.ones_like(Y), np.ones_like(S), np.ones_like(C));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
-    print(f"BiRnnLayer, numericGradient9, Lstm, InnerState, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"BiRnnLayer, numericGradient9, Lstm, InnerState, Sequence and State {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "BiRnnLayer, numericGradient9, Lstm, InnerState, Sequence and State", X);
     print("\n");
 
@@ -5204,7 +5209,7 @@ def testBiRnnLayerGradient10_LstmLayer_ForeignState_Sequence():
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
     dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
-    print(f"BiRnnLayer, numericGradient10, Lstm, ForeignState, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}");
+    print(f"BiRnnLayer, numericGradient10, Lstm, ForeignState, Sequence {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dC error', dC1, dCN)}");
     testModuleGradient(m, "BiRnnLayer, numericGradient10, Lstm, ForeignState, Sequence", X, H, C);
     print("\n");
 
@@ -5219,7 +5224,7 @@ def testBiRnnLayerGradient11_LstmLayer_ForeignState_State():
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
     dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
-    print(f"BiRnnLayer, numericGradient11, Lstm, ForeignState, State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}");
+    print(f"BiRnnLayer, numericGradient11, Lstm, ForeignState, State {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dC error', dC1, dCN)}");
     testModuleGradient(m, "BiRnnLayer, numericGradient11, Lstm, ForeignState, State", X, H, C);
     print("\n");
 
@@ -5234,7 +5239,7 @@ def testBiRnnLayerGradient12_LstmLayer_ForeignState_Sequence_State():
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
     dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
-    print(f"BiRnnLayer, numericGradient12, Lstm, ForeignState, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}");
+    print(f"BiRnnLayer, numericGradient12, Lstm, ForeignState, Sequence and State {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dC error', dC1, dCN)}");
     testModuleGradient(m, "BiRnnLayer, numericGradient12, Lstm, ForeignState, Sequence and State", X, H, C);
     print("\n");
 
@@ -5247,7 +5252,7 @@ def testStackRnnLayerGradient1_Gru_InnerState_Sequence():
     Y, = m.forward(X);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
-    print(f"StackRnnLayer, numericGradient1, Gru, InnerState, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"StackRnnLayer, numericGradient1, Gru, InnerState, Sequence {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "StackRnnLayer, numericGradient1, Gru, InnerState, Sequence", X);
     print("\n");
 
@@ -5260,7 +5265,7 @@ def testStackRnnLayerGradient2_Gru_InnerState_State():
     S, = m.forward(X);
     dX1, = m.backward(np.ones_like(S));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
-    print(f"StackRnnLayer, numericGradient2, Gru, InnerState, State, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"StackRnnLayer, numericGradient2, Gru, InnerState, State {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "StackRnnLayer, numericGradient2, Gru, InnerState, State", X);
     print("\n");
 
@@ -5273,7 +5278,7 @@ def testStackRnnLayerGradient3_Gru_InnerState_Sequence_State():
     Y, S = m.forward(X);
     dX1, = m.backward(np.ones_like(Y), np.ones_like(S));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
-    print(f"StackRnnLayer, numericGradient3, Gru, InnerState, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"StackRnnLayer, numericGradient3, Gru, InnerState, Sequence and State {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "StackRnnLayer, numericGradient3, Gru, InnerState, Sequence and State", X);
     print("\n");
 
@@ -5287,7 +5292,7 @@ def testStackRnnLayerGradient4_Gru_ForeignState_Sequence():
     dX1, dH1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x)), H);
-    print(f"StackRnnLayer, numericGradient4, Gru, ForeignState, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}");
+    print(f"StackRnnLayer, numericGradient4, Gru, ForeignState, Sequence {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)}");
     testModuleGradient(m, "StackRnnLayer, numericGradient4, Gru, ForeignState, Sequence", X, H);
     print("\n");
 
@@ -5301,7 +5306,7 @@ def testStackRnnLayerGradient5_Gru_ForeignState_State():
     dX1, dH1 = m.backward(np.ones_like(S));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x)), H);
-    print(f"StackRnnLayer, numericGradient5, Gru, ForeignState, State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}");
+    print(f"StackRnnLayer, numericGradient5, Gru, ForeignState, State {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)}");
     testModuleGradient(m, "StackRnnLayer, numericGradient5, Gru, ForeignState, State", X, H);
     print("\n");
 
@@ -5315,7 +5320,7 @@ def testStackRnnLayerGradient6_Gru_ForeignState_Sequence_State():
     dX1, dH1 = m.backward(np.ones_like(Y), np.ones_like(S));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x)), H);
-    print(f"StackRnnLayer, numericGradient6, Gru, ForeignState, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}");
+    print(f"StackRnnLayer, numericGradient6, Gru, ForeignState, Sequence and State {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)}");
     testModuleGradient(m, "StackRnnLayer, numericGradient6, Gru, ForeignState, Sequence and State", X, H);
     print("\n");
 
@@ -5328,7 +5333,7 @@ def testStackRnnLayerGradient7_Lstm_InnerState_Sequence():
     Y, = m.forward(X);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
-    print(f"StackRnnLayer, numericGradient7, Lstm, InnerState, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"StackRnnLayer, numericGradient7, Lstm, InnerState, Sequence {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "StackRnnLayer, numericGradient7, Lstm, InnerState, Sequence", X);
     print("\n");
 
@@ -5341,7 +5346,7 @@ def testStackRnnLayerGradient8_Lstm_InnerState_State():
     S, C = m.forward(X);
     dX1, = m.backward(np.ones_like(S), np.ones_like(C));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
-    print(f"StackRnnLayer, numericGradient8, Lstm, InnerState, State, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"StackRnnLayer, numericGradient8, Lstm, InnerState, State {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "StackRnnLayer, numericGradient8, Lstm, InnerState, State", X);
     print("\n");
 
@@ -5354,7 +5359,7 @@ def testStackRnnLayerGradient9_Lstm_InnerState_Sequence_State():
     Y, S, C = m.forward(X);
     dX1, = m.backward(np.ones_like(Y), np.ones_like(S), np.ones_like(C));
     dXN = numericGradient(lambda x: sumAll(*m.forward(x)), X);
-    print(f"StackRnnLayer, numericGradient9, Lstm, InnerState, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"StackRnnLayer, numericGradient9, Lstm, InnerState, Sequence and State {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "StackRnnLayer, numericGradient9, Lstm, InnerState, Sequence and State", X);
     print("\n");
 
@@ -5369,7 +5374,7 @@ def testStackRnnLayerGradient10_Lstm_ForeignState_Sequence():
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
     dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
-    print(f"StackRnnLayer, numericGradient10, Lstm, ForeignState, Sequence, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}");
+    print(f"StackRnnLayer, numericGradient10, Lstm, ForeignState, Sequence {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dC error', dC1, dCN)}");
     testModuleGradient(m, "StackRnnLayer, numericGradient10, Lstm, ForeignState, Sequence", X, H, C);
     print("\n");
 
@@ -5384,7 +5389,7 @@ def testStackRnnLayerGradient11_Lstm_ForeignState_State():
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
     dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
-    print(f"StackRnnLayer, numericGradient11, Lstm, ForeignState, State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}");
+    print(f"StackRnnLayer, numericGradient11, Lstm, ForeignState, State {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dC error', dC1, dCN)}");
     testModuleGradient(m, "StackRnnLayer, numericGradient11, Lstm, ForeignState, State", X, H, C);
     print("\n");
 
@@ -5399,7 +5404,7 @@ def testStackRnnLayerGradient12_Lstm_ForeignState_Sequence_State():
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
     dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
-    print(f"StackRnnLayer, numericGradient12, Lstm, ForeignState, Sequence and State, dX error: {np.sum(np.abs(dX1 - dXN))}, dH error: {np.sum(np.abs(dH1 - dHN))}, dC error: {np.sum(np.abs(dC1 - dCN))}");
+    print(f"StackRnnLayer, numericGradient12, Lstm, ForeignState, Sequence and State {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dC error', dC1, dCN)}");
     testModuleGradient(m, "StackRnnLayer, numericGradient12, Lstm, ForeignState, Sequence and State", X, H, C);
     print("\n");
 
@@ -5477,7 +5482,7 @@ def testAdditiveAttentionModuleGradient1():
     dWqN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = x, Wk = Wk, wv = wv).forward(Q, K, V)[0]), Wq);
     dWkN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = x, wv = wv).forward(Q, K, V)[0]), Wk);
     dwvN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = Wk, wv = x).forward(Q, K, V)[0]), wv);
-    print(f"AdditiveAttentionModule, numericGradient1, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dWq error: {np.sum(np.abs(dWq1 - dWqN))}, dWk error: {np.sum(np.abs(dWk1 - dWkN))}, dwv error: {np.sum(np.abs(dwv1 - dwvN))}");
+    print(f"AdditiveAttentionModule, numericGradient1 {getErrorText('dQ error', dQ1, dQN)} {getErrorText('dK error', dK1, dKN)} {getErrorText('dV error', dV1, dVN)} {getErrorText('dWq error', dWq1, dWqN)} {getErrorText('dWk error', dWk1, dWkN)} {getErrorText('dwv error', dwv1, dwvN)}");
     print("\n");
 
 
@@ -5507,7 +5512,7 @@ def testAdditiveAttentionModuleGradient2():
     dWqN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = x, Wk = Wk, wv = wv).forward(Q, K, V, M)[0]), Wq);
     dWkN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = x, wv = wv).forward(Q, K, V, M)[0]), Wk);
     dwvN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = Wk, wv = x).forward(Q, K, V, M)[0]), wv);
-    print(f"AdditiveAttentionModule, numericGradient2, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dWq error: {np.sum(np.abs(dWq1 - dWqN))}, dWk error: {np.sum(np.abs(dWk1 - dWkN))}, dwv error: {np.sum(np.abs(dwv1 - dwvN))}");
+    print(f"AdditiveAttentionModule, numericGradient2 {getErrorText('dQ error', dQ1, dQN)} {getErrorText('dK error', dK1, dKN)} {getErrorText('dV error', dV1, dVN)} {getErrorText('dWq error', dWq1, dWqN)} {getErrorText('dWk error', dWk1, dWkN)} {getErrorText('dwv error', dwv1, dwvN)}");
     print("\n");
 
 
@@ -5537,7 +5542,7 @@ def testAdditiveAttentionModuleGradient3():
     dWqN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = x, Wk = Wk, wv = wv).forward(Q, K, V, M)[0]), Wq);
     dWkN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = x, wv = wv).forward(Q, K, V, M)[0]), Wk);
     dwvN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = Wk, wv = x).forward(Q, K, V, M)[0]), wv);
-    print(f"AdditiveAttentionModule, numericGradient3, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dWq error: {np.sum(np.abs(dWq1 - dWqN))}, dWk error: {np.sum(np.abs(dWk1 - dWkN))}, dwv error: {np.sum(np.abs(dwv1 - dwvN))}");
+    print(f"AdditiveAttentionModule, numericGradient3 {getErrorText('dQ error', dQ1, dQN)} {getErrorText('dK error', dK1, dKN)} {getErrorText('dV error', dV1, dVN)} {getErrorText('dWq error', dWq1, dWqN)} {getErrorText('dWk error', dWk1, dWkN)} {getErrorText('dwv error', dwv1, dwvN)}");
     print("\n");
 
 
@@ -5560,7 +5565,7 @@ def testAdditiveAttentionModuleGradient4():
     dWqN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = x, Wk = Wk, wv = wv).forward(Q, K, V, M)[0]), Wq);
     dWkN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = x, wv = wv).forward(Q, K, V, M)[0]), Wk);
     dwvN = numericGradient(lambda x: np.sum(AdditiveAttentionModule(querySize, keySize, hiddenSize, Wq = Wq, Wk = Wk, wv = x).forward(Q, K, V, M)[0]), wv);
-    print(f"AdditiveAttentionModule, numericGradient4, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dWq error: {np.sum(np.abs(dWq1 - dWqN))}, dWk error: {np.sum(np.abs(dWk1 - dWkN))}, dwv error: {np.sum(np.abs(dwv1 - dwvN))}");
+    print(f"AdditiveAttentionModule, numericGradient4 {getErrorText('dQ error', dQ1, dQN)} {getErrorText('dK error', dK1, dKN)} {getErrorText('dV error', dV1, dVN)} {getErrorText('dWq error', dWq1, dWqN)} {getErrorText('dWk error', dWk1, dWkN)} {getErrorText('dwv error', dwv1, dwvN)}");
     print("\n");
 
 
@@ -5577,7 +5582,7 @@ def testDotProductAttentionModuleGradient1():
     dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V)[0]), Q);
     dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V)[0]), K);
     dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x)[0]), V);
-    print(f"DotProductAttentionModule, numericGradient1, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    print(f"DotProductAttentionModule, numericGradient1 {getErrorText('dQ error', dQ1, dQN)} {getErrorText('dK error', dK1, dKN)} {getErrorText('dV error', dV1, dVN)}");
     print("\n");
 
 
@@ -5602,7 +5607,7 @@ def testDotProductAttentionModuleGradient2():
     dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
     dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
     dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
-    print(f"DotProductAttentionModule, numericGradient2, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    print(f"DotProductAttentionModule, numericGradient2 {getErrorText('dQ error', dQ1, dQN)} {getErrorText('dK error', dK1, dKN)} {getErrorText('dV error', dV1, dVN)}");
     print("\n");
 
 
@@ -5627,7 +5632,7 @@ def testDotProductAttentionModuleGradient3():
     dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
     dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
     dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
-    print(f"DotProductAttentionModule, numericGradient3, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    print(f"DotProductAttentionModule, numericGradient3 {getErrorText('dQ error', dQ1, dQN)} {getErrorText('dK error', dK1, dKN)} {getErrorText('dV error', dV1, dVN)}");
     print("\n");
 
 
@@ -5645,7 +5650,7 @@ def testDotProductAttentionModuleGradient4():
     dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
     dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
     dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
-    print(f"DotProductAttentionModule, numericGradient4, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    print(f"DotProductAttentionModule, numericGradient4 {getErrorText('dQ error', dQ1, dQN)} {getErrorText('dK error', dK1, dKN)} {getErrorText('dV error', dV1, dVN)}");
     print("\n");
 
 
@@ -5674,7 +5679,7 @@ def testMultiHeadAttentionModule1():
     for p1, p3 in zip(m1.params, m3.params):
         assert np.sum(p1.value - p3.value) < 1e-6;
 
-    print(f"MultiHeadAttentionModule, error1, Y2 error: {np.sum(np.abs(Y1 - Y2))}, Y3 error: {np.sum(np.abs(Y1 - Y3))}");
+    print(f"MultiHeadAttentionModule, error1 {getErrorText('Y2 error', Y1, Y2)} {getErrorText('Y3 error', Y1, Y3)}");
     print("\n");
 
 
@@ -5703,7 +5708,7 @@ def testMultiHeadAttentionModule2():
     for p1, p3 in zip(m1.params, m3.params):
         assert np.sum(p1.value - p3.value) < 1e-6;
 
-    print(f"MultiHeadAttentionModule, error2, Y2 error: {np.sum(np.abs(Y1 - Y2))}, Y3 error: {np.sum(np.abs(Y1 - Y3))}");
+    print(f"MultiHeadAttentionModule, error2 {getErrorText('Y2 error', Y1, Y2)} {getErrorText('Y3 error', Y1, Y3)}");
     print("\n");
 
 
@@ -5731,7 +5736,7 @@ def testMultiHeadAttentionModule3():
                                  Wq = np.concatenate(Wqs, axis = -1), Wk = np.concatenate(Wks, axis = -1), Wv = np.concatenate(Wvs, axis = -1), Wo = Wo);
     Y2, = m.forward(Q, K, V);
 
-    print(f"MultiHeadAttentionModule, value3, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"MultiHeadAttentionModule, value3 {getErrorText('Y error', Y1, Y2)}");
     print("\n");
 
 
@@ -5760,7 +5765,7 @@ def testMultiHeadAttentionModule4():
                                  Wq = np.concatenate(Wqs, axis = -1), Wk = np.concatenate(Wks, axis = -1), Wv = np.concatenate(Wvs, axis = -1), Wo = Wo);
     Y2, = m.forward(Q, K, V, M);
 
-    print(f"MultiHeadAttentionModule, value4, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"MultiHeadAttentionModule, value4 {getErrorText('Y error', Y1, Y2)}");
     print("\n");
 
 
@@ -5779,7 +5784,7 @@ def testMultiHeadAttentionModuleGradient1():
     dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V)[0]), Q);
     dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V)[0]), K);
     dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x)[0]), V);
-    print(f"MultiHeadAttentionModule, numericGradient1, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    print(f"MultiHeadAttentionModule, numericGradient1 {getErrorText('dQ error', dQ1, dQN)} {getErrorText('dK error', dK1, dKN)} {getErrorText('dV error', dV1, dVN)}");
     testModuleGradient(m, "MultiHeadAttentionModule, numericGradient1", Q, K, V);
     print("\n");
 
@@ -5800,7 +5805,7 @@ def testMultiHeadAttentionModuleGradient2():
     dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
     dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
     dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
-    print(f"MultiHeadAttentionModule, numericGradient2, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    print(f"MultiHeadAttentionModule, numericGradient2 {getErrorText('dQ error', dQ1, dQN)} {getErrorText('dK error', dK1, dKN)} {getErrorText('dV error', dV1, dVN)}");
     testModuleGradient(m, "MultiHeadAttentionModule, numericGradient2", Q, K, V, M);
     print("\n");
 
@@ -5821,7 +5826,7 @@ def testMultiHeadAttentionModuleGradient3():
     dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
     dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
     dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
-    print(f"MultiHeadAttentionModule, numericGradient3, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    print(f"MultiHeadAttentionModule, numericGradient3 {getErrorText('dQ error', dQ1, dQN)} {getErrorText('dK error', dK1, dKN)} {getErrorText('dV error', dV1, dVN)}");
     testModuleGradient(m, "MultiHeadAttentionModule, numericGradient3", Q, K, V, M);
     print("\n");
 
@@ -5842,7 +5847,7 @@ def testMultiHeadAttentionModuleGradient4():
     dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
     dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
     dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
-    print(f"MultiHeadAttentionModule, numericGradient4, dQ error: {np.sum(np.abs(dQ1 - dQN))}, dK error: {np.sum(np.abs(dK1 - dKN))}, dV error: {np.sum(np.abs(dV1 - dVN))}");
+    print(f"MultiHeadAttentionModule, numericGradient4 {getErrorText('dQ error', dQ1, dQN)} {getErrorText('dK error', dK1, dKN)} {getErrorText('dV error', dV1, dVN)}");
     testModuleGradient(m, "MultiHeadAttentionModule, numericGradient4", Q, K, V, M);
     print("\n");
 
@@ -5863,7 +5868,7 @@ def testSelfAttentionModuleGradient1():
     Y, = m.forward(X, M);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"SelfAttentionModule, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SelfAttentionModule, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -5884,7 +5889,7 @@ def testSelfAttentionModuleGradient2():
     Y, = m.forward(X, M);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"SelfAttentionModule, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SelfAttentionModule, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -5898,7 +5903,7 @@ def testSelfAttentionModuleGradient3():
     Y, = m.forward(X, M);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"SelfAttentionModule, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SelfAttentionModule, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -5912,7 +5917,7 @@ def testSelfAttentionModuleGradient4():
     Y, = m.forward(X, M);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"SelfAttentionModule, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SelfAttentionModule, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "SelfAttentionModule, numericGradient4", X, M);
     print("\n");
 
@@ -5927,7 +5932,7 @@ def testSelfAttentionModuleGradient5():
     Y, = m.forward(X, M);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"SelfAttentionModule, numericGradient5, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SelfAttentionModule, numericGradient5 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "SelfAttentionModule, numericGradient5", X, M);
     print("\n");
 
@@ -5940,7 +5945,7 @@ def testSinePositionalEncodingModuleGradient1():
     Y, = m.forward(X);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"SinePositionalEncodingModule, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SinePositionalEncodingModule, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -5952,7 +5957,7 @@ def testSinePositionalEncodingModuleGradient2():
     Y, = m.forward(X);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"SinePositionalEncodingModule, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SinePositionalEncodingModule, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -5965,7 +5970,7 @@ def testSinePositionalEncodingModuleGradient3():
     Y, = m.forward(X, startIndex);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, startIndex)[0]), X);
-    print(f"SinePositionalEncodingModule, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SinePositionalEncodingModule, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -5978,7 +5983,7 @@ def testSinePositionalEncodingModuleGradient4():
     Y, = m.forward(X, startIndex);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, startIndex)[0]), X);
-    print(f"SinePositionalEncodingModule, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"SinePositionalEncodingModule, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -5996,7 +6001,7 @@ def testTransformerAddNormalizationModuleGradient1():
     dX1, dF1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, F)[0]), X);
     dFN = numericGradient(lambda x: np.sum(m.forward(X, x)[0]), F);
-    print(f"TransformerAddNormalizationModule, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dF error: {np.sum(np.abs(dF1 - dFN))}");
+    print(f"TransformerAddNormalizationModule, numericGradient1 {getErrorText('dX error', dX1, dXN)}, dF error: {np.sum(np.abs(dF1 - dFN))}");
     testModuleGradient(m, "TransformerAddNormalizationModule, numericGradient1", X, F);
     print("\n");
 
@@ -6015,7 +6020,7 @@ def testTransformerAddNormalizationModuleGradient2():
     dX1, dF1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, F)[0]), X);
     dFN = numericGradient(lambda x: np.sum(m.forward(X, x)[0]), F);
-    print(f"TransformerAddNormalizationModule, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}, dF error: {np.sum(np.abs(dF1 - dFN))}");
+    print(f"TransformerAddNormalizationModule, numericGradient2 {getErrorText('dX error', dX1, dXN)}, dF error: {np.sum(np.abs(dF1 - dFN))}");
     testModuleGradient(m, "TransformerAddNormalizationModule, numericGradient2", X, F);
     print("\n");
 
@@ -6028,7 +6033,7 @@ def testTransformerPositionwiseFFNModuleGradient1():
     Y, = m.forward(X);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"TransformerAddNormalizationModule, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"TransformerAddNormalizationModule, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "TransformerAddNormalizationModule, numericGradient1", X);
     print("\n");
 
@@ -6046,7 +6051,7 @@ def testTransformerEncoderBlockGradient1():
     Y, = m.forward(X);
     dX1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"TransformerEncoderBlock, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"TransformerEncoderBlock, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "TransformerEncoderBlock, numericGradient1", X);
     print("\n");
 
@@ -6065,7 +6070,7 @@ def testTransformerEncoderBlockGradient2():
     Y, = m.forward(X, M);
     dX1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"TransformerEncoderBlock, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"TransformerEncoderBlock, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "TransformerEncoderBlock, numericGradient2", X, M);
     print("\n");
 
@@ -6085,7 +6090,7 @@ def testTransformerEncoderBlockGradient3():
     Y, = m.forward(X, M);
     dX1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"TransformerEncoderBlock, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"TransformerEncoderBlock, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "TransformerEncoderBlock, numericGradient3", X, M);
     print("\n");
 
@@ -6105,7 +6110,7 @@ def testTransformerEncoderBlockGradient4():
     Y, = m.forward(X, M);
     dX1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"TransformerEncoderBlock, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"TransformerEncoderBlock, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "TransformerEncoderBlock, numericGradient4", X, M);
     print("\n");
 
@@ -6123,7 +6128,7 @@ def testTransformerEncoderGradient1():
     Y, = m.forward(X);
     dX1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"TransformerEncoder, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"TransformerEncoder, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "TransformerEncoder, numericGradient1", X);
     print("\n");
 
@@ -6142,7 +6147,7 @@ def testTransformerEncoderGradient2():
     Y, = m.forward(X, M);
     dX1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"TransformerEncoder, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"TransformerEncoder, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "TransformerEncoder, numericGradient2", X, M);
     print("\n");
 
@@ -6162,7 +6167,7 @@ def testTransformerEncoderGradient3():
     Y, = m.forward(X, M);
     dX1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"TransformerEncoder, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"TransformerEncoder, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "TransformerEncoder, numericGradient3", X, M);
     print("\n");
 
@@ -6182,7 +6187,7 @@ def testTransformerEncoderGradient4():
     Y, = m.forward(X, M);
     dX1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"TransformerEncoder, numericGradient4, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"TransformerEncoder, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "TransformerEncoder, numericGradient4", X, M);
     print("\n");
 
@@ -6347,7 +6352,7 @@ def testTransformerDecoderGradient1():
     dX1, dEncoderY1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, encoderY)[0]), X);
     dEncoderYN = numericGradient(lambda x: np.sum(m.forward(X, x)[0]), encoderY);
-    print(f"TransformerDecoder, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
+    print(f"TransformerDecoder, numericGradient1 {getErrorText('dX error', dX1, dXN)}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
     testModuleGradient(m, "TransformerDecoder, numericGradient1", X, encoderY);
     print("\n");
 
@@ -6369,7 +6374,7 @@ def testTransformerDecoderGradient2():
     dX1, dEncoderY1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, encoderY, encoderM)[0]), X);
     dEncoderYN = numericGradient(lambda x: np.sum(m.forward(X, x, encoderM)[0]), encoderY);
-    print(f"TransformerDecoder, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
+    print(f"TransformerDecoder, numericGradient1 {getErrorText('dX error', dX1, dXN)}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
     testModuleGradient(m, "TransformerDecoder, numericGradient2", X, encoderY, encoderM);
     print("\n");
 
@@ -6392,7 +6397,7 @@ def testTransformerDecoderGradient3():
     dX1, dEncoderY1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, encoderY, encoderM)[0]), X);
     dEncoderYN = numericGradient(lambda x: np.sum(m.forward(X, x, encoderM)[0]), encoderY);
-    print(f"TransformerDecoder, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
+    print(f"TransformerDecoder, numericGradient3 {getErrorText('dX error', dX1, dXN)}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
     testModuleGradient(m, "TransformerDecoder, numericGradient3", X, encoderY, encoderM);
     print("\n");
 
@@ -6553,7 +6558,7 @@ def testAttentionPoolingLayerGradient1():
     Y, = m.forward(X);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"AttentionPoolingLayer, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"AttentionPoolingLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "AttentionPoolingLayer, numericGradient1", X);
     print("\n");
 
@@ -6567,7 +6572,7 @@ def testAttentionPoolingLayerGradient2():
     Y, = m.forward(X, M);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"AttentionPoolingLayer, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"AttentionPoolingLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "AttentionPoolingLayer, numericGradient2", X, M);
     print("\n");
 
@@ -6581,7 +6586,7 @@ def testAttentionPoolingLayerGradient3():
     Y, = m.forward(X, M);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"AttentionPoolingLayer, numericGradient3, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"AttentionPoolingLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "AttentionPoolingLayer, numericGradient3", X, M);
     print("\n");
 
@@ -6721,7 +6726,7 @@ def testGaussianVAELossGradient():
     dVN = numericGradient(lambda x: m.forward(X, M, x, E, U), V);
     dEN = numericGradient(lambda x: m.forward(X, M, V, x, U), E);
     dUN = numericGradient(lambda x: m.forward(X, M, V, E, x), U);
-    print(f"GaussianVAELoss, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dM error: {np.sum(np.abs(dM1 - dMN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dE error: {np.sum(np.abs(dE1 - dEN))}, dU error: {np.sum(np.abs(dU1 - dUN))}");
+    print(f"GaussianVAELoss, numericGradient {getErrorText('dX error', dX1, dXN)}, dM error: {np.sum(np.abs(dM1 - dMN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dE error: {np.sum(np.abs(dE1 - dEN))}, dU error: {np.sum(np.abs(dU1 - dUN))}");
     print("\n");
 
 
@@ -6745,7 +6750,7 @@ def testGaussianVAEGradient1():
     X, M, V, E, U = m.forward(X, epsilon);
     dX1 = m.backward(np.ones_like(X), np.ones_like(M), np.ones_like(V), np.ones_like(E), np.ones_like(U))[0];
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, epsilon)), X);
-    print(f"GaussianVAE, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"GaussianVAE, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "GaussianVAE, numericGradient1", X, epsilon);
     print("\n");
 
@@ -6771,7 +6776,7 @@ def testGaussianVAEGradient2():
     loss.forward(*m.forward(X, epsilon));
     dX1 = m.backward(*loss.backward())[0];
     dXN = numericGradient(lambda x: loss.forward(*m.forward(x, epsilon)), X);
-    print(f"GaussianVAE, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"GaussianVAE, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
@@ -6864,7 +6869,7 @@ def testBernoulliVAELossGradient():
     dMN = numericGradient(lambda x: m.forward(X, x, V, Y), M);
     dVN = numericGradient(lambda x: m.forward(X, M, x, Y), V);
     dYN = numericGradient(lambda x: m.forward(X, M, V, x), Y);
-    print(f"BernoulliVAELoss, numericGradient, dX error: {np.sum(np.abs(dX1 - dXN))}, dM error: {np.sum(np.abs(dM1 - dMN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dY error: {np.sum(np.abs(dY1 - dYN))}");
+    print(f"BernoulliVAELoss, numericGradient {getErrorText('dX error', dX1, dXN)}, dM error: {np.sum(np.abs(dM1 - dMN))}, dV error: {np.sum(np.abs(dV1 - dVN))}, dY error: {np.sum(np.abs(dY1 - dYN))}");
     print("\n");
 
 
@@ -6888,7 +6893,7 @@ def testBernoulliVAEGradient1():
     X, M, V, Y = m.forward(X, epsilon);
     dX1 = m.backward(np.ones_like(X), np.ones_like(M), np.ones_like(V), np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, epsilon)), X);
-    print(f"BernoulliVAE, numericGradient1, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"BernoulliVAE, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "BernoulliVAE, numericGradient1", X, epsilon);
     print("\n");
 
@@ -6914,7 +6919,7 @@ def testBernoulliVAEGradient2():
     loss.forward(*m.forward(X, epsilon));
     dX1 = m.backward(*loss.backward())[0];
     dXN = numericGradient(lambda x: loss.forward(*m.forward(x, epsilon)), X);
-    print(f"BernoulliVAE, numericGradient2, dX error: {np.sum(np.abs(dX1 - dXN))}");
+    print(f"BernoulliVAE, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
