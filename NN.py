@@ -1471,7 +1471,7 @@ class VariationalDropoutLayer(DropoutLayer):
 
 
 class ReshapeLayer(NetModuleBase):
-    def __init__(self, *shapeSelector : Union[Tuple, Callable]):
+    def __init__(self, *shapeSelector : Union[Tuple, Callable[[np.ndarray], Tuple]]):
         super().__init__();
 
         self._originalShapes = [];
@@ -2451,18 +2451,18 @@ class RnnLayerBase(NetModuleBase, metaclass = abc.ABCMeta):
 
 
 class RnnLayer(RnnLayerBase):
-    def __init__(self, inputSize : int, hiddenSize : int, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, bx : Optional[np.ndarray] = None, bh : Optional[np.ndarray] = None, activationFuncSelector : Optional[Callable[[], INetModel]] = None):
+    def __init__(self, inputSize : int, hiddenSize : int, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, Wx : Optional[np.ndarray] = None, Wh : Optional[np.ndarray] = None, bx : Optional[np.ndarray] = None, bh : Optional[np.ndarray] = None, activationFuncSelector : Optional[Callable[[int], INetModel]] = None):
         super().__init__(inputSize, hiddenSize, stateful, returnSequence, returnState, Wx, Wh, bx, bh);
 
         self._H = None;
         self._dH = None;
         self._sequenceLength = 0;
         self._foreignState = False;
-        self._activationFuncSelector : Callable[[], INetModel] = activationFuncSelector if activationFuncSelector is not None else (lambda: TanhLayer()); # type: ignore
+        self._activationFuncSelector : Callable[[int], INetModel] = activationFuncSelector if activationFuncSelector is not None else (lambda size: TanhLayer()); # type: ignore
         self._name = f"RNN {inputSize}*{hiddenSize}";
 
         self._Xs, self._W = np.empty(0), np.empty(0);
-        self._activationFuncs : List[INetModel] = [];
+        self._activationFuncs : List[INetModule] = [];
 
 
     def _setContext(self, context : INetContext):
@@ -2494,7 +2494,7 @@ class RnnLayer(RnnLayerBase):
         self._sequenceLength, N = Xs.shape[: 2];
 
         if len(self._activationFuncs) != self._sequenceLength:
-            self._activationFuncs = [self._activationFuncSelector() for _ in range(self._sequenceLength)];
+            self._activationFuncs = [self._activationFuncSelector(self._hiddenSize) for _ in range(self._sequenceLength)];
 
         if self._foreignState:
             self._H = data[1];
@@ -4731,7 +4731,7 @@ class SequentialContainer(NetModelBase):
         super().__init__(*modules);
 
 
-    def apply(self, func : Callable):
+    def apply(self, func : Callable[[INetModule], Any]):
         for m in self._modules:
             func(m);
 
@@ -5060,19 +5060,19 @@ class TransformerAddNormalizationModule(AggregateNetModule):
 
 
 class TransformerPositionwiseFFNModule(AggregateNetModule):
-    def __init__(self, inputSize : int, hiddenSize : int, activationFuncSelector : Optional[Callable] = None):
-        self._activationFuncSelector = activationFuncSelector if activationFuncSelector is not None else (lambda: ReluLayer());
+    def __init__(self, inputSize : int, hiddenSize : int, activationFuncSelector : Optional[Callable[[int], INetModule]] = None):
+        self._activationFuncSelector = activationFuncSelector if activationFuncSelector is not None else (lambda size: ReluLayer());
 
         super().__init__(
             AffineLayer(inputSize, hiddenSize),
-            self._activationFuncSelector(),
+            self._activationFuncSelector(hiddenSize),
             AffineLayer(hiddenSize, inputSize),
         );
         self._name = "TransformerPositionwiseFFN";
 
 
 class TransformerEncoderBlock(AggregateNetModule, INetAttentionModule):
-    def __init__(self, inputSize : int, attentionHiddenSize : int, ffnHiddenSize : int, normalizedShape : Union[int, Tuple[int, ...]], headNum : int = 2, dropoutRatio : float = 0.0, ffnActivationFuncSelector : Optional[Callable] = None):
+    def __init__(self, inputSize : int, attentionHiddenSize : int, ffnHiddenSize : int, normalizedShape : Union[int, Tuple[int, ...]], headNum : int = 2, dropoutRatio : float = 0.0, ffnActivationFuncSelector : Optional[Callable[[int], INetModule]] = None):
         self._attentionModule = SelfAttentionModule(MultiHeadAttentionModule(DotProductAttentionModule(dropoutRatio = dropoutRatio), inputSize, inputSize, inputSize, (attentionHiddenSize, attentionHiddenSize, attentionHiddenSize, inputSize), headNum = headNum));
         self._addNormal1 = TransformerAddNormalizationModule(normalizedShape, dropoutRatio = dropoutRatio);
         self._positionwiseFFN = TransformerPositionwiseFFNModule(inputSize, ffnHiddenSize, activationFuncSelector = ffnActivationFuncSelector);
@@ -5113,7 +5113,7 @@ class TransformerEncoderBlock(AggregateNetModule, INetAttentionModule):
 
 
 class TransformerEncoder(AggregateNetModule, INetAttentionModule):
-    def __init__(self, inputSize: int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Optional[Callable] = None):
+    def __init__(self, inputSize: int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Optional[Callable[[int], INetModule]] = None):
         self._attentionWeight = None;
         self._positionalEncoding = SinePositionalEncodingModule(inputSize, maxLength = maxSequenceLength, dropoutRatio = dropoutRatio);
         self._blocks = [TransformerEncoderBlock(inputSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, dropoutRatio = dropoutRatio, ffnActivationFuncSelector = ffnActivationFuncSelector) for _ in range(blockNum)];
@@ -5153,7 +5153,7 @@ class TransformerEncoder(AggregateNetModule, INetAttentionModule):
 
 
 class TransformerEmbeddingEncoder(AggregateNetModule, INetAttentionModule):
-    def __init__(self, embeddingNum : int, embeddingSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Optional[Callable] = None):
+    def __init__(self, embeddingNum : int, embeddingSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Optional[Callable[[int], INetModule]] = None):
         self._embeddingScale = math.sqrt(embeddingSize);
         self._embedding = EmbeddingLayer(embeddingNum, embeddingSize);
         self._encoder = TransformerEncoder(embeddingSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, blockNum = blockNum, maxSequenceLength = maxSequenceLength, dropoutRatio = dropoutRatio, ffnActivationFuncSelector = ffnActivationFuncSelector);
@@ -5193,7 +5193,7 @@ class TransformerEmbeddingEncoder(AggregateNetModule, INetAttentionModule):
 
 
 class TransformerDecoderBlock(AggregateNetModule, INetAttentionModule):
-    def __init__(self, inputSize : int, encoderSize : int, attentionHiddenSize : int, ffnHiddenSize : int, normalizedShape : Union[int, Tuple[int, ...]], headNum : int = 2, dropoutRatio : float = 0.0, ffnActivationFuncSelector : Optional[Callable] = None):
+    def __init__(self, inputSize : int, encoderSize : int, attentionHiddenSize : int, ffnHiddenSize : int, normalizedShape : Union[int, Tuple[int, ...]], headNum : int = 2, dropoutRatio : float = 0.0, ffnActivationFuncSelector : Optional[Callable[[int], INetModule]] = None):
         self._innerAttentionModule = MultiHeadAttentionModule(DotProductAttentionModule(dropoutRatio = dropoutRatio), inputSize, inputSize, inputSize, (attentionHiddenSize, attentionHiddenSize, attentionHiddenSize, inputSize), headNum = headNum);
         self._addNormal1 = TransformerAddNormalizationModule(normalizedShape, dropoutRatio = dropoutRatio);
         self._crossAttentionModule = MultiHeadAttentionModule(DotProductAttentionModule(dropoutRatio = dropoutRatio), inputSize, encoderSize, encoderSize, (attentionHiddenSize, attentionHiddenSize, attentionHiddenSize, inputSize), headNum = headNum);
@@ -5255,7 +5255,7 @@ class TransformerDecoderBlock(AggregateNetModule, INetAttentionModule):
 
 
 class TransformerDecoder(AggregateNetModule, INetAttentionModule):
-    def __init__(self, inputSize: int, encoderSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Optional[Callable] = None):
+    def __init__(self, inputSize: int, encoderSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Optional[Callable[[int], INetModule]] = None):
         if blockNum < 1:
             raise ValueError("blockNum < 1");
 
@@ -5325,7 +5325,7 @@ class TransformerDecoder(AggregateNetModule, INetAttentionModule):
 
 
 class TransformerEmbeddingDecoder(AggregateNetModule, INetAttentionModule):
-    def __init__(self, embeddingNum : int, embeddingSize : int, encoderSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Optional[Callable] = None):
+    def __init__(self, embeddingNum : int, embeddingSize : int, encoderSize : int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Optional[Callable[[int], INetModule]] = None):
         self._embeddingScale = math.sqrt(embeddingSize);
         self._embedding = EmbeddingLayer(embeddingNum, embeddingSize);
         self._decoder = TransformerDecoder(embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, blockNum = blockNum, maxSequenceLength = maxSequenceLength, dropoutRatio = dropoutRatio, ffnActivationFuncSelector = ffnActivationFuncSelector);

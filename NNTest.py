@@ -2192,7 +2192,7 @@ def unitTest():
     # testBatchNormalization1DLayer1();
     # testBatchNormalization1DLayer2();
     # testBatchNormalization1DLayerGradient1();
-    testBatchNormalizationLayer1DGradient2();
+    # testBatchNormalizationLayer1DGradient2();
     # testLayerNormalizationLayer1();
     # testLayerNormalizationLayerGradient1();
     # testLayerNormalizationLayerGradient2();
@@ -4286,17 +4286,17 @@ def testRnnLayerGradient2_Sequence():
     X = np.random.randn(T, N, inputSize);
     Wx, Wh = np.random.randn(inputSize, hiddenSize), np.random.randn(hiddenSize, hiddenSize);
     bx, bh = np.random.randn(hiddenSize), np.random.randn(hiddenSize);
-    m = RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda: ReluLayer(), stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
+    m = RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda size: ReluLayer(), stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
     m.context.isTrainingMode = True;
     Y, = m.forward(X);
     dX1 = m.backward(np.ones_like(Y))[0];
     dWx1, dWh1 = m.params[0].grad, m.params[1].grad;
     dbx1, dbh1 = m.params[2].grad, m.params[3].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dWxN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda: ReluLayer(), stateful = False, Wx = x, Wh = Wh, bx = bx, bh = bh).forward(X)[0]), Wx);
-    dWhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda: ReluLayer(), stateful = False, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
-    dbxN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda: ReluLayer(), stateful = False, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
-    dbhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda: ReluLayer(), stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
+    dWxN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda size: ReluLayer(), stateful = False, Wx = x, Wh = Wh, bx = bx, bh = bh).forward(X)[0]), Wx);
+    dWhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda size: ReluLayer(), stateful = False, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X)[0]), Wh);
+    dbxN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda size: ReluLayer(), stateful = False, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X)[0]), bx);
+    dbhN = numericGradient(lambda x: np.sum(RnnLayer(inputSize, hiddenSize, activationFuncSelector = lambda size: ReluLayer(), stateful = False, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X)[0]), bh);
     print(f"RnnLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
@@ -4344,19 +4344,20 @@ def testRnnLayerGradient4_Sequence_State():
 def testRnnLayerGradient5_Foreign_Sequence_State():
     T, N, inputSize, hiddenSize = 4, 32, 24, 48;
     X, H = np.random.randn(T, N, inputSize), np.random.randn(N, hiddenSize);
+    beta = np.random.randn(hiddenSize);
     Wx, Wh = np.random.randn(inputSize, hiddenSize), np.random.randn(hiddenSize, hiddenSize);
     bx, bh = np.random.randn(hiddenSize), np.random.randn(hiddenSize);
-    m = RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
+    m = RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = bh, activationFuncSelector = lambda size: SwishLayer(beta = beta, outputSize = size));
     Y, S = m.forward(X, H);
     dX1, dH1 = m.backward(np.ones_like(Y), np.ones_like(S));
     dWx1, dWh1 = m.params[0].grad, m.params[1].grad;
     dbx1, dbh1 = m.params[2].grad, m.params[3].grad;
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x)), H);
-    dWxN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = x, Wh = Wh, bx = bx, bh = bh).forward(X, H)), Wx);
-    dWhN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh).forward(X, H)), Wh);
-    dbxN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh).forward(X, H)), bx);
-    dbhN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x).forward(X, H)), bh);
+    dWxN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = x, Wh = Wh, bx = bx, bh = bh, activationFuncSelector = lambda size: SwishLayer(beta = beta, outputSize = size)).forward(X, H)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh, activationFuncSelector = lambda size: SwishLayer(beta = beta, outputSize = size)).forward(X, H)), Wh);
+    dbxN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh, activationFuncSelector = lambda size: SwishLayer(beta = beta, outputSize = size)).forward(X, H)), bx);
+    dbhN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x, activationFuncSelector = lambda size: SwishLayer(beta = beta, outputSize = size)).forward(X, H)), bh);
     print(f"RnnLayer, numericGradient5 {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
@@ -6028,13 +6029,13 @@ def testTransformerAddNormalizationModuleGradient2():
 def testTransformerPositionwiseFFNModuleGradient1():
     batchSize, sequenceNum, sequenceLength, sequenceDimension, hiddenSize = 2, 3, 4, 5, 6;
     X = np.random.randn(batchSize, sequenceNum, sequenceLength, sequenceDimension);
-    m = TransformerPositionwiseFFNModule(sequenceDimension, hiddenSize, activationFuncSelector = lambda: GeluLayer());
+    m = TransformerPositionwiseFFNModule(sequenceDimension, hiddenSize, activationFuncSelector = lambda size: PReluLayer(outputSize = size));
 
     Y, = m.forward(X);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    print(f"TransformerAddNormalizationModule, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
-    testModuleGradient(m, "TransformerAddNormalizationModule, numericGradient1", X);
+    print(f"TransformerPositionwiseFFNModule, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
+    testModuleGradient(m, "TransformerPositionwiseFFNModule, numericGradient1", X);
     print("\n");
 
 
@@ -6180,7 +6181,7 @@ def testTransformerEncoderGradient4():
     M = getAttentionMaskByValidLength(sequenceLength, sequenceLength, validLength, onlyBatch = True);
     C = np.random.randn(*X.shape);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
     m = SequentialContainer(
-        TransformerEncoder(sequenceDimension, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda: GeluLayer()),
+        TransformerEncoder(sequenceDimension, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda size: SwishLayer(outputSize = size)),
         FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
     );
 
@@ -6388,7 +6389,7 @@ def testTransformerDecoderGradient3():
     encoderM = getAttentionMaskByValidLength(sequenceLength, sequenceLength + 1, encoderValidLength, onlyBatch = True);
     C = np.random.randn(*X.shape);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
     m = SequentialContainer(
-        TransformerDecoder(sequenceDimension, sequenceDimension + 2, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda: GeluLayer()),
+        TransformerDecoder(sequenceDimension, sequenceDimension + 2, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda size: GeluLayer()),
         FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
     );
     m.context.isTrainingMode = True;
@@ -6442,7 +6443,7 @@ def testTransformerEmbeddingEncoderGradient3():
     validLength = np.random.randint(1, sequenceLength + 1, (batchSize, sequenceNum));
     C = np.random.randn(batchSize, sequenceNum, sequenceLength, embeddingSize);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
     m = SequentialContainer(
-        TransformerEmbeddingEncoder(vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda: GeluLayer()),
+        TransformerEmbeddingEncoder(vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda size: SwishLayer(outputSize = size)),
         FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
     );
 
@@ -6518,7 +6519,7 @@ def testTransformerEmbeddingDecoderGradient2():
     encoderValidLength = np.random.randint(1, sequenceLength + 2, batchSize);
     C = np.random.randn(batchSize, sequenceLength, embeddingSize);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
     m = SequentialContainer(
-        TransformerEmbeddingDecoder(vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum),
+        TransformerEmbeddingDecoder(vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda size: GeluLayer()),
         FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
     );
 
@@ -6538,7 +6539,7 @@ def testTransformerEmbeddingDecoderGradient3():
     encoderValidLength = np.random.randint(1, sequenceLength + 2, (batchSize, sequenceNum));
     C = np.random.randn(batchSize, sequenceNum, sequenceLength, embeddingSize);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
     m = SequentialContainer(
-        TransformerEmbeddingDecoder(vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda: GeluLayer()),
+        TransformerEmbeddingDecoder(vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda size: SwishLayer(outputSize = size)),
         FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
     );
 
