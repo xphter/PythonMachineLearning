@@ -1613,7 +1613,7 @@ class BatchNormalization1DLayer(NetModuleBase):
         self._momentum = max(0.0, min(1.0, float(momentum))) if momentum is not None else None;
         self._evalWeight = None;
         self._evalBias = None;
-        self._name = "BatchNormalization1D";
+        self._name = f"BatchNormalization1D {inputSize}";
 
         self._n = 0;
         self._XC = np.empty(0);
@@ -5404,7 +5404,11 @@ class AttentionPoolingLayer(AggregateNetModule, INetAttentionModule):
         modules.append(AffineLayer(lastHiddenSize, 1, includeBias = False));
 
         super().__init__(*tuple(modules));
-        self._name = "AttentionPoolingLayer";
+
+        if isinstance(hiddenSize, int):
+            self._name = f"AttentionPoolingLayer {inputSize}*{hiddenSize}*1";
+        else:
+            self._name = f"AttentionPoolingLayer {'*'.join([str(item) for item in [inputSize] + list(hiddenSize) + [1]])}";
 
 
     @property
