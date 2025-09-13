@@ -958,6 +958,8 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
         if minEpoch is not None and len(paramsData) > 0 and evaluator is not None:
             index = np.argmax(testAccuracyData[minEpoch:]) if evaluator.high else np.argmin(testAccuracyData[minEpoch:]);
+            print(f"the final params were training on epoch {minEpoch + int(index)}");
+
             self.params = paramsData[minEpoch + int(index)];
             self.states = statesData[minEpoch + int(index)];
 
