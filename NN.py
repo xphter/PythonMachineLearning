@@ -4243,6 +4243,10 @@ class GradientsClipping(INetOptimizer):
     @learningRate.setter
     def learningRate(self, value: float):
         self._optimizer.learningRate = value;
+    
+
+    def epochStep(self, epoch : int):
+        pass;
 
 
     def updateStep(self, params : List[INetParamDefinition], context : INetContext):
