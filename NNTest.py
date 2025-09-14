@@ -2193,6 +2193,8 @@ def unitTest():
     # testBatchNormalization1DLayer2();
     # testBatchNormalization1DLayerGradient1();
     # testBatchNormalizationLayer1DGradient2();
+    testBatchNormalization2DLayer1();
+    # testBatchNormalizationLayer2DGradient1();
     # testLayerNormalizationLayer1();
     # testLayerNormalizationLayerGradient1();
     # testLayerNormalizationLayerGradient2();
@@ -3861,23 +3863,27 @@ def testBatchNormalization1DLayer2():
 
 
 def testBatchNormalization1DLayerGradient1():
-    def createModel(inputSize, g, b) -> BatchNormalization1DLayer:
-        layer = BatchNormalization1DLayer(inputSize, gamma = g, beta = b);
+    def createModel(inputSize, g, b, c) -> BatchNormalization1DLayer:
+        layer = SequentialContainer(
+            BatchNormalization1DLayer(inputSize, gamma = g, beta = b),
+            FunctionalNetModule("*C", lambda x: x * c, lambda x, y, dy: dy * c),
+        )
         layer.context.isTrainingMode = True;
         return layer;
 
 
-    N, T, D = 32, 24, 16;
-    X = np.random.randn(N, T, D);
+    N, T, D = 32, 24, 8;
+    X = np.random.randn(N, D, T);
+    C = np.random.randn(N, D, T);
     gamma = np.random.randn(D);
     beta = np.random.randn(D);
-    m = createModel(D, gamma, beta);
+    m = createModel(D, gamma, beta, C);
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dGamma1, dBeta1 = m.params[0].grad, m.params[1].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dGammaN = numericGradient(lambda x: np.sum(createModel(D, x, beta).forward(X)[0]), gamma);
-    dBetaN = numericGradient(lambda x: np.sum(createModel(D, gamma, x).forward(X)[0]), beta);
+    dGammaN = numericGradient(lambda x: np.sum(createModel(D, x, beta, C).forward(X)[0]), gamma);
+    dBetaN = numericGradient(lambda x: np.sum(createModel(D, gamma, x, C).forward(X)[0]), beta);
     print(f"BatchNormalization1DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)} {getErrorText('dGamma error', dGamma1, dGammaN)} {getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
@@ -3891,7 +3897,7 @@ def testBatchNormalizationLayer1DGradient2():
         layer.context.isTrainingMode = True;
         return layer;
 
-    N, D = 32, 256;
+    N, D = 32, 8;
     X, C = np.random.randn(N, D), np.random.randn(N, D);
     gamma = np.random.randn(D);
     beta = np.random.randn(D);
@@ -3903,6 +3909,79 @@ def testBatchNormalizationLayer1DGradient2():
     dGammaN = numericGradient(lambda x: np.sum(createModel(D, x, beta, C).forward(X)[0]), gamma);
     dBetaN = numericGradient(lambda x: np.sum(createModel(D, gamma, x, C).forward(X)[0]), beta);
     print(f"BatchNormalization1DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)} {getErrorText('dGamma error', dGamma1, dGammaN)} {getErrorText('dBeta error', dBeta1, dBetaN)}");
+    print("\n");
+
+
+def testBatchNormalization2DLayer1():
+    batchSize, channelNum, imageHeight, imageWidth = 32, 8, 12, 16;
+
+    X = np.random.randn(batchSize, channelNum, imageHeight, imageWidth);
+
+    X1 = torch.tensor(X, dtype = torch.float32);
+    m1 = torch.nn.BatchNorm2d(channelNum, eps = 1e-8);
+    m1.train();
+    Y1 = m1(X1).detach().numpy();
+
+    X2 = X;
+    m2 = BatchNormalization2DLayer(channelNum);
+    m2.context.isTrainingMode = True;
+    m2.context.trainingIterations += 1;
+    Y2, = m2.forward(X2);
+
+    print(f"BatchNormalization2DLayer, value1 {getErrorText('Y error', Y1, Y2)}");
+    print(f"BatchNormalization2DLayer, value1 {getErrorText('eval mean error', m1.running_mean.detach().numpy(), m2.evalMean)}");
+    print(f"BatchNormalization2DLayer, value1 {getErrorText('eval var error', m1.running_var.detach().numpy(), m2.evalVar)}");
+
+    X = np.random.randn(batchSize, channelNum, imageHeight, imageWidth);
+
+    X1 = torch.tensor(X, dtype = torch.float32);
+    Y1 = m1(X1).detach().numpy();
+
+    X2 = X;
+    m2.context.trainingIterations += 1;
+    Y2, = m2.forward(X2);
+
+    print(f"BatchNormalization2DLayer, value1 {getErrorText('Y error', Y1, Y2)}");
+    print(f"BatchNormalization2DLayer, value1 {getErrorText('eval mean error', m1.running_mean.detach().numpy(), m2.evalMean)}");
+    print(f"BatchNormalization2DLayer, value1 {getErrorText('eval var error', m1.running_var.detach().numpy(), m2.evalVar)}");
+
+    X = np.random.randn(batchSize, channelNum, imageHeight, imageWidth);
+
+    X1 = torch.tensor(X, dtype = torch.float32);
+    m1.eval();
+    Y1 = m1(X1).detach().numpy();
+
+    X2 = X;
+    m2.context.isTrainingMode = False;
+    m2.context.trainingIterations += 1;
+    Y2, = m2.forward(X2);
+
+    print(f"BatchNormalization2DLayer, value1 {getErrorText('Y error', Y1, Y2)}");
+    print("\n");
+
+
+def testBatchNormalizationLayer2DGradient1():
+    def createModel(inputSize, g, b, c) -> BatchNormalization2DLayer:
+        layer = SequentialContainer(
+            BatchNormalization2DLayer(inputSize, gamma = g, beta = b),
+            FunctionalNetModule("*C", lambda x: x * c, lambda x, y, dy: dy * c)
+        );
+        layer.context.isTrainingMode = True;
+        return layer;
+
+    batchSize, channelNum, imageHeight, imageWidth = 32, 8, 12, 16;
+    X = np.random.randn(batchSize, channelNum, imageHeight, imageWidth);
+    C = np.random.randn(batchSize, channelNum, imageHeight, imageWidth);
+    gamma = np.random.randn(channelNum);
+    beta = np.random.randn(channelNum);
+    m = createModel(channelNum, gamma, beta, C);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dGamma1, dBeta1 = m.params[0].grad, m.params[1].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dGammaN = numericGradient(lambda x: np.sum(createModel(channelNum, x, beta, C).forward(X)[0]), gamma);
+    dBetaN = numericGradient(lambda x: np.sum(createModel(channelNum, gamma, x, C).forward(X)[0]), beta);
+    print(f"BatchNormalization2DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)} {getErrorText('dGamma error', dGamma1, dGammaN)} {getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
@@ -4132,7 +4211,7 @@ def testEmbeddingWithDotLayerGradient2():
 
 
 def testAdditiveResidualBlockGradient1():
-    N, D = 64, 128;
+    N, D = 32, 16;
     X = np.random.randn(N, D);
     m = AdditiveResidualBlock(
         AffineLayer(D, D)
@@ -4145,7 +4224,7 @@ def testAdditiveResidualBlockGradient1():
 
 
 def testAdditiveResidualBlockGradient2():
-    N, D1, D2 = 64, 128, 256;
+    N, D1, D2 = 32, 16, 24;
     X = np.random.randn(N, D1);
     m = AdditiveResidualBlock(
         AffineLayer(D1, D2),
@@ -4159,7 +4238,7 @@ def testAdditiveResidualBlockGradient2():
 
 
 def testAdditiveResidualBlockGradient3():
-    N, D1, D2 = 64, 128, 256;
+    N, D1, D2 = 32, 16, 24;
     X = np.random.randn(N, D1);
     m = AdditiveResidualBlock(
         AffineLayer(D1, D2),

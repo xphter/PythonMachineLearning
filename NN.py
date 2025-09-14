@@ -19,7 +19,7 @@ import collections;
 
 import matplotlib.pyplot as plt;
 
-from typing import Union, List, Tuple, Callable, Any, Optional, Iterable, Generator;
+from typing import Union, List, Tuple, Callable, Any, Optional, Iterable, Generator
 from Functions import *;
 
 
@@ -1605,7 +1605,7 @@ class AffineLayer(NetModuleBase):
         return dX, ;
 
 
-class BatchNormalization1DLayer(NetModuleBase):
+class BatchNormalizationLayer(NetModuleBase):
     def __init__(self, inputSize : int, gamma : Optional[np.ndarray] = None, beta : Optional[np.ndarray] = None, epsilon = 1e-8, momentum : Optional[float] = 0.1):
         super().__init__();
 
@@ -1613,7 +1613,7 @@ class BatchNormalization1DLayer(NetModuleBase):
         self._momentum = max(0.0, min(1.0, float(momentum))) if momentum is not None else None;
         self._evalWeight = None;
         self._evalBias = None;
-        self._name = f"BatchNormalization1D {inputSize}";
+        self._name = f"BatchNormalization {inputSize}";
 
         self._n = 0;
         self._XC = np.empty(0);
@@ -1733,6 +1733,67 @@ class BatchNormalization1DLayer(NetModuleBase):
         if shape is not None:
             dX = dX.reshape(*shape);
 
+        return dX, ;
+
+
+class BatchNormalization1DLayer(BatchNormalizationLayer):
+    def __init__(self, inputSize : int, gamma : Optional[np.ndarray] = None, beta : Optional[np.ndarray] = None, epsilon = 1e-8, momentum : Optional[float] = 0.1):
+        super().__init__(inputSize, gamma = gamma, beta = beta, epsilon = epsilon, momentum = momentum);
+
+        self._name = f"BatchNormalization1D {inputSize}";
+
+
+    # X shape: (batch_size, input_size) or (batch_size, channel_num, sequence_length)
+    def forward(self, *data: ndarray) -> Tuple[ndarray, ...]:
+        X = data[0];
+        
+        if X.ndim > 2:
+            Y, = super().forward(X.swapaxes(-2, -1));
+            Y = Y.swapaxes(-2, -1);
+        else:
+            Y, = super().forward(X);
+        
+        return Y, ;
+    
+
+    def backward(self, *dout: ndarray) -> Tuple[ndarray, ...]:
+        dY = dout[0];
+
+        if dY.ndim > 2:
+            dX, = super().backward(dY.swapaxes(-2, -1));
+            dX = dX.swapaxes(-2, -1);
+        else:
+            dX, = super().backward(dY);
+        
+        return dX, ;
+
+
+class BatchNormalization2DLayer(BatchNormalizationLayer):
+    def __init__(self, channelNum : int, gamma : Optional[np.ndarray] = None, beta : Optional[np.ndarray] = None, epsilon = 1e-8, momentum : Optional[float] = 0.1):
+        super().__init__(channelNum, gamma = gamma, beta = beta, epsilon = epsilon, momentum = momentum);
+
+        self._name = f"BatchNormalization2D {channelNum}";
+
+
+    # X shape: (batch_size, channel_num, image_height, image_width)
+    def forward(self, *data: ndarray) -> Tuple[ndarray, ...]:
+        X = data[0];
+
+        if X.ndim < 4:
+            raise ValueError("the input shape of BatchNorm2D should be 4 at least");
+        
+        Y, = super().forward(X.swapaxes(-3, -1));
+        Y = Y.swapaxes(-3, -1);
+        
+        return Y, ;
+    
+
+    def backward(self, *dout: ndarray) -> Tuple[ndarray, ...]:
+        dY = dout[0];
+
+        dX, = super().backward(dY.swapaxes(-3, -1));
+        dX = dX.swapaxes(-3, -1);
+        
         return dX, ;
 
 
