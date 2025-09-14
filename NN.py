@@ -1744,7 +1744,7 @@ class BatchNormalization1DLayer(BatchNormalizationLayer):
 
 
     # X shape: (batch_size, input_size) or (batch_size, channel_num, sequence_length)
-    def forward(self, *data: ndarray) -> Tuple[ndarray, ...]:
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
         
         if X.ndim > 2:
@@ -1756,7 +1756,7 @@ class BatchNormalization1DLayer(BatchNormalizationLayer):
         return Y, ;
     
 
-    def backward(self, *dout: ndarray) -> Tuple[ndarray, ...]:
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
 
         if dY.ndim > 2:
@@ -1776,7 +1776,7 @@ class BatchNormalization2DLayer(BatchNormalizationLayer):
 
 
     # X shape: (batch_size, channel_num, image_height, image_width)
-    def forward(self, *data: ndarray) -> Tuple[ndarray, ...]:
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
 
         if X.ndim < 4:
@@ -1788,7 +1788,7 @@ class BatchNormalization2DLayer(BatchNormalizationLayer):
         return Y, ;
     
 
-    def backward(self, *dout: ndarray) -> Tuple[ndarray, ...]:
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
         dY = dout[0];
 
         dX, = super().backward(dY.swapaxes(-3, -1));
@@ -2106,13 +2106,19 @@ class AvgPooling2DLayer(NetModuleBase):
         return dX, ;
 
 
-class AdditiveResidualBlock(NetModuleBase):
+class AdditiveResidualBlock(AggregateNetModule):
     def __init__(self, mainModule : INetModule, adaptiveModule : Optional[INetModule] = None, activationModule : Optional[INetModule] = None):
-        super().__init__();
-
         self._mainModule = mainModule;
         self._adaptiveModule = adaptiveModule;
         self._activationModule = activationModule;
+
+        modules : List[INetModule] = [self._mainModule];
+        if self._adaptiveModule is not None:
+            modules.append(self._adaptiveModule);
+        if self._activationModule is not None:
+            modules.append(self._activationModule);
+
+        super().__init__(*tuple(modules));
 
         self._name = f"AdditiveResidualBlock({self._mainModule})";
 

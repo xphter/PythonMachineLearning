@@ -2193,7 +2193,7 @@ def unitTest():
     # testBatchNormalization1DLayer2();
     # testBatchNormalization1DLayerGradient1();
     # testBatchNormalizationLayer1DGradient2();
-    testBatchNormalization2DLayer1();
+    # testBatchNormalization2DLayer1();
     # testBatchNormalizationLayer2DGradient1();
     # testLayerNormalizationLayer1();
     # testLayerNormalizationLayerGradient1();
@@ -2209,9 +2209,9 @@ def unitTest():
     # testEmbeddingLayerGradient2();
     # testEmbeddingWithDotLayerGradient1();
     # testEmbeddingWithDotLayerGradient2();
-    # testAdditiveResidualBlockGradient1();
-    # testAdditiveResidualBlockGradient2();
-    # testAdditiveResidualBlockGradient3();
+    testAdditiveResidualBlockGradient1();
+    testAdditiveResidualBlockGradient2();
+    testAdditiveResidualBlockGradient3();
     # testRepeatedWrapperOfAffineLayerGradient();
     # testRnnCell1();
     # testRnnCellGradient1();
@@ -4220,6 +4220,7 @@ def testAdditiveResidualBlockGradient1():
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"AdditiveResidualBlock, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
+    testModuleGradient(m, "AdditiveResidualBlock, numericGradient1", X);
     print("\n");
 
 
@@ -4234,6 +4235,7 @@ def testAdditiveResidualBlockGradient2():
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"AdditiveResidualBlock, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
+    testModuleGradient(m, "AdditiveResidualBlock, numericGradient2", X);
     print("\n");
 
 
@@ -4249,6 +4251,7 @@ def testAdditiveResidualBlockGradient3():
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"AdditiveResidualBlock, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
+    testModuleGradient(m, "AdditiveResidualBlock, numericGradient3", X);
     print("\n");
 
 
