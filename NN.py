@@ -5453,30 +5453,33 @@ class TransformerEmbeddingDecoder(AggregateNetModule, INetAttentionModule):
 
 # encode sequence to vector
 class AttentionPoolingLayer(AggregateNetModule, INetAttentionModule):
-    def __init__(self, inputSize : int, hiddenSize : Union[int, Tuple[int, ...], List[int]], activationFuncSelector : Optional[Callable[[int], INetModule]] = None):
+    def __init__(self, inputSize : int, hiddenSize : Optional[Union[int, Tuple[int, ...], List[int]]] = None, activationFuncSelector : Optional[Callable[[int], INetModule]] = None):
         self._X = None;
         self._attentionWeight, self._innerWeight = np.empty(0), None;
         self._activationFuncSelector = activationFuncSelector if activationFuncSelector is not None else (lambda size: TanhLayer());
 
         modules = [];
-        lastHiddenSize = 0;
+        lastHiddenSize = inputSize;
 
-        if isinstance(hiddenSize, int):
-            modules.append(AffineLayer(inputSize, hiddenSize, includeBias = False));
-            modules.append(self._activationFuncSelector(hiddenSize));
-            lastHiddenSize = hiddenSize;
-        else:
-            preHiddenSize = inputSize;
-            for item in hiddenSize:
-                modules.append(AffineLayer(preHiddenSize, item, includeBias = False));
-                modules.append(self._activationFuncSelector(item));
-                preHiddenSize = item;
-            lastHiddenSize = hiddenSize[-1];
+        if hiddenSize is not None:
+            if isinstance(hiddenSize, int):
+                modules.append(AffineLayer(inputSize, hiddenSize));
+                modules.append(self._activationFuncSelector(hiddenSize));
+                lastHiddenSize = hiddenSize;
+            else:
+                preHiddenSize = inputSize;
+                for nextSize in hiddenSize:
+                    modules.append(AffineLayer(preHiddenSize, nextSize));
+                    modules.append(self._activationFuncSelector(nextSize));
+                    preHiddenSize = nextSize;
+                lastHiddenSize = hiddenSize[-1];
         modules.append(AffineLayer(lastHiddenSize, 1, includeBias = False));
 
         super().__init__(*tuple(modules));
 
-        if isinstance(hiddenSize, int):
+        if hiddenSize is None:
+            self._name = f"AttentionPoolingLayer {inputSize}*1";
+        elif isinstance(hiddenSize, int):
             self._name = f"AttentionPoolingLayer {inputSize}*{hiddenSize}*1";
         else:
             self._name = f"AttentionPoolingLayer {'*'.join([str(item) for item in [inputSize] + list(hiddenSize) + [1]])}";

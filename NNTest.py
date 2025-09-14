@@ -2209,9 +2209,9 @@ def unitTest():
     # testEmbeddingLayerGradient2();
     # testEmbeddingWithDotLayerGradient1();
     # testEmbeddingWithDotLayerGradient2();
-    testAdditiveResidualBlockGradient1();
-    testAdditiveResidualBlockGradient2();
-    testAdditiveResidualBlockGradient3();
+    # testAdditiveResidualBlockGradient1();
+    # testAdditiveResidualBlockGradient2();
+    # testAdditiveResidualBlockGradient3();
     # testRepeatedWrapperOfAffineLayerGradient();
     # testRnnCell1();
     # testRnnCellGradient1();
@@ -2329,6 +2329,7 @@ def unitTest():
     # testAttentionPoolingLayerGradient1();
     # testAttentionPoolingLayerGradient2();
     # testAttentionPoolingLayerGradient3();
+    testAttentionPoolingLayerGradient4();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -6634,7 +6635,7 @@ def testTransformerEmbeddingDecoderGradient3():
 
 
 def testAttentionPoolingLayerGradient1():
-    batchSize, sequenceLength, inputSize, hiddenSize = 32, 20, 21, (22, 23);
+    batchSize, sequenceLength, inputSize, hiddenSize = 32, 20, 21, None;
     X = np.random.randn(batchSize, sequenceLength, inputSize);
     m = AttentionPoolingLayer(inputSize, hiddenSize);
 
@@ -6647,6 +6648,19 @@ def testAttentionPoolingLayerGradient1():
 
 
 def testAttentionPoolingLayerGradient2():
+    batchSize, sequenceLength, inputSize, hiddenSize = 32, 20, 21, 22;
+    X = np.random.randn(batchSize, sequenceLength, inputSize);
+    m = AttentionPoolingLayer(inputSize, hiddenSize);
+
+    Y, = m.forward(X);
+    dX1, = m.backward(np.ones_like(Y));
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"AttentionPoolingLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
+    testModuleGradient(m, "AttentionPoolingLayer, numericGradient2", X);
+    print("\n");
+
+
+def testAttentionPoolingLayerGradient3():
     batchSize, sequenceLength, inputSize, hiddenSize = 32, 20, 21, (22, 23);
     X = np.random.randn(batchSize, sequenceLength, inputSize);
     M = np.random.randint(0, 2, (batchSize, sequenceLength));
@@ -6655,12 +6669,12 @@ def testAttentionPoolingLayerGradient2():
     Y, = m.forward(X, M);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"AttentionPoolingLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
-    testModuleGradient(m, "AttentionPoolingLayer, numericGradient2", X, M);
+    print(f"AttentionPoolingLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
+    testModuleGradient(m, "AttentionPoolingLayer, numericGradient3", X, M);
     print("\n");
 
 
-def testAttentionPoolingLayerGradient3():
+def testAttentionPoolingLayerGradient4():
     batchSize, sequenceNum, sequenceLength, inputSize, hiddenSize = 2, 3, 4, 5, (6, 7);
     X = np.random.randn(batchSize, sequenceNum, sequenceLength, inputSize);
     M = np.random.randint(0, 2, (batchSize, sequenceNum, sequenceLength));
@@ -6669,8 +6683,8 @@ def testAttentionPoolingLayerGradient3():
     Y, = m.forward(X, M);
     dX1, = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0]), X);
-    print(f"AttentionPoolingLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
-    testModuleGradient(m, "AttentionPoolingLayer, numericGradient3", X, M);
+    print(f"AttentionPoolingLayer, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
+    testModuleGradient(m, "AttentionPoolingLayer, numericGradient4", X, M);
     print("\n");
 
 
