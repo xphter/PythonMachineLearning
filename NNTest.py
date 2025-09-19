@@ -2269,6 +2269,8 @@ def unitTest():
     # testStackRnnLayerGradient10_Lstm_ForeignState_Sequence();
     # testStackRnnLayerGradient11_Lstm_ForeignState_State();
     # testStackRnnLayerGradient12_Lstm_ForeignState_Sequence_State();
+    # testStackRnnLayerGradient13_BiGru_ForeignState_Sequence_State();
+    testStackRnnLayerGradient14_BiLstm_ForeignState_Sequence_State();
     # testStackLstmLayerGradient_State(False);
     # testStackLstmLayerGradient_State_Dropout(False);
 
@@ -2329,7 +2331,7 @@ def unitTest():
     # testAttentionPoolingLayerGradient1();
     # testAttentionPoolingLayerGradient2();
     # testAttentionPoolingLayerGradient3();
-    testAttentionPoolingLayerGradient4();
+    # testAttentionPoolingLayerGradient4();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -5232,8 +5234,12 @@ def testBiRnnLayerGradient5_Gru_ForeignState_State():
 
 def testBiRnnLayerGradient6_Gru_ForeignState_Sequence_State():
     T, N, inputSize, hiddenSize = 4, 32, 24, 48;
-    X, H = np.random.randn(T, N, inputSize), np.random.randn(N, 2 * hiddenSize);
-    m = BiRnnLayer(inputSize, hiddenSize, GruLayer, stateful = False, returnSequence = True, returnState = True);
+    X, H, C = np.random.randn(T, N, inputSize), np.random.randn(N, 2 * hiddenSize), np.random.randn(T, N, 2 * hiddenSize);
+    CY, CH = np.random.randn(T, N, 2 * hiddenSize), np.random.randn(N, 2 * hiddenSize);
+    m = SequentialContainer(
+        BiRnnLayer(inputSize, hiddenSize, GruLayer, stateful = False, returnSequence = True, returnState = True),
+        FunctionalNetModule("*C", lambda x: x * CH if x.ndim == 2 else x * CY, lambda x, y, dy: dy * CH if dy.ndim == 2 else dy * CY),
+    );
     m.context.isTrainingMode = True;
     Y, S = m.forward(X, H);
     dX1, dH1 = m.backward(np.ones_like(Y), np.ones_like(S));
@@ -5316,7 +5322,11 @@ def testBiRnnLayerGradient11_LstmLayer_ForeignState_State():
 def testBiRnnLayerGradient12_LstmLayer_ForeignState_Sequence_State():
     T, N, inputSize, hiddenSize = 4, 32, 24, 48;
     X, H, C = np.random.randn(T, N, inputSize), np.random.randn(N, 2 * hiddenSize), np.random.randn(N, 2 * hiddenSize);
-    m = BiRnnLayer(inputSize, hiddenSize, LstmLayer, stateful = False, returnSequence = True, returnState = True);
+    CY, CH = np.random.randn(T, N, 2 * hiddenSize), np.random.randn(N, 2 * hiddenSize);
+    m = SequentialContainer(
+        BiRnnLayer(inputSize, hiddenSize, LstmLayer, stateful = False, returnSequence = True, returnState = True),
+        FunctionalNetModule("*C", lambda x: x * CH if x.ndim == 2 else x * CY, lambda x, y, dy: dy * CH if dy.ndim == 2 else dy * CY),
+    );
     m.context.isTrainingMode = True;
     Y, OS, OC = m.forward(X, H, C);
     dX1, dH1, dC1 = m.backward(np.ones_like(Y), np.ones_like(OS), np.ones_like(OC));
@@ -5396,9 +5406,13 @@ def testStackRnnLayerGradient5_Gru_ForeignState_State():
 
 
 def testStackRnnLayerGradient6_Gru_ForeignState_Sequence_State():
-    L, T, N, inputSize, hiddenSize = 2, 4, 32, 24, 48;
+    L, T, N, inputSize, hiddenSize = 3, 4, 32, 24, 48;
     X, H = np.random.randn(T, N, inputSize), np.random.randn(L, N, hiddenSize);
-    m = StackRnnLayer(inputSize, hiddenSize, GruLayer, layersNum = L, stateful = False, returnSequence = True, returnState = True);
+    CY, CH = np.random.randn(T, N, hiddenSize), np.random.randn(L, N, hiddenSize);
+    m = SequentialContainer(
+        StackRnnLayer(inputSize, hiddenSize, GruLayer, layersNum = L, stateful = False, returnSequence = True, returnState = True),
+        FunctionalNetModule("*C", lambda x: x * CH if len(x) == L else x * CY, lambda x, y, dy: dy * CH if len(dy) == L else dy * CY),
+    );
     m.context.isTrainingMode = True;
     Y, S = m.forward(X, H);
     dX1, dH1 = m.backward(np.ones_like(Y), np.ones_like(S));
@@ -5479,9 +5493,13 @@ def testStackRnnLayerGradient11_Lstm_ForeignState_State():
 
 
 def testStackRnnLayerGradient12_Lstm_ForeignState_Sequence_State():
-    L, T, N, inputSize, hiddenSize = 2, 4, 32, 24, 48;
+    L, T, N, inputSize, hiddenSize = 3, 4, 32, 24, 48;
     X, H, C = np.random.randn(T, N, inputSize), np.random.randn(L, N, hiddenSize), np.random.randn(L, N, hiddenSize);
-    m = StackRnnLayer(inputSize, hiddenSize, LstmLayer, layersNum = L, stateful = False, returnSequence = True, returnState = True);
+    CY, CH = np.random.randn(T, N, hiddenSize), np.random.randn(L, N, hiddenSize);
+    m = SequentialContainer(
+        StackRnnLayer(inputSize, hiddenSize, LstmLayer, layersNum = L, stateful = False, returnSequence = True, returnState = True),
+        FunctionalNetModule("*C", lambda x: x * CH if len(x) == L else x * CY, lambda x, y, dy: dy * CH if len(dy) == L else dy * CY),
+    );
     m.context.isTrainingMode = True;
     Y, OH, OC = m.forward(X, H, C);
     dX1, dH1, dC1 = m.backward(np.ones_like(Y), np.ones_like(OH), np.ones_like(OC));
@@ -5490,6 +5508,43 @@ def testStackRnnLayerGradient12_Lstm_ForeignState_Sequence_State():
     dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
     print(f"StackRnnLayer, numericGradient12, Lstm, ForeignState, Sequence and State {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dC error', dC1, dCN)}");
     testModuleGradient(m, "StackRnnLayer, numericGradient12, Lstm, ForeignState, Sequence and State", X, H, C);
+    print("\n");
+
+
+def testStackRnnLayerGradient13_BiGru_ForeignState_Sequence_State():
+    L, T, N, inputSize, hiddenSize = 3, 4, 32, 12, 24;
+    X, H = np.random.randn(T, N, inputSize), np.random.randn(L, N, 2 * hiddenSize);
+    CY, CH = np.random.randn(T, N, 2 * hiddenSize), np.random.randn(L, N, 2 * hiddenSize);
+    m = SequentialContainer(
+        StackRnnLayer(inputSize, hiddenSize, GruLayer, layersNum = L, stateful = False, returnSequence = True, returnState = True, bidirectional = True),
+        FunctionalNetModule("*C", lambda x: x * CH if len(x) == L else x * CY, lambda x, y, dy: dy * CH if len(dy) == L else dy * CY),
+    );
+    m.context.isTrainingMode = True;
+    Y, S = m.forward(X, H);
+    dX1, dH1 = m.backward(np.ones_like(Y), np.ones_like(S));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H)), X);
+    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x)), H);
+    print(f"StackRnnLayer, numericGradient13, BiGru, ForeignState, Sequence and State {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)}");
+    testModuleGradient(m, "StackRnnLayer, numericGradient13, BiGru, ForeignState, Sequence and State", X, H);
+    print("\n");
+
+
+def testStackRnnLayerGradient14_BiLstm_ForeignState_Sequence_State():
+    L, T, N, inputSize, hiddenSize = 3, 4, 32, 12, 24;
+    X, H, C = np.random.randn(T, N, inputSize), np.random.randn(L, N, 2 * hiddenSize), np.random.randn(L, N, 2 * hiddenSize);
+    CY, CH = np.random.randn(T, N, 2 * hiddenSize), np.random.randn(L, N, 2 * hiddenSize);
+    m = SequentialContainer(
+        StackRnnLayer(inputSize, hiddenSize, LstmLayer, layersNum = L, stateful = False, returnSequence = True, returnState = True, bidirectional = True),
+        FunctionalNetModule("*C", lambda x: x * CH if len(x) == L else x * CY, lambda x, y, dy: dy * CH if len(dy) == L else dy * CY),
+    );
+    m.context.isTrainingMode = True;
+    Y, OH, OC = m.forward(X, H, C);
+    dX1, dH1, dC1 = m.backward(np.ones_like(Y), np.ones_like(OH), np.ones_like(OC));
+    dXN = numericGradient(lambda x: sumAll(*m.forward(x, H, C)), X);
+    dHN = numericGradient(lambda x: sumAll(*m.forward(X, x, C)), H);
+    dCN = numericGradient(lambda x: sumAll(*m.forward(X, H, x)), C);
+    print(f"StackRnnLayer, numericGradient14, BiLstm, ForeignState, Sequence and State {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dC error', dC1, dCN)}");
+    testModuleGradient(m, "StackRnnLayer, numericGradient14, BiLstm, ForeignState, Sequence and State", X, H, C);
     print("\n");
 
 

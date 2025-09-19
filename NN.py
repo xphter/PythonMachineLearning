@@ -3450,7 +3450,7 @@ class LstmLayer(RnnLayerBase):
 
 # rnnSelector(inputSize, hiddenSize, stateful, returnSequence, returnState) -> RnnLayerBase
 class StackRnnLayer(AggregateNetModule):
-    def __init__(self, inputSize : int, hiddenSize : int, rnnSelector : Callable[[int, int, bool, bool, bool], RnnLayerBase], layersNum : int = 2, dropoutRatio : float = 0.0, stateful : bool = True, returnSequence : bool = True, returnState : bool = False):
+    def __init__(self, inputSize : int, hiddenSize : int, rnnSelector : Callable[[int, int, bool, bool, bool], RnnLayerBase], layersNum : int = 2, dropoutRatio : float = 0.0, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, bidirectional : bool = False):
         if not returnSequence and not returnState:
             raise ValueError("returnSequence and returnState are both false");
 
@@ -3459,7 +3459,10 @@ class StackRnnLayer(AggregateNetModule):
         self._dropoutModules : List[INetModule] = [];
 
         for l in range(layersNum):
-            modules.append(rnnSelector(inputSize if l == 0 else hiddenSize, hiddenSize, stateful, True, True));
+            if bidirectional:
+                modules.append(BiRnnLayer(inputSize if l == 0 else 2 * hiddenSize, hiddenSize, rnnSelector, stateful, True, True));
+            else:
+                modules.append(rnnSelector(inputSize if l == 0 else hiddenSize, hiddenSize, stateful, True, True));
             self._rnnModules.append(modules[-1]);
 
             if dropoutRatio > 0 and l < layersNum - 1:
@@ -3480,7 +3483,11 @@ class StackRnnLayer(AggregateNetModule):
         self._hiddenStates = ();
         self._dStates = None;
         self._foreignState = False;
-        self._name = f"StackRnnLayer {inputSize}*{'*'.join([str(hiddenSize)] * layersNum)}";
+
+        if bidirectional:
+            self._name = f"StackBiRnnLayer {inputSize}*{'*'.join([str(2 * hiddenSize)] * layersNum)}";
+        else:
+            self._name = f"StackRnnLayer {inputSize}*{'*'.join([str(hiddenSize)] * layersNum)}";
 
 
     # input X, states: [L, N, H]
