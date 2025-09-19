@@ -1108,7 +1108,7 @@ class FunctionalNetModule(NetModuleBase):
         self._name = name;
         self._forwardFunc = forwardFunc;
         self._backwardFunc = backwardFunc;
-        self._X, self._Y = np.empty(0), np.empty(0);
+        self._X, self._Y = (), ();
 
 
     def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
