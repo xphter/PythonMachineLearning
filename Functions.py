@@ -374,7 +374,7 @@ def seq2col(X : np.ndarray, FW : int, stride : int = 1, padding : Union[Tuple[in
     padNumber = sum(padding);
 
     N, C, T = X.shape;
-    kernelSize = FW + (FW - 1) * (dilation - 1);
+    kernelSize = dilation * (FW - 1) + 1;
 
     if (T + padNumber - kernelSize) % stride != 0:
         raise ValueError("the convolution core unable to cover all data");
@@ -399,7 +399,7 @@ def col2seq(X : np.ndarray, seqShape : tuple, FW : int, stride : int = 1, paddin
     padNumber = sum(padding);
 
     N, C, T = seqShape;
-    kernelSize = FW + (FW - 1) * (dilation - 1);
+    kernelSize = dilation * (FW - 1) + 1;
 
     if (T + padNumber - kernelSize) % stride != 0:
         raise ValueError("the convolution core unable to cover all data");
@@ -437,8 +437,8 @@ def im2col(X : np.ndarray, FH : int, FW : int, stride : Union[Tuple[int, int], i
     strideH, strideW = parseStride2D(stride);
     paddingTop, paddingBottom, paddingLeft, paddingRight = parsePadding2D(padding);
     paddingH, paddingW = paddingTop + paddingBottom, paddingLeft + paddingRight;
-    kernelHeight = FH + (FH - 1) * (dilation - 1);
-    kernelWidth = FW + (FW - 1) * (dilation - 1);
+    kernelHeight = dilation * (FH - 1) + 1;
+    kernelWidth = dilation * (FW - 1) + 1;
 
     if (H + paddingH - kernelHeight) % strideH != 0 or (W + paddingW - kernelWidth) % strideW != 0:
         raise ValueError("the convolution kernel unable to cover all data");
@@ -467,8 +467,8 @@ def col2im(X : np.ndarray, imShape : Tuple[int, ...], FH : int, FW : int, stride
     strideH, strideW  = parseStride2D(stride);
     paddingTop, paddingBottom, paddingLeft, paddingRight = parsePadding2D(padding);
     paddingH, paddingW  = paddingTop + paddingBottom, paddingLeft + paddingRight;
-    kernelHeight = FH + (FH - 1) * (dilation - 1);
-    kernelWidth = FW + (FW - 1) * (dilation - 1);
+    kernelHeight = dilation * (FH - 1) + 1;
+    kernelWidth = dilation * (FW - 1) + 1;
 
     if (H + paddingH - kernelHeight) % strideH != 0 or (W + paddingW - kernelWidth) % strideW != 0:
         raise ValueError("the convolution kernel unable to cover all data");
