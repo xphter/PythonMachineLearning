@@ -2173,13 +2173,16 @@ def unitTest():
     # testAffineLayerGradient2();
     # testAffineLayerGradient3();
     # testConvolution1DLayer1();
-    testConvolution1DLayer2();
+    # testConvolution1DLayer2();
     # testConvolution1DLayerGradient1();
     # testConvolution1DLayerGradient2();
+    # testConvolution1DLayerGradient3();
     # testConvolution2DLayer1();
+    # testConvolution2DLayer2();
     # testConvolution2DLayerGradient1();
     # testConvolution2DLayerGradient2();
     # testConvolution2DLayerGradient3();
+    # testConvolution2DLayerGradient4();
     # testMaxPooling2DLayer1();
     # testMaxPooling2DLayerGradient1();
     # testMaxPooling2DLayerGradient2();
@@ -3553,6 +3556,23 @@ def testConvolution1DLayerGradient2():
     print("\n");
 
 
+def testConvolution1DLayerGradient3():
+    N, T, D = 32, 49, 8;
+    FN, FW, S, P, R = 16, 3, 2, (2, 4), 3;
+    X = np.random.randn(N, D, T);
+    W = np.random.randn(FN, D, FW);
+    b = np.random.randn(FN);
+    m = Convolution1DLayer(D, FN, FW, S, P, dilation = R, W = W, b = b);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dW1, db1 = m.params[0].grad, m.params[1].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dWN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, dilation = R, W = x, b = b).forward(X)[0]), W);
+    dbN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, dilation = R, W = W, b = x).forward(X)[0]), b);
+    print(f"Convolution1DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
+    print("\n");
+
+
 def testConvolution2DLayer1():
     N, C, H, W = 32, 4, 28, 28;
     FN, FH, FW, S, P = 6, 5, 3, (2, 4), (1, 2, 3, 4);
@@ -3576,6 +3596,38 @@ def testConvolution2DLayer1():
                     Y2[n, k, j, i] = np.sum(x * Weight[k]) + bias[k];
 
     print(f"Convolution2DLayer, value1 {getErrorText('Y error', Y1, Y2)}");
+    print("\n");
+
+
+def testConvolution2DLayer2():
+    def innerTest(x : np.ndarray, p : int, s : int, d : int):
+        m1 = torch.nn.Conv2d(inputChannel, outputChannel, kernelSize, stride = s, padding = p, dilation = d);
+        X1 = torch.tensor(X, dtype = torch.float32, requires_grad = True);
+        Y1 = m1(X1);
+        torch.sum(Y1).backward();
+        Y1 = Y1.detach().numpy();
+        dX1 = X1.grad.detach().numpy();
+        dW1 = m1.weight.grad.detach().numpy();
+        db1 = m1.bias.grad.detach().numpy();
+
+        m2 = Convolution2DLayer(inputChannel, outputChannel, kernelSize, stride = s, padding = p, dilation = d, W = m1.weight.detach().numpy(), b = m1.bias.detach().numpy());
+        X2 = X;
+        Y2, = m2.forward(X2);
+        dX2, = m2.backward(np.ones_like(Y2));
+        dW2, db2 = m2.params[0].grad, m2.params[1].grad;
+        print(f"Convolution2DLayer, value2, padding = {p}, stride = {s}, dilation = {d} {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)} {getErrorText('dW error', dW1, dW2)} {getErrorText('db error', db1, db2)}");
+
+
+    batchSize, inputChannel, outputChannel, imageHeight, imageWidth, kernelSize = 32, 16, 24, 51, 49, 3;
+    X = np.random.randn(batchSize, inputChannel, imageHeight, imageWidth);
+
+    paddings, strides, dilations = (0, 2), (1, 2), (1, 3);
+
+    for padding in paddings:
+        for stride in strides:
+            for dilation in dilations:
+                innerTest(X, padding, stride, dilation);
+
     print("\n");
 
 
@@ -3627,6 +3679,23 @@ def testConvolution2DLayerGradient3():
     dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = x, b = bias).forward(X)[0]), Weight);
     dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = Weight, b = x).forward(X)[0]), bias);
     print(f"Convolution2DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
+    print("\n");
+
+
+def testConvolution2DLayerGradient4():
+    N, C, H, W = 32, 4, 29, 27;
+    FN, FH, FW, S, P, R = 6, 5, 3, (2, 4), (1, 3, 5, 7), 3;
+    X = np.random.randn(N, C, H, W);
+    Weight = np.random.randn(FN, C, FH, FW);
+    bias = np.random.randn(FN);
+    m = Convolution2DLayer(C, FN, (FH, FW), S, P, dilation = R, W = Weight, b = bias);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dW1, db1 = m.params[0].grad, m.params[1].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, dilation = R, W = x, b = bias).forward(X)[0]), Weight);
+    dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, dilation = R, W = Weight, b = x).forward(X)[0]), bias);
+    print(f"Convolution2DLayer, numericGradient4 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 

@@ -431,58 +431,66 @@ def parsePadding2D(padding : Union[Tuple[int, ...], int]) -> Tuple[int, int, int
     return paddingTop, paddingBottom, paddingLeft, paddingRight;
 
 
-# X shape: batch_size, input_channel, image_height, image_width
-def im2col(X : np.ndarray, FH : int, FW : int, stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int] = 0) -> Tuple[np.ndarray, int, int]:
+# X shape: (batch_size, input_channel, image_height, image_width)
+def im2col(X : np.ndarray, FH : int, FW : int, stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int] = 0, dilation : int = 1) -> Tuple[np.ndarray, int, int]:
     N, C, H, W = X.shape;
     strideH, strideW = parseStride2D(stride);
     paddingTop, paddingBottom, paddingLeft, paddingRight = parsePadding2D(padding);
     paddingH, paddingW = paddingTop + paddingBottom, paddingLeft + paddingRight;
+    kernelHeight = FH + (FH - 1) * (dilation - 1);
+    kernelWidth = FW + (FW - 1) * (dilation - 1);
 
-    if (H + paddingH - FH) % strideH != 0 or (W + paddingW - FW) % strideW != 0:
+    if (H + paddingH - kernelHeight) % strideH != 0 or (W + paddingW - kernelWidth) % strideW != 0:
         raise ValueError("the convolution kernel unable to cover all data");
 
-    OH = (H + paddingH - FH) // strideH + 1;
-    OW = (W + paddingW - FW) // strideW + 1;
+    OH = (H + paddingH - kernelHeight) // strideH + 1;
+    OW = (W + paddingW - kernelWidth) // strideW + 1;
 
     img = X if paddingH + paddingW  <= 0 else np.pad(X, [(0, 0), (0, 0), (paddingTop, paddingBottom), (paddingLeft, paddingRight)], "constant");
     col = np.zeros((N, C, FH, FW, OH, OW), dtype = X.dtype);
 
     for y in range(FH):
-        yMax = y + strideH * OH;
+        i = y * dilation;
+        yMax = i + strideH * OH;
 
         for x in range(FW):
-            xMax = x + strideW * OW;
+            j = x * dilation;
+            xMax = j + strideW * OW;
 
-            col[:, :, y, x, :, :] = img[:, :, y: yMax: strideH, x: xMax: strideW];
+            col[:, :, y, x, :, :] = img[:, :, i: yMax: strideH, j: xMax: strideW];
 
     return col.transpose(0, 4, 5, 1, 2, 3).reshape(N * OH * OW, -1), OH, OW;
 
 
-def col2im(X : np.ndarray, imShape : Tuple[int, ...], FH : int, FW : int, stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int] = 0, inDiff : bool = False) -> np.ndarray:
+def col2im(X : np.ndarray, imShape : Tuple[int, ...], FH : int, FW : int, stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int] = 0, dilation : int = 1, inDiff : bool = False) -> np.ndarray:
     N, C, H, W = imShape;
     strideH, strideW  = parseStride2D(stride);
     paddingTop, paddingBottom, paddingLeft, paddingRight = parsePadding2D(padding);
     paddingH, paddingW  = paddingTop + paddingBottom, paddingLeft + paddingRight;
+    kernelHeight = FH + (FH - 1) * (dilation - 1);
+    kernelWidth = FW + (FW - 1) * (dilation - 1);
 
-    if (H + paddingH - FH) % strideH != 0 or (W + paddingW - FW) % strideW != 0:
+    if (H + paddingH - kernelHeight) % strideH != 0 or (W + paddingW - kernelWidth) % strideW != 0:
         raise ValueError("the convolution kernel unable to cover all data");
 
-    OH = (H + paddingH - FH) // strideH + 1;
-    OW = (W + paddingW - FW) // strideW + 1;
+    OH = (H + paddingH - kernelHeight) // strideH + 1;
+    OW = (W + paddingW - kernelWidth) // strideW + 1;
 
     col = X.reshape(N, OH, OW, C, FH, FW).transpose(0, 3, 4, 5, 1, 2);
     img = np.zeros((N, C, H + paddingH, W + paddingW), dtype = X.dtype);
 
     for y in range(FH):
-        yMax = y + strideH * OH;
+        i = y * dilation;
+        yMax = i + strideH * OH;
 
         for x in range(FW):
-            xMax = x + strideW * OW;
+            j = x * dilation;
+            xMax = j + strideW * OW;
 
             if inDiff:
-                img[:, :, y: yMax: strideH, x: xMax: strideW] += col[:, :, y, x, :, :];
+                img[:, :, i: yMax: strideH, j: xMax: strideW] += col[:, :, y, x, :, :];
             else:
-                img[:, :, y: yMax: strideH, x: xMax: strideW] = col[:, :, y, x, :, :];
+                img[:, :, i: yMax: strideH, j: xMax: strideW] = col[:, :, y, x, :, :];
 
     return img[:, :, paddingTop: H + paddingTop, paddingLeft: W + paddingLeft];
 

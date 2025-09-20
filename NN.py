@@ -1965,12 +1965,13 @@ class Convolution1DLayer(NetModuleBase):
 
 
 class Convolution2DLayer(NetModuleBase):
-    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : Union[Tuple[int, int], int], stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int] = 0, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None):
+    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : Union[Tuple[int, int], int], stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int] = 0, dilation : int = 1, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None):
         super().__init__();
 
         FH, FW = kernelSize[: 2] if isinstance(kernelSize, tuple) else (kernelSize, kernelSize);
         self._stride = stride;
         self._padding = padding;
+        self._dilation = max(1, int(dilation));
         self._shape = tuple();
         self._colX = np.empty(0);
         self._colW = np.empty(0);
@@ -2004,7 +2005,7 @@ class Convolution2DLayer(NetModuleBase):
         N, C, H, W = X.shape;
         FN, C, FH, FW = self._weight.shape;
 
-        self._colX, OH, OW = im2col(X, FH, FW, self._stride, self._padding);
+        self._colX, OH, OW = im2col(X, FH, FW, self._stride, self._padding, dilation = self._dilation);
         self._colW = self._weight.reshape(FN, -1).T;
         Y = self._colX @ self._colW + self._bias;
         Y = Y.reshape(N, OH, OW, FN).transpose(0, 3, 1, 2);
@@ -2020,7 +2021,7 @@ class Convolution2DLayer(NetModuleBase):
         dW = self._colX.T @ colDY;
         db = np.sum(colDY, axis = 0);
         dX = colDY @ self._colW.T;
-        dX = col2im(dX, self._shape, FH, FW, self._stride, self._padding, True);
+        dX = col2im(dX, self._shape, FH, FW, self._stride, self._padding, dilation = self._dilation, inDiff = True);
 
         self._params[0].grad[...] = dW.T.reshape(FN, C, FH, FW);
         self._params[1].grad[...] = db;
@@ -2065,7 +2066,7 @@ class MaxPooling2DLayer(NetModuleBase):
         colDY = dY.transpose(0, 2, 3, 1).reshape(-1, 1);
         colDY = colDY * self._M;
         colDY = colDY.reshape(-1, C * self._PH * self._PW);
-        dX = col2im(colDY, self._shape, self._PH, self._PW, self._stride, self._padding, True);
+        dX = col2im(colDY, self._shape, self._PH, self._PW, self._stride, self._padding, inDiff = True);
 
         return dX, ;
 
@@ -2102,7 +2103,7 @@ class AvgPooling2DLayer(NetModuleBase):
         colDY = dY.transpose(0, 2, 3, 1).reshape(-1, 1);
         colDY = colDY * self._M;
         colDY = colDY.reshape(-1, C * self._PH * self._PW);
-        dX = col2im(colDY, self._shape, self._PH, self._PW, self._stride, self._padding, True);
+        dX = col2im(colDY, self._shape, self._PH, self._PW, self._stride, self._padding, inDiff =True);
 
         return dX, ;
 
