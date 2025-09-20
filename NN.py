@@ -1964,6 +1964,16 @@ class Convolution1DLayer(NetModuleBase):
         return dX, ;
 
 
+class TcnLayer(Convolution1DLayer):
+    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : int, layerIndex : int = 0, dilation : Optional[int] = None, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None):
+        realDilation = dilation if dilation is not None else 2 ** layerIndex;
+        padding = (realDilation * (kernelSize - 1), 0);
+
+        super().__init__(inputChannel, outputChannel, kernelSize, stride = 1, padding = padding, dilation = realDilation, W = W, b = b);
+
+        self._name = f"TCN {outputChannel}*{inputChannel}*{kernelSize}*{realDilation}";
+
+
 class Convolution2DLayer(NetModuleBase):
     def __init__(self, inputChannel : int, outputChannel : int, kernelSize : Union[Tuple[int, int], int], stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int] = 0, dilation : int = 1, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None):
         super().__init__();
