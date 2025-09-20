@@ -1413,16 +1413,28 @@ class DropoutLayer(NetModuleBase):
 
         self._mask = None;
         self._reuseMask = reuseMask;
-        self._dropoutRatio = max(0.0, min(1.0, dropoutRatio));
+        self._dropoutRatio = max(0.0, min(1.0, float(dropoutRatio)));
         self._name = f"Dropout {dropoutRatio}";
+    
+
+    @property
+    def mask(self) -> Optional[np.ndarray]:
+        return self._mask;
+    
+
+    def _checkInput(self, X : np.ndarray) -> bool:
+        return True;
 
 
-    def _getMask(self, shape : Tuple, dtype) -> np.ndarray:
+    def _getMask(self, shape : Tuple[int, ...], dtype) -> np.ndarray:
         return (np.random.rand(*shape) > self._dropoutRatio).astype(dtype) / (1.0 - self._dropoutRatio);
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         X = data[0];
+
+        if not self._checkInput(X):
+            raise ValueError(f"the input shape {X.shape} is invalid");
 
         if self.context.isTrainingMode:
             if self._dropoutRatio == 0.0:
@@ -1462,7 +1474,7 @@ class VariationalDropoutLayer(DropoutLayer):
         self._name = f"VariationalDropout {dropoutRatio}";
 
 
-    def _getMask(self, shape : Tuple, dtype) -> np.ndarray:
+    def _getMask(self, shape : Tuple[int, ...], dtype) -> np.ndarray:
         if len(shape) <= 2:
             return super()._getMask(shape, dtype);
 
@@ -1470,6 +1482,38 @@ class VariationalDropoutLayer(DropoutLayer):
         mask = np.repeat(np.expand_dims(mask, axis = 0), shape[0], axis = 0);
 
         return mask;
+
+
+# the dimension of feature map is self._ndim
+class DropoutNDLayer(DropoutLayer):
+    def __init__(self, dimensionNum : int, dropoutRatio = 0.5):
+        super().__init__(dropoutRatio = dropoutRatio, reuseMask = False);
+
+        self._ndim = max(1, int(dimensionNum));
+        self._name = f"Dropout{self._ndim}D {self._dropoutRatio}";
+    
+
+    def _checkInput(self, X: np.ndarray) -> bool:
+        return X.ndim > self._ndim;
+    
+
+    def _getMask(self, shape: Tuple[int, ...], dtype) -> np.ndarray:
+        return super()._getMask(shape[: -self._ndim] + (1, ) * self._ndim, dtype);
+
+
+class Dropout1DLayer(DropoutNDLayer):
+    def __init__(self, dropoutRatio = 0.5):
+        super().__init__(1, dropoutRatio = dropoutRatio);
+
+
+class Dropout2DLayer(DropoutNDLayer):
+    def __init__(self, dropoutRatio = 0.5):
+        super().__init__(2, dropoutRatio = dropoutRatio);
+
+
+class Dropout3DLayer(DropoutNDLayer):
+    def __init__(self, dropoutRatio = 0.5):
+        super().__init__(3, dropoutRatio = dropoutRatio);
 
 
 class ReshapeLayer(NetModuleBase):

@@ -2106,6 +2106,8 @@ def unitTest():
     # testSigmoidGradient2();
     # testMinMaxScaler();
 
+    testDropout();
+
     # testAggregateNetLrScheduler();
     # testCyclicNetLrScheduler();
 
@@ -2573,6 +2575,36 @@ def testMinMaxScaler():
     X_test_2, Y_test_2 = scaler.inverse(scaler.transform(X_test_1)), scaler.inverse(scaler.transform(Y_test_1));
 
     print(f"MinMaxScaler, transform-inverse, {np.sum(np.abs(X_train_1 - X_train_2))}, {np.sum(np.abs(Y_train_1 - Y_train_2))}, {np.sum(np.abs(X_test_1 - X_test_2))}, {np.sum(np.abs(Y_test_1 - Y_test_2))}");
+    print("\n");
+
+
+def testDropout():
+    batchSize, channelNum, imageHeight, imageWidth, inputSize, timeStep = 32, 16, 24, 24, 48, 10;
+
+    X1 = np.random.randn(batchSize, inputSize);
+    m1 = DropoutLayer();
+    m1.context.isTrainingMode = True;
+    Y1, = m1.forward(X1);
+    print(f"DropoutLayer, mask shape: {m1.mask.shape}");
+
+    X2 = np.random.randn(timeStep, batchSize, inputSize);
+    m2 = VariationalDropoutLayer();
+    m2.context.isTrainingMode = True;
+    Y2, = m2.forward(X2);
+    print(f"DropoutVariationalDropoutLayerLayer, mask shape: {m2.mask.shape}");
+
+    X3 = np.random.randn(batchSize, channelNum, inputSize);
+    m3 = Dropout1DLayer();
+    m3.context.isTrainingMode = True;
+    Y3, = m3.forward(X3);
+    print(f"Dropout1DLayer, mask shape: {m3.mask.shape}");
+
+    X4 = np.random.randn(batchSize, channelNum, imageHeight, imageWidth);
+    m4 = Dropout2DLayer();
+    m4.context.isTrainingMode = True;
+    Y4, = m4.forward(X4);
+    print(f"Dropout2DLayer, mask shape: {m4.mask.shape}");
+
     print("\n");
 
 
