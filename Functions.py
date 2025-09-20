@@ -368,51 +368,55 @@ def numericGradient(f : Callable, X : np.ndarray):
 
 
 # X shape: batch_size, input_channel, sequence_length
-def seq2col(X : np.ndarray, FW : int, stride : int = 1, padding : Union[Tuple[int, int], int] = 0) -> Tuple[np.ndarray, int]:
+def seq2col(X : np.ndarray, FW : int, stride : int = 1, padding : Union[Tuple[int, int], int] = 0, dilation : int = 1) -> Tuple[np.ndarray, int]:
     if isinstance(padding, int):
         padding = (padding, padding);
     padNumber = sum(padding);
 
     N, C, T = X.shape;
+    kernelSize = FW + (FW - 1) * (dilation - 1);
 
-    if (T + padNumber - FW) % stride != 0:
+    if (T + padNumber - kernelSize) % stride != 0:
         raise ValueError("the convolution core unable to cover all data");
 
-    OT = (T + padNumber - FW) // stride + 1;
+    OT = (T + padNumber - kernelSize) // stride + 1;
 
     seq = X if padNumber <= 0 else np.pad(X, [(0, 0), (0, 0), (padding[0], padding[1])], "constant");
     col = np.zeros((N, C, FW, OT), dtype = X.dtype);
 
     for t in range(FW):
-        tMax = t + stride * OT;
+        j = t * dilation;
+        tMax = j + stride * OT;
 
-        col[:, :, t, :] = seq[:, :, t : tMax : stride];
+        col[:, :, t, :] = seq[:, :, j : tMax : stride];
 
     return col.transpose(0, 3, 1, 2).reshape(N * OT, -1), OT;
 
 
-def col2seq(X : np.ndarray, seqShape : tuple, FW : int, stride : int = 1, padding : Union[Tuple[int, int], int] = 0, inDiff : bool = False) -> np.ndarray:
+def col2seq(X : np.ndarray, seqShape : tuple, FW : int, stride : int = 1, padding : Union[Tuple[int, int], int] = 0, dilation : int = 1, inDiff : bool = False) -> np.ndarray:
     if isinstance(padding, int):
         padding = (padding, padding);
     padNumber = sum(padding);
 
     N, C, T = seqShape;
+    kernelSize = FW + (FW - 1) * (dilation - 1);
 
-    if (T + padNumber - FW) % stride != 0:
+    if (T + padNumber - kernelSize) % stride != 0:
         raise ValueError("the convolution core unable to cover all data");
 
-    OT = (T + padNumber - FW) // stride + 1;
+    OT = (T + padNumber - kernelSize) // stride + 1;
 
     col = X.reshape(N, OT, C, FW).transpose(0, 2, 3, 1);
     seq = np.zeros((N, C, T + padNumber), dtype = X.dtype);
 
     for t in range(FW):
-        tMax = t + stride * OT;
+        j = t * dilation;
+        tMax = j + stride * OT;
 
         if inDiff:
-            seq[:, :, t: tMax: stride] += col[:, :, t, :];
+            seq[:, :, j: tMax: stride] += col[:, :, t, :];
         else:
-            seq[:, :, t: tMax: stride] = col[:, :, t, :];
+            seq[:, :, j: tMax: stride] = col[:, :, t, :];
 
     return seq[:, :, padding[0]: T + padding[0]];
 

@@ -2173,6 +2173,7 @@ def unitTest():
     # testAffineLayerGradient2();
     # testAffineLayerGradient3();
     # testConvolution1DLayer1();
+    testConvolution1DLayer2();
     # testConvolution1DLayerGradient1();
     # testConvolution1DLayerGradient2();
     # testConvolution2DLayer1();
@@ -2270,7 +2271,7 @@ def unitTest():
     # testStackRnnLayerGradient11_Lstm_ForeignState_State();
     # testStackRnnLayerGradient12_Lstm_ForeignState_Sequence_State();
     # testStackRnnLayerGradient13_BiGru_ForeignState_Sequence_State();
-    testStackRnnLayerGradient14_BiLstm_ForeignState_Sequence_State();
+    # testStackRnnLayerGradient14_BiLstm_ForeignState_Sequence_State();
     # testStackLstmLayerGradient_State(False);
     # testStackLstmLayerGradient_State_Dropout(False);
 
@@ -3483,6 +3484,38 @@ def testConvolution1DLayer1():
                 Y2[i, j, k] = np.sum(x * W[j, :, :]) + b[j];
 
     print(f"Convolution1DLayer, value1 {getErrorText('Y error', Y1, Y2)}");
+    print("\n");
+
+
+def testConvolution1DLayer2():
+    def innerTest(x : np.ndarray, p : int, s : int, d : int):
+        m1 = torch.nn.Conv1d(inputChannel, outputChannel, kernelSize, stride = s, padding = p, dilation = d);
+        X1 = torch.tensor(X, dtype = torch.float32, requires_grad = True);
+        Y1 = m1(X1);
+        torch.sum(Y1).backward();
+        Y1 = Y1.detach().numpy();
+        dX1 = X1.grad.detach().numpy();
+        dW1 = m1.weight.grad.detach().numpy();
+        db1 = m1.bias.grad.detach().numpy();
+
+        m2 = Convolution1DLayer(inputChannel, outputChannel, kernelSize, stride = s, padding = p, dilation = d, W = m1.weight.detach().numpy(), b = m1.bias.detach().numpy());
+        X2 = X;
+        Y2, = m2.forward(X2);
+        dX2, = m2.backward(np.ones_like(Y2));
+        dW2, db2 = m2.params[0].grad, m2.params[1].grad;
+        print(f"Convolution1DLayer, value2, padding = {p}, stride = {s}, dilation = {d} {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)} {getErrorText('dW error', dW1, dW2)} {getErrorText('db error', db1, db2)}");
+
+
+    batchSize, inputChannel, outputChannel, inputSize, kernelSize = 32, 16, 24, 49, 3;
+    X = np.random.randn(batchSize, inputChannel, inputSize);
+
+    paddings, strides, dilations = (0, 2), (1, 2), (1, 3);
+
+    for padding in paddings:
+        for stride in strides:
+            for dilation in dilations:
+                innerTest(X, padding, stride, dilation);
+
     print("\n");
 
 

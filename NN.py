@@ -1901,11 +1901,12 @@ class MinMaxLayer(NetModuleBase):
 
 
 class Convolution1DLayer(NetModuleBase):
-    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : int, stride : int = 1, padding : Union[Tuple[int, int], int] = 0, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None):
+    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : int, stride : int = 1, padding : Union[Tuple[int, int], int] = 0, dilation : int = 1, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None):
         super().__init__();
 
         self._stride = stride;
         self._padding = (padding, padding) if isinstance(padding, int) else padding;
+        self._dilation = max(1, int(dilation));
         self._shape = tuple();
         self._colX = np.empty(0);
         self._colW = np.empty(0);
@@ -1939,7 +1940,7 @@ class Convolution1DLayer(NetModuleBase):
         N, C, T = X.shape;
         FN, C, FW = self._weight.shape;
 
-        self._colX, OT = seq2col(X, FW, self._stride, self._padding);
+        self._colX, OT = seq2col(X, FW, self._stride, self._padding, dilation = self._dilation);
         self._colW = self._weight.reshape(FN, -1).T;
         Y = self._colX @ self._colW + self._bias;
         Y = Y.reshape(N, OT, FN).transpose(0, 2, 1);
@@ -1955,7 +1956,7 @@ class Convolution1DLayer(NetModuleBase):
         dW = self._colX.T @ colDY;
         db = np.sum(colDY, axis = 0);
         dX = colDY @ self._colW.T;
-        dX = col2seq(dX, self._shape, FW, self._stride, self._padding, True);
+        dX = col2seq(dX, self._shape, FW, self._stride, self._padding, dilation = self._dilation, inDiff = True);
 
         self._params[0].grad[...] = dW.T.reshape(FN, C, FW);
         self._params[1].grad[...] = db;
