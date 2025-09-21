@@ -5001,6 +5001,9 @@ class DotProductAttentionModule(AggregateNetModule, INetAttentionModule):
 
 class MultiHeadAttentionModule(AggregateNetModule, INetAttentionModule):
     def __init__(self, attentionModule : INetAttentionModule, querySize : int, keySize : int, valueSize : int, hiddenSize : Union[int, Tuple[int, int, int, int]], headNum : int = 2, Wq : Optional[np.ndarray] = None, Wk : Optional[np.ndarray] = None, Wv : Optional[np.ndarray] = None, Wo : Optional[np.ndarray] = None):
+        if headNum < 1:
+            raise ValueError("headNum < 1");
+
         self._attentionModule = attentionModule;
         super().__init__(self._attentionModule);
 
@@ -5253,6 +5256,9 @@ class TransformerEncoderBlock(AggregateNetModule, INetAttentionModule):
 
 class TransformerEncoder(AggregateNetModule, INetAttentionModule):
     def __init__(self, inputSize: int, attentionHiddenSize: int, ffnHiddenSize: int, normalizedShape: Union[int, Tuple[int, ...]], headNum: int = 2, blockNum : int = 2, maxSequenceLength : int = 10000, dropoutRatio: float = 0.0, ffnActivationFuncSelector : Optional[Callable[[int], INetModule]] = None):
+        if blockNum < 1:
+            raise ValueError("blockNum < 1");
+        
         self._attentionWeight = None;
         self._positionalEncoding = SinePositionalEncodingModule(inputSize, maxLength = maxSequenceLength, dropoutRatio = dropoutRatio);
         self._blocks = [TransformerEncoderBlock(inputSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, dropoutRatio = dropoutRatio, ffnActivationFuncSelector = ffnActivationFuncSelector) for _ in range(blockNum)];
