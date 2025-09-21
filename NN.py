@@ -2176,7 +2176,10 @@ class AdditiveResidualBlock(AggregateNetModule):
 
         super().__init__(*tuple(modules));
 
-        self._name = f"AdditiveResidualBlock({self._mainModule})";
+        if self._activationModule is not None:
+            self._name = f"AdditiveResidualBlock(({str(self._adaptiveModule) if self._adaptiveModule is not None else 'X'} + ({self._mainModule})) --> {self._activationModule})";
+        else:
+            self._name = f"AdditiveResidualBlock({str(self._adaptiveModule) if self._adaptiveModule is not None else 'X'} + ({self._mainModule}))";
 
 
     def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
@@ -5009,7 +5012,7 @@ class MultiHeadAttentionModule(AggregateNetModule, INetAttentionModule):
         self._headNum = headNum;
         self._headShape = (headNum, -1);
         self._Q, self._K, self._V, self._C = np.empty(0), np.empty(0), np.empty(0), np.empty(0);
-        self._name = f"MultiHeadAttention({headNum} {attentionModule})";
+        self._name = f"MultiHeadAttention({headNum}*{hiddenSize}, {attentionModule})";
 
         self._weightQ = math.sqrt(2.0 / querySize) * np.random.randn(querySize, headNum * queryHiddenSize).astype(defaultDType) if Wq is None else Wq;
         self._weightK = math.sqrt(2.0 / keySize) * np.random.randn(keySize, headNum * keyHiddenSize).astype(defaultDType) if Wk is None else Wk;
@@ -5204,7 +5207,7 @@ class TransformerPositionwiseFFNModule(AggregateNetModule):
             self._activationFuncSelector(hiddenSize),
             AffineLayer(hiddenSize, inputSize),
         );
-        self._name = "TransformerPositionwiseFFN";
+        self._name = f"TransformerPositionwiseFFN({self._name})";
 
 
 class TransformerEncoderBlock(AggregateNetModule, INetAttentionModule):
@@ -5215,7 +5218,7 @@ class TransformerEncoderBlock(AggregateNetModule, INetAttentionModule):
         self._addNormal2 = TransformerAddNormalizationModule(normalizedShape, dropoutRatio = dropoutRatio);
 
         super().__init__(self._attentionModule, self._addNormal1, self._positionwiseFFN, self._addNormal2);
-        self._name = "TransformerEncoderBlock";
+        self._name = f"TransformerEncoderBlock({self._attentionModule}, {self._positionwiseFFN})";
 
 
     @property
@@ -5255,7 +5258,7 @@ class TransformerEncoder(AggregateNetModule, INetAttentionModule):
         self._blocks = [TransformerEncoderBlock(inputSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, dropoutRatio = dropoutRatio, ffnActivationFuncSelector = ffnActivationFuncSelector) for _ in range(blockNum)];
 
         super().__init__(*tuple([self._positionalEncoding] + self._blocks));
-        self._name = "TransformerEncoder";
+        self._name = f"TransformerEncoder({blockNum} * ({self._blocks[0]}))";
 
 
     @property
@@ -5295,7 +5298,7 @@ class TransformerEmbeddingEncoder(AggregateNetModule, INetAttentionModule):
         self._encoder = TransformerEncoder(embeddingSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, blockNum = blockNum, maxSequenceLength = maxSequenceLength, dropoutRatio = dropoutRatio, ffnActivationFuncSelector = ffnActivationFuncSelector);
 
         super().__init__(self._embedding, self._encoder);
-        self._name = "TransformerEmbeddingEncoder";
+        self._name = f"TransformerEmbeddingEncoder({self._embedding}, {self._encoder})";
 
 
     @property
@@ -5338,7 +5341,7 @@ class TransformerDecoderBlock(AggregateNetModule, INetAttentionModule):
         self._addNormal3 = TransformerAddNormalizationModule(normalizedShape, dropoutRatio = dropoutRatio);
 
         super().__init__(self._innerAttentionModule, self._addNormal1, self._crossAttentionModule, self._addNormal2, self._positionwiseFFN, self._addNormal3);
-        self._name = "TransformerEncoderBlock";
+        self._name = f"TransformerDecoderBlock({self._innerAttentionModule}, {self._crossAttentionModule}, {self._positionwiseFFN})";
 
 
     @property
@@ -5401,7 +5404,7 @@ class TransformerDecoder(AggregateNetModule, INetAttentionModule):
         self._blocks = [TransformerDecoderBlock(inputSize, encoderSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, dropoutRatio = dropoutRatio, ffnActivationFuncSelector = ffnActivationFuncSelector) for _ in range(blockNum)];
 
         super().__init__(*tuple([self._positionalEncoding] + self._blocks));
-        self._name = "TransformerDecoder";
+        self._name = f"TransformerDecoder({blockNum} * ({self._blocks[0]}))";
 
 
     @property
@@ -5467,7 +5470,7 @@ class TransformerEmbeddingDecoder(AggregateNetModule, INetAttentionModule):
         self._decoder = TransformerDecoder(embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, normalizedShape, headNum = headNum, blockNum = blockNum, maxSequenceLength = maxSequenceLength, dropoutRatio = dropoutRatio, ffnActivationFuncSelector = ffnActivationFuncSelector);
 
         super().__init__(self._embedding, self._decoder);
-        self._name = "TransformerEmbeddingDecoder";
+        self._name = f"TransformerEmbeddingDecoder({self._embedding}, {self._decoder})";
 
 
     @property

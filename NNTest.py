@@ -2106,7 +2106,7 @@ def unitTest():
     # testSigmoidGradient2();
     # testMinMaxScaler();
 
-    testDropout();
+    # testDropout();
 
     # testAggregateNetLrScheduler();
     # testCyclicNetLrScheduler();
