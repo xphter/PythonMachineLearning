@@ -1945,11 +1945,14 @@ class MinMaxLayer(NetModuleBase):
 
 
 class Convolution1DLayer(NetModuleBase):
-    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : int, stride : int = 1, padding : Union[Tuple[int, int], int] = 0, dilation : int = 1, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None):
+    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : int, stride : int = 1, padding : Union[Tuple[int, int], int, str] = 0, dilation : int = 1, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None):
         super().__init__();
 
         self._stride = stride;
-        self._padding = (padding, padding) if isinstance(padding, int) else padding;
+        self._lastLength = 0;
+        self._isSame = str(padding).lower() == "same";
+        self._isCausal = str(padding).lower() == "causal";
+        self._padding = (padding, padding) if isinstance(padding, int) else (padding if isinstance(padding, tuple) else 0);
         self._dilation = max(1, int(dilation));
         self._shape = tuple();
         self._colX = np.empty(0);
@@ -1983,6 +1986,11 @@ class Convolution1DLayer(NetModuleBase):
 
         N, C, T = X.shape;
         FN, C, FW = self._weight.shape;
+
+        if self._isSame or self._isCausal:
+            if T != self._lastLength:
+                self._padding = getConvSamePadding(T, FW, self._stride, self._dilation) if self._isSame else getConvCausalPadding(T, FW, self._stride, self._dilation);
+                self._lastLength = T;
 
         self._colX, OT = seq2col(X, FW, self._stride, self._padding, dilation = self._dilation);
         self._colW = self._weight.reshape(FN, -1).T;
@@ -2019,12 +2027,16 @@ class TcnLayer(Convolution1DLayer):
 
 
 class Convolution2DLayer(NetModuleBase):
-    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : Union[Tuple[int, int], int], stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int] = 0, dilation : int = 1, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None):
+    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : Union[Tuple[int, int], int], stride : Union[Tuple[int, int], int] = 1, padding : Union[Tuple[int, ...], int, str] = 0, dilation : int = 1, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None):
         super().__init__();
 
         FH, FW = kernelSize[: 2] if isinstance(kernelSize, tuple) else (kernelSize, kernelSize);
         self._stride = stride;
-        self._padding = padding;
+        self._strideHeight, self._strideWidth = parseStride2D(stride);
+        self._lastHeight, self._lastWidth = 0, 0;
+        self._isSame = str(padding).lower() == "same";
+        self._isCausal = str(padding).lower() == "causal";
+        self._padding = (padding, padding, padding, padding) if isinstance(padding, int) else (padding if isinstance(padding, tuple) else 0);
         self._dilation = max(1, int(dilation));
         self._shape = tuple();
         self._colX = np.empty(0);
@@ -2058,6 +2070,15 @@ class Convolution2DLayer(NetModuleBase):
 
         N, C, H, W = X.shape;
         FN, C, FH, FW = self._weight.shape;
+
+        if self._isSame or self._isCausal:
+            if H != self._lastHeight or W != self._lastWidth:
+                if self._isSame:
+                    self._padding = getConvSamePadding(H, FH, self._strideHeight, self._dilation) + getConvSamePadding(W, FW, self._strideWidth, self._dilation);
+                else:
+                    self._padding = getConvCausalPadding(H, FH, self._strideHeight, self._dilation) + getConvCausalPadding(W, FW, self._strideWidth, self._dilation);
+
+                self._lastHeight, self._lastWidth = H, W;
 
         self._colX, OH, OW = im2col(X, FH, FW, self._stride, self._padding, dilation = self._dilation);
         self._colW = self._weight.reshape(FN, -1).T;

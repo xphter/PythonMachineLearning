@@ -2178,11 +2178,13 @@ def unitTest():
     # testAffineLayerGradient3();
     # testConvolution1DLayer1();
     # testConvolution1DLayer2();
+    # testConvolution1DLayer3();
     # testConvolution1DLayerGradient1();
     # testConvolution1DLayerGradient2();
     # testConvolution1DLayerGradient3();
     # testConvolution2DLayer1();
     # testConvolution2DLayer2();
+    # testConvolution2DLayer3();
     # testConvolution2DLayerGradient1();
     # testConvolution2DLayerGradient2();
     # testConvolution2DLayerGradient3();
@@ -3588,6 +3590,24 @@ def testConvolution1DLayer2():
     print("\n");
 
 
+def testConvolution1DLayer3():
+    N, T, D = 32, 49, 8;
+    FN, FW, S = 16, 4, 2;
+    X = np.random.randn(N, D, T);
+
+    P, R = ("same", "causal"), (1, 3);
+
+    for p in P:
+        for r in R:
+            m = Convolution1DLayer(D, FN, FW, stride = S, padding = p, dilation = r);
+            Y, = m.forward(X);
+            Y, = m.forward(X);
+            assert Y.shape[-1] == X.shape[-1], "the length is not same";
+    
+    print(f"Convolution1DLayer, value3, padding test pass.");
+    print("\n");
+
+
 def testConvolution1DLayerGradient1():
     N, T, D = 32, 48, 8;
     FN, FW, S, P = 16, 3, 1, 0;
@@ -3694,6 +3714,24 @@ def testConvolution2DLayer2():
             for dilation in dilations:
                 innerTest(X, padding, stride, dilation);
 
+    print("\n");
+
+
+def testConvolution2DLayer3():
+    N, C, H, W = 32, 8, 49, 51;
+    FN, FH, FW, S = 16, 4, 6, 2;
+    X = np.random.randn(N, C, H, W);
+
+    P, R = ("same", "causal"), (1, 3);
+
+    for p in P:
+        for r in R:
+            m = Convolution2DLayer(C, FN, (FH, FW), stride = S, padding = p, dilation = r);
+            Y, = m.forward(X);
+            Y, = m.forward(X);
+            assert Y.shape[-2: ] == X.shape[-2: ], "the length is not same";
+    
+    print(f"Convolution2DLayer, value3, padding test pass.");
     print("\n");
 
 
