@@ -2182,6 +2182,16 @@ def unitTest():
     # testConvolution1DLayerGradient1();
     # testConvolution1DLayerGradient2();
     # testConvolution1DLayerGradient3();
+    # testMaxPooling1DLayer1();
+    # testMaxPooling1DLayerGradient1();
+    # testMaxPooling1DLayerGradient2();
+    # testMaxPooling1DLayerGradient3();
+    # testMaxPooling1DLayerGradient4();
+    # testAvgPooling1DLayer1();
+    # testAvgPooling1DLayerGradient1();
+    # testAvgPooling1DLayerGradient2();
+    # testAvgPooling1DLayerGradient3();
+    # testAvgPooling1DLayerGradient4();
     # testConvolution2DLayer1();
     # testConvolution2DLayer2();
     # testConvolution2DLayer3();
@@ -3656,6 +3666,171 @@ def testConvolution1DLayerGradient3():
     dWN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, dilation = R, W = x, b = b).forward(X)[0]), W);
     dbN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, dilation = R, W = W, b = x).forward(X)[0]), b);
     print(f"Convolution1DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
+    print("\n");
+
+
+def testMaxPooling1DLayer1():
+    N, C, T = 32, 3, 48;
+    PW, S, P = 13, 2, (1, 2);
+    X = np.random.randn(N, C, T);
+    m = MaxPooling1DLayer(PW, S, P);
+    m.context.isTrainingMode = True;
+    Y1 = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y1))[0];
+
+    OT = convOutputSize(T, PW, S, P[0] + P[1]);
+    Y2 = np.zeros((N, C, OT));
+    PX = np.pad(X, [(0, 0), (0, 0), (P[0], P[1])], "constant");
+    dPX = np.zeros_like(PX);
+
+    for n in range(N):
+        for c in range(C):
+            for i in range(OT):
+                x = PX[n, c, i * S: i * S + PW];
+                Y2[n, c, i] = np.amax(x, axis = None);
+                idx = np.argmax(x, axis = None);
+                dPX[n, c, i * S + idx] += 1;
+    dX2 = dPX[:, :, P[0]: T + P[0]];
+
+    print(f"MaxPooling1DLayer, value1 {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)}");
+    print("\n");
+
+
+def testMaxPooling1DLayerGradient1():
+    N, C, T = 32, 3, 28;
+    PW, S, P = 3, 1, 0;
+    X = np.random.randn(N, C, T);
+    m = MaxPooling1DLayer(PW, S, P);
+    m.context.isTrainingMode = True;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    m.context.isTrainingMode = False;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"MaxPooling1DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testMaxPooling1DLayerGradient2():
+    N, C, T = 32, 3, 24;
+    PW, S, P = 4, 4, 2;
+    X = np.random.randn(N, C, T);
+    m = MaxPooling1DLayer(PW, S, P);
+    m.context.isTrainingMode = True;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    m.context.isTrainingMode = False;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"MaxPooling1DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testMaxPooling1DLayerGradient3():
+    N, C, T = 32, 3, 24;
+    PW, S, P = 3, 4, (3, 4);
+    X = np.random.randn(N, C, T);
+    m = MaxPooling1DLayer(PW, S, P);
+    m.context.isTrainingMode = True;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    m.context.isTrainingMode = False;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"MaxPooling1DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testMaxPooling1DLayerGradient4():
+    N, C, T = 32, 3, 24;
+    PW, S, P = 4, 4, 2;
+    OT = convOutputSize(T, PW, S, 2 * P);
+    X = np.random.randn(N, C, T);
+    m = SequentialContainer(
+        MaxPooling1DLayer(PW, S, P),
+        AffineLayer(OT, 2 * OT),
+    );
+    m.context.isTrainingMode = True;
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    m.context.isTrainingMode = False;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"MaxPooling1DLayer, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testAvgPooling1DLayer1():
+    N, C, T = 32, 3, 50;
+    PW, S, P = 13, 4, (3, 4);
+    X = np.random.randn(N, C, T);
+    m = AvgPooling1DLayer(PW, S, P);
+    Y1 = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y1))[0];
+
+    dm = 1.0 / PW;
+    OT = convOutputSize(T, PW, S, P[0] + P[1]);
+    Y2 = np.zeros((N, C, OT));
+    PX = np.pad(X, [(0, 0), (0, 0), (P[0], P[1])], "constant");
+    dPX = np.zeros_like(PX);
+
+    for n in range(N):
+        for c in range(C):
+            for i in range(OT):
+                x = PX[n, c, i * S: i * S + PW];
+                Y2[n, c, i] = np.mean(x);
+                dPX[n, c, i * S: i * S + PW] += dm;
+    dX2 = dPX[:, :, P[0]: T + P[0]];
+
+    print(f"AvgPooling1DLayer, value1 {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)}");
+    print("\n");
+
+
+def testAvgPooling1DLayerGradient1():
+    N, C, T = 32, 3, 28;
+    PW, S, P = 3, 1, 0;
+    X = np.random.randn(N, C, T);
+    m = AvgPooling1DLayer(PW, S, P);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"AvgPooling1DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testAvgPooling1DLayerGradient2():
+    N, C, T = 32, 3, 24;
+    PW, S, P = 4, 4, 2;
+    X = np.random.randn(N, C, T);
+    m = AvgPooling1DLayer(PW, S, P);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"AvgPooling1DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testAvgPooling1DLayerGradient3():
+    N, C, T = 32, 3, 24;
+    PW, S, P = 3, 4, (3, 4);
+    X = np.random.randn(N, C, T);
+    m = AvgPooling1DLayer(PW, S, P);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"AvgPooling1DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testAvgPooling1DLayerGradient4():
+    N, C, T = 32, 3, 24;
+    PW, S, P = 4, 4, 2;
+    OT = convOutputSize(T, PW, S, 2 * P);
+    X = np.random.randn(N, C, T);
+    m = SequentialContainer(
+        AvgPooling1DLayer(PW, S, P),
+        AffineLayer(OT, 2 * OT),
+    );
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"AvgPooling1DLayer, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 

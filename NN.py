@@ -2016,6 +2016,85 @@ class Convolution1DLayer(NetModuleBase):
         return dX, ;
 
 
+class MaxPooling1DLayer(NetModuleBase):
+    def __init__(self, poolingSize : int, stride : Optional[int] = None, padding : Union[Tuple[int, int], int] = 0):
+        super().__init__();
+
+        self._PW = poolingSize;
+        self._stride = stride if stride is not None else self._PW;
+        self._padding = padding;
+        self._shape = tuple();
+        self._M = None;
+        self._name = f"MaxPooling1D {self._PW}";
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X = data[0];
+        self._shape = X.shape;
+
+        N, C, T = X.shape;
+
+        col, OT = seq2col(X, self._PW, self._stride, self._padding);
+        col = col.reshape(-1, self._PW);
+        Y = np.amax(col, axis = -1).reshape(N, OT, C).transpose(0, 2, 1);
+
+        if self.context.isTrainingMode:
+            E = np.zeros_like(col, dtype = np.int32) + np.arange(col.shape[-1], dtype = np.int32);
+            M = E == np.argmax(col, axis = -1, keepdims = True);
+            self._M = (M + 0).astype(defaultDType);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+        N, C, OT = dY.shape;
+
+        colDY = dY.transpose(0, 2, 1).reshape(-1, 1);
+        colDY = colDY * self._M;
+        colDY = colDY.reshape(-1, C * self._PW);
+        dX = col2seq(colDY, self._shape, self._PW, self._stride, self._padding, inDiff = True);
+
+        return dX, ;
+
+
+class AvgPooling1DLayer(NetModuleBase):
+    def __init__(self, poolingSize : int, stride : Optional[int] = None, padding : Union[Tuple[int, int], int] = 0):
+        super().__init__();
+
+        self._PW = poolingSize;
+        self._stride = stride if stride is not None else self._PW;
+        self._padding = padding;
+        self._shape = tuple();
+        self._M = 1.0 / self._PW * np.ones(self._PW, dtype = defaultDType);
+        self._name = f"AvgPooling1D {self._PW}";
+
+
+    def forward(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        X = data[0];
+        self._shape = X.shape;
+
+        N, C, T = X.shape;
+
+        col, OT = seq2col(X, self._PW, self._stride, self._padding);
+        col = col.reshape(-1, self._PW);
+        Y = np.mean(col, axis = -1).reshape(N, OT, C).transpose(0, 2, 1);
+
+        return Y, ;
+
+
+    def backward(self, *dout : np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+        N, C, OT = dY.shape;
+
+        colDY = dY.transpose(0, 2, 1).reshape(-1, 1);
+        colDY = colDY * self._M;
+        colDY = colDY.reshape(-1, C * self._PW);
+        dX = col2seq(colDY, self._shape, self._PW, self._stride, self._padding, inDiff =True);
+
+        return dX, ;
+
+
 class TcnLayer(Convolution1DLayer):
     def __init__(self, inputChannel : int, outputChannel : int, kernelSize : int, layerIndex : int = 0, dilation : Optional[int] = None, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None):
         realDilation = dilation if dilation is not None else 2 ** layerIndex;
