@@ -367,6 +367,26 @@ def numericGradient(f : Callable, X : np.ndarray):
     return grad;
 
 
+def calcConvSamePadding(width : int, kernel : int, stride : int, dilation : int) -> int:
+    return width * (stride - 1) + dilation * (kernel - 1) + 1 - stride;
+
+
+def getConvSamePadding(width : int, kernel : int, stride : int, dilation : int) -> Tuple[int, int]:
+    padding = calcConvSamePadding(width, kernel, stride, dilation);
+    paddingLeft = padding // 2;
+    paddingRight = padding - paddingLeft;
+
+    return paddingLeft, paddingRight;
+
+
+def getConvCausalPadding(width : int, kernel : int, stride : int, dilation : int) -> Tuple[int, int]:
+    padding = calcConvSamePadding(width, kernel, stride, dilation);
+    paddingLeft = dilation * (kernel - 1);
+    paddingRight = padding - paddingLeft;
+
+    return paddingLeft, paddingRight;
+
+
 # X shape: batch_size, input_channel, sequence_length
 def seq2col(X : np.ndarray, FW : int, stride : int = 1, padding : Union[Tuple[int, int], int] = 0, dilation : int = 1) -> Tuple[np.ndarray, int]:
     if isinstance(padding, int):
