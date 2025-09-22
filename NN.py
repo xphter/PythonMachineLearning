@@ -3915,6 +3915,67 @@ class ConcatenationLayer(NetModuleBase):
         return tuple(np.split(dY, self._index, axis = -1));
 
 
+class GatedAdditiveLayer(NetModuleBase):
+    def __init__(self, inputSize : int, W : Optional[np.ndarray] = None, b : Optional[np.ndarray] = None):
+        super().__init__();
+
+        self._X1, self._X2 = np.empty(0), np.empty(0);
+        self._X, self._A, self._G = np.empty(0), np.empty(0), np.empty(0);
+
+        self._weight = math.sqrt(2.0 / inputSize) * np.random.randn(2 * inputSize, inputSize).astype(defaultDType) if W is None else W;
+        self._bias = np.zeros(inputSize, dtype = defaultDType) if b is None else b;
+        self._name = f"GatedAdditive {inputSize}";
+
+        self._params.append(NetParamDefinition("weight", self._weight));
+        self._params.append(NetParamDefinition("bias", self._bias, canDecay = False));
+    
+
+    @property
+    def weight(self) -> np.ndarray:
+        return self._weight;
+    
+
+    @property
+    def bias(self) -> np.ndarray:
+        return self._bias;
+    
+
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
+        X1, X2 = data[: 2];
+        X = np.concatenate((X1, X2), axis = -1);
+        A = X @ self._weight + self._bias;
+        G = sigmoid(A);
+        Y = X1 * G + X2 * (1 - G);
+
+        self._X1, self._X2 = X1, X2;
+        self._X, self._A, self._G = X, A, G;
+
+        return Y, ;
+    
+
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+
+        dX1 = dY * self._G;
+        dX2 = dY * (1 - self._G);
+        dG = dY * (self._X1 - self._X2);
+        dA = dG * sigmoidGradient(self._G);
+
+        dX = dA @ self._weight.T;
+        dW = np.swapaxes(self._X, -2, -1) @ dA;
+        if dW.ndim > 2:
+            dW = np.sum(dW, axis = tuple(range(dW.ndim - 2)));
+        db = np.sum(dA, axis = tuple(range(dA.ndim - 1)));
+        dX1_, dX2_ = np.split(dX, 2, axis = -1);
+        dX1 += dX1_;
+        dX2 += dX2_;
+
+        self._params[0].grad[...] = dW;
+        self._params[1].grad[...] = db;
+
+        return dX1, dX2;
+
+
 class CrossEntropyLoss(NetLossBase):
     def __init__(self, reductionType : LossReductionType = LossReductionType.Mean):
         super().__init__();

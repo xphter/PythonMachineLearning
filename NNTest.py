@@ -2116,6 +2116,8 @@ def unitTest():
     # testSoftmaxLayerGradient1();
     # testSoftmaxLayerGradient2();
     # testSoftmaxLayerGradient3();
+    # testGatedAdditiveLayerGradient1();
+    # testGatedAdditiveLayerGradient2();
     # testIdentityWithMeanAbsoluteLossGradient1();
     # testIdentityWithMeanAbsoluteLossGradient2();
     # testIdentityWithMeanAbsoluteLossGradient3();
@@ -2724,6 +2726,38 @@ def testSoftmaxLayerGradient3():
     dX1, = m.backward(dY);
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0] * dY), X);
     print(f"SoftmaxLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testGatedAdditiveLayerGradient1():
+    N, D = 32, 48;
+    X1, X2 = np.random.randn(N, D), np.random.randn(N, D);
+    weight, bias = np.random.randn(2 * D, D), np.random.randn(D);
+    m = GatedAdditiveLayer(D, W = weight, b = bias);
+    Y, = m.forward(X1, X2);
+    dX1, dX2 = m.backward(np.ones_like(Y));
+    dW1, db1 = m.params[0].grad, m.params[1].grad;
+    dX1N = numericGradient(lambda x: np.sum(m.forward(x, X2)[0]), X1);
+    dX2N = numericGradient(lambda x: np.sum(m.forward(X1, x)[0]), X2);
+    dWN = numericGradient(lambda x: np.sum(GatedAdditiveLayer(D, W = x, b = bias).forward(X1, X2)[0]), weight);
+    dbN = numericGradient(lambda x: np.sum(GatedAdditiveLayer(D, W = weight, b = x).forward(X1, X2)[0]), bias);
+    print(f"GatedAdditiveLayer, numericGradient1 {getErrorText('dX1 error', dX1, dX1N)} {getErrorText('dX2 error', dX2, dX2N)} {getErrorText('dW error', dW1, dWN)} {getErrorText('db error', db1, dbN)}");
+    print("\n");
+
+
+def testGatedAdditiveLayerGradient2():
+    N, M, T, D = 32, 2, 6, 24;
+    X1, X2 = np.random.randn(N, M, T, D), np.random.randn(N, M, T, D);
+    weight, bias = np.random.randn(2 * D, D), np.random.randn(D);
+    m = GatedAdditiveLayer(D, W = weight, b = bias);
+    Y, = m.forward(X1, X2);
+    dX1, dX2 = m.backward(np.ones_like(Y));
+    dW1, db1 = m.params[0].grad, m.params[1].grad;
+    dX1N = numericGradient(lambda x: np.sum(m.forward(x, X2)[0]), X1);
+    dX2N = numericGradient(lambda x: np.sum(m.forward(X1, x)[0]), X2);
+    dWN = numericGradient(lambda x: np.sum(GatedAdditiveLayer(D, W = x, b = bias).forward(X1, X2)[0]), weight);
+    dbN = numericGradient(lambda x: np.sum(GatedAdditiveLayer(D, W = weight, b = x).forward(X1, X2)[0]), bias);
+    print(f"GatedAdditiveLayer, numericGradient1 {getErrorText('dX1 error', dX1, dX1N)} {getErrorText('dX2 error', dX2, dX2N)} {getErrorText('dW error', dW1, dWN)} {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
