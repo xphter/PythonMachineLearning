@@ -2182,6 +2182,7 @@ def unitTest():
     # testConvolution1DLayerGradient1();
     # testConvolution1DLayerGradient2();
     # testConvolution1DLayerGradient3();
+    # testConvolution1DLayerGradient4();
     # testMaxPooling1DLayer1();
     # testMaxPooling1DLayerGradient1();
     # testMaxPooling1DLayerGradient2();
@@ -3590,7 +3591,7 @@ def testConvolution1DLayer2():
     batchSize, inputChannel, outputChannel, inputSize, kernelSize = 32, 16, 24, 49, 3;
     X = np.random.randn(batchSize, inputChannel, inputSize);
 
-    paddings, strides, dilations = (0, 2), (1, 2), (1, 3);
+    paddings, strides, dilations = (0, 2), (1, 2, 3), (1, 3);
 
     for padding in paddings:
         for stride in strides:
@@ -3631,7 +3632,7 @@ def testConvolution1DLayerGradient1():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, W = x, b = b).forward(X)[0]), W);
     dbN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, W = W, b = x).forward(X)[0]), b);
-    print(f"Convolution1DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
+    print(f"Convolution1DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)} {getErrorText('dW error', dW1, dWN)} {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
@@ -3648,7 +3649,7 @@ def testConvolution1DLayerGradient2():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, W = x, b = b).forward(X)[0]), W);
     dbN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, W = W, b = x).forward(X)[0]), b);
-    print(f"Convolution1DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
+    print(f"Convolution1DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)} {getErrorText('dW error', dW1, dWN)} {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
@@ -3665,7 +3666,24 @@ def testConvolution1DLayerGradient3():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, dilation = R, W = x, b = b).forward(X)[0]), W);
     dbN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, dilation = R, W = W, b = x).forward(X)[0]), b);
-    print(f"Convolution1DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
+    print(f"Convolution1DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)} {getErrorText('dW error', dW1, dWN)} {getErrorText('db error', db1, dbN)}");
+    print("\n");
+
+
+def testConvolution1DLayerGradient4():
+    N, T, D = 32, 49, 8;
+    FN, FW, S, P, R = 16, 3, 5, (2, 4), 3;
+    X = np.random.randn(N, D, T);
+    W = np.random.randn(FN, D, FW);
+    b = np.random.randn(FN);
+    m = Convolution1DLayer(D, FN, FW, S, P, dilation = R, W = W, b = b);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dW1, db1 = m.params[0].grad, m.params[1].grad;
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    dWN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, dilation = R, W = x, b = b).forward(X)[0]), W);
+    dbN = numericGradient(lambda x: np.sum(Convolution1DLayer(D, FN, FW, S, P, dilation = R, W = W, b = x).forward(X)[0]), b);
+    print(f"Convolution1DLayer, numericGradient4 {getErrorText('dX error', dX1, dXN)} {getErrorText('dW error', dW1, dWN)} {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
@@ -3726,7 +3744,7 @@ def testMaxPooling1DLayerGradient2():
 
 def testMaxPooling1DLayerGradient3():
     N, C, T = 32, 3, 24;
-    PW, S, P = 3, 4, (3, 4);
+    PW, S, P = 3, 5, (3, 4);
     X = np.random.randn(N, C, T);
     m = MaxPooling1DLayer(PW, S, P);
     m.context.isTrainingMode = True;
@@ -3808,7 +3826,7 @@ def testAvgPooling1DLayerGradient2():
 
 def testAvgPooling1DLayerGradient3():
     N, C, T = 32, 3, 24;
-    PW, S, P = 3, 4, (3, 4);
+    PW, S, P = 3, 5, (3, 4);
     X = np.random.randn(N, C, T);
     m = AvgPooling1DLayer(PW, S, P);
     Y = m.forward(X)[0];
@@ -3882,7 +3900,7 @@ def testConvolution2DLayer2():
     batchSize, inputChannel, outputChannel, imageHeight, imageWidth, kernelSize = 32, 16, 24, 51, 49, 3;
     X = np.random.randn(batchSize, inputChannel, imageHeight, imageWidth);
 
-    paddings, strides, dilations = (0, 2), (1, 2), (1, 3);
+    paddings, strides, dilations = (0, 2), (1, 2, 5), (1, 3);
 
     for padding in paddings:
         for stride in strides:
@@ -3923,7 +3941,7 @@ def testConvolution2DLayerGradient1():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = x, b = bias).forward(X)[0]), Weight);
     dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = Weight, b = x).forward(X)[0]), bias);
-    print(f"Convolution2DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
+    print(f"Convolution2DLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)} {getErrorText('dW error', dW1, dWN)} {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
@@ -3940,13 +3958,13 @@ def testConvolution2DLayerGradient2():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = x, b = bias).forward(X)[0]), Weight);
     dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = Weight, b = x).forward(X)[0]), bias);
-    print(f"Convolution2DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
+    print(f"Convolution2DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)} {getErrorText('dW error', dW1, dWN)} {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
 def testConvolution2DLayerGradient3():
     N, C, H, W = 32, 4, 28, 28;
-    FN, FH, FW, S, P = 6, 5, 3, (2, 4), (1, 2, 3, 4);
+    FN, FH, FW, S, P = 6, 5, 3, (3, 5), (1, 2, 3, 4);
     X = np.random.randn(N, C, H, W);
     Weight = np.random.randn(FN, C, FH, FW);
     bias = np.random.randn(FN);
@@ -3957,7 +3975,7 @@ def testConvolution2DLayerGradient3():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = x, b = bias).forward(X)[0]), Weight);
     dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, W = Weight, b = x).forward(X)[0]), bias);
-    print(f"Convolution2DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
+    print(f"Convolution2DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)} {getErrorText('dW error', dW1, dWN)} {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
@@ -3974,7 +3992,7 @@ def testConvolution2DLayerGradient4():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     dWN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, dilation = R, W = x, b = bias).forward(X)[0]), Weight);
     dbN = numericGradient(lambda x: np.sum(Convolution2DLayer(C, FN, (FH, FW), S, P, dilation = R, W = Weight, b = x).forward(X)[0]), bias);
-    print(f"Convolution2DLayer, numericGradient4 {getErrorText('dX error', dX1, dXN)}, {getErrorText('dW error', dW1, dWN)}, {getErrorText('db error', db1, dbN)}");
+    print(f"Convolution2DLayer, numericGradient4 {getErrorText('dX error', dX1, dXN)} {getErrorText('dW error', dW1, dWN)} {getErrorText('db error', db1, dbN)}");
     print("\n");
 
 
@@ -4037,7 +4055,7 @@ def testMaxPooling2DLayerGradient2():
 
 def testMaxPooling2DLayerGradient3():
     N, C, H, W = 32, 3, 24, 24;
-    PH, PW, S, P = 3, 3, (2, 4), (1, 2, 3, 4);
+    PH, PW, S, P = 5, 3, (3, 5), (1, 2, 3, 4);
     X = np.random.randn(N, C, H, W);
     m = MaxPooling2DLayer((PH, PW), S, P);
     m.context.isTrainingMode = True;
@@ -4122,7 +4140,7 @@ def testAvgPooling2DLayerGradient2():
 
 def testAvgPooling2DLayerGradient3():
     N, C, H, W = 32, 3, 24, 24;
-    PH, PW, S, P = 3, 3, (2, 4), (1, 2, 3, 4);
+    PH, PW, S, P = 5, 3, (3, 5), (1, 2, 3, 4);
     X = np.random.randn(N, C, H, W);
     m = AvgPooling2DLayer((PH, PW), S, P);
     Y = m.forward(X)[0];

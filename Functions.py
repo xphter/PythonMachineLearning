@@ -396,8 +396,8 @@ def seq2col(X : np.ndarray, FW : int, stride : int = 1, padding : Union[Tuple[in
     N, C, T = X.shape;
     kernelSize = dilation * (FW - 1) + 1;
 
-    if (T + padNumber - kernelSize) % stride != 0:
-        raise ValueError("the convolution core unable to cover all data");
+    if T + padNumber < kernelSize:
+        raise ValueError("the sequence is too short");
 
     OT = (T + padNumber - kernelSize) // stride + 1;
 
@@ -421,8 +421,8 @@ def col2seq(X : np.ndarray, seqShape : tuple, FW : int, stride : int = 1, paddin
     N, C, T = seqShape;
     kernelSize = dilation * (FW - 1) + 1;
 
-    if (T + padNumber - kernelSize) % stride != 0:
-        raise ValueError("the convolution core unable to cover all data");
+    if T + padNumber < kernelSize:
+        raise ValueError("the sequence is too short");
 
     OT = (T + padNumber - kernelSize) // stride + 1;
 
@@ -460,8 +460,8 @@ def im2col(X : np.ndarray, FH : int, FW : int, stride : Union[Tuple[int, int], i
     kernelHeight = dilation * (FH - 1) + 1;
     kernelWidth = dilation * (FW - 1) + 1;
 
-    if (H + paddingH - kernelHeight) % strideH != 0 or (W + paddingW - kernelWidth) % strideW != 0:
-        raise ValueError("the convolution kernel unable to cover all data");
+    if (H + paddingH < kernelHeight) or (W + paddingW < kernelWidth):
+        raise ValueError("the image is too small");
 
     OH = (H + paddingH - kernelHeight) // strideH + 1;
     OW = (W + paddingW - kernelWidth) // strideW + 1;
@@ -490,8 +490,8 @@ def col2im(X : np.ndarray, imShape : Tuple[int, ...], FH : int, FW : int, stride
     kernelHeight = dilation * (FH - 1) + 1;
     kernelWidth = dilation * (FW - 1) + 1;
 
-    if (H + paddingH - kernelHeight) % strideH != 0 or (W + paddingW - kernelWidth) % strideW != 0:
-        raise ValueError("the convolution kernel unable to cover all data");
+    if (H + paddingH < kernelHeight) or (W + paddingW < kernelWidth):
+        raise ValueError("the image is too small");
 
     OH = (H + paddingH - kernelHeight) // strideH + 1;
     OW = (W + paddingW - kernelWidth) // strideW + 1;
