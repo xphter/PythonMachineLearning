@@ -2312,6 +2312,7 @@ def unitTest():
     # testMultiHeadAttentionModuleGradient2();
     # testMultiHeadAttentionModuleGradient3();
     # testMultiHeadAttentionModuleGradient4();
+    testMultiHeadAttentionModuleGradient5();
     # testSelfAttentionModuleGradient1();
     # testSelfAttentionModuleGradient2();
     # testSelfAttentionModuleGradient3();
@@ -6387,6 +6388,27 @@ def testMultiHeadAttentionModuleGradient4():
     dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
     print(f"MultiHeadAttentionModule, numericGradient4 {getErrorText('dQ error', dQ1, dQN)} {getErrorText('dK error', dK1, dKN)} {getErrorText('dV error', dV1, dVN)}");
     testModuleGradient(m, "MultiHeadAttentionModule, numericGradient4", Q, K, V, M);
+    print("\n");
+
+
+def testMultiHeadAttentionModuleGradient5():
+    batchSize, sequenceNum, headNum, queryNum, keyNum = 2, 3, 1, 5, 6;
+    querySize, keySize, valueSize = 7, 8, 9;
+    queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize = 10, 10, 10, 11;
+    Q = np.random.randn(batchSize, sequenceNum, queryNum, querySize);
+    K = np.random.randn(batchSize, sequenceNum, keyNum, keySize);
+    V = np.random.randn(batchSize, sequenceNum, keyNum, valueSize);
+    M = getAttentionMaskByValidLength(queryNum, keyNum, np.random.randint(1, keyNum + 1, (batchSize, sequenceNum, queryNum)));
+    attentionModule = DotProductAttentionModule();
+    m = MultiHeadAttentionModule(attentionModule, querySize, keySize, valueSize, (queryHiddenSize, keyHiddenSize, valueHiddenSize, outputHiddenSize), headNum = headNum);
+
+    Y, = m.forward(Q, K, V, M);
+    dQ1, dK1, dV1 = m.backward(np.ones_like(Y));
+    dQN = numericGradient(lambda x: np.sum(m.forward(x, K, V, M)[0]), Q);
+    dKN = numericGradient(lambda x: np.sum(m.forward(Q, x, V, M)[0]), K);
+    dVN = numericGradient(lambda x: np.sum(m.forward(Q, K, x, M)[0]), V);
+    print(f"MultiHeadAttentionModule, numericGradient5 {getErrorText('dQ error', dQ1, dQN)} {getErrorText('dK error', dK1, dKN)} {getErrorText('dV error', dV1, dVN)}");
+    testModuleGradient(m, "MultiHeadAttentionModule, numericGradient5", Q, K, V, M);
     print("\n");
 
 
