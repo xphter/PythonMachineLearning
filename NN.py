@@ -1022,6 +1022,26 @@ class NetOptimizerBase(INetOptimizer, metaclass = abc.ABCMeta):
     @learningRate.setter
     def learningRate(self, value : float):
         self._lr = value;
+    
+
+    @property
+    def weightDecay(self) -> float:
+        return self._weightDecay;
+
+
+    @weightDecay.setter
+    def weightDecay(self, value : float):
+        self._weightDecay = value;
+    
+
+    @property
+    def decoupledDecay(self) -> bool:
+        return self._decoupledDecay;
+
+
+    @decoupledDecay.setter
+    def decoupledDecay(self, value : bool):
+        self._decoupledDecay = value;
 
 
     def _onPreUpdate(self, params : List[INetParamDefinition]):
