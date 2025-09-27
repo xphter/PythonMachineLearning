@@ -888,7 +888,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         trainingLossData = [];
         trainingAccuracyData = [];
         testLossData = [];
-        testAccuracyData = [];
+        testAccuracyData : List[float] = [];
         finalTrainingLoss, finalTrainingAccuracy = None, None;
         finalTestLoss, finalTestAccuracy = None, None;
         paramsData, statesData = [], [];
@@ -957,7 +957,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
             print(f"epoch {epoch}, training loss: {trainingLossData[-1]}{trainingMessage}{testMessage}, elapsed time: {int(time.time() - startTime)}s");
 
         if minEpoch is not None and len(paramsData) > 0 and evaluator is not None:
-            index = np.argmax(testAccuracyData[minEpoch:]) if evaluator.high else np.argmin(testAccuracyData[minEpoch:]);
+            index = np.argmax(np.array(testAccuracyData[minEpoch:])) if evaluator.high else np.argmin(np.array(testAccuracyData[minEpoch:]));
             print(f"the final params were training on epoch {minEpoch + int(index)}");
 
             self.params = paramsData[minEpoch + int(index)];
