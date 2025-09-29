@@ -4239,17 +4239,26 @@ class IdentityWithMeanSquareLoss(NetLossBase):
 
         self._Y = np.empty(0);
         self._T = np.empty(0);
+        self._W = np.empty(0);
 
 
     def forward(self, *data: np.ndarray) -> float:
-        self._Y, self._T = data;
-        self._loss = meanSquareError(self._Y, self._T) / 2;
+        if len(data) > 2:
+            self._Y, self._W, self._T = data;
+        else:
+            self._Y, self._T = data; # type: ignore
+            self._W = None;
+
+        self._loss = meanSquareError(self._Y, self._T, W = self._W) / 2;
 
         return self._loss;
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
-        dY = (self._Y - self._T) / self._T.size;
+        if self._W is not None:
+            dY = self._W * (self._Y - self._T) / float(np.sum(self._W));
+        else:
+            dY = (self._Y - self._T) / self._T.size;
 
         return dY, ;
 
@@ -6208,8 +6217,11 @@ class MaeAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     def update(self, loss : float, *data: np.ndarray):
-        Y, T = data;
-        # self._rss += float(np.sum(np.square(Y - T)));
+        if len(data) > 2:
+            Y, W, T = data;
+        else:
+            Y, T = data; # type: ignore
+
         self._rss += float(np.sum(np.abs(Y - T)));
         self._totalCount += T.size;
 
@@ -6261,7 +6273,10 @@ class MseAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     def update(self, loss : float, *data: np.ndarray):
-        Y, T = data;
+        if len(data) > 2:
+            Y, W, T = data;
+        else:
+            Y, T = data; # type: ignore
 
         if self._takeLog:
             if self._logMinValue is not None:

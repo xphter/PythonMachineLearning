@@ -2149,6 +2149,7 @@ def unitTest():
     # testIdentityWithMeanSquareLossGradient1();
     # testIdentityWithMeanSquareLossGradient2();
     # testIdentityWithMeanSquareLossGradient3();
+    # testIdentityWithMeanSquareLossGradient4();
     # testSumWithMeanSquareLossGradient1();
     # testSumWithMeanSquareLossGradient2();
     # testPReluLayerGradient1();
@@ -2312,7 +2313,7 @@ def unitTest():
     # testMultiHeadAttentionModuleGradient2();
     # testMultiHeadAttentionModuleGradient3();
     # testMultiHeadAttentionModuleGradient4();
-    testMultiHeadAttentionModuleGradient5();
+    # testMultiHeadAttentionModuleGradient5();
     # testSelfAttentionModuleGradient1();
     # testSelfAttentionModuleGradient2();
     # testSelfAttentionModuleGradient3();
@@ -3154,6 +3155,17 @@ def testIdentityWithMeanSquareLossGradient3():
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
     print(f"IdentityWithMeanSquareLoss, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testIdentityWithMeanSquareLossGradient4():
+    N, C, D = 32, 24, 10;
+    X, W, T = np.random.randn(N, C, D), np.random.randn(N, C, D), np.random.randn(N, C, D);
+    m = IdentityWithMeanSquareLoss();
+    loss = m.forward(X, W, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, W, T), X);
+    print(f"IdentityWithMeanSquareLoss, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 

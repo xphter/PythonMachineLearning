@@ -180,11 +180,15 @@ def lengthExceptLastDimension(X : np.ndarray):
     return X.size // X.shape[-1] if X.ndim > 2 else len(X);
 
 
-def meanSquareError(Y : np.ndarray, T : np.ndarray):
+# W is a weight array, the shape is as same as Y
+def meanSquareError(Y : np.ndarray, T : np.ndarray, W : Optional[np.ndarray] = None):
     if Y.shape != T.shape:
         raise ValueError("the shapes is not same.");
-
-    return float(np.sum(np.square(Y - T))) / T.size;
+    
+    if W is not None:
+        return float(np.sum(W * np.square(Y - T))) / float(np.sum(W));
+    else:
+        return float(np.sum(np.square(Y - T))) / T.size;
 
 
 def meanAbsoluteError(Y : np.ndarray, T : np.ndarray):
