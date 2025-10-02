@@ -3629,12 +3629,13 @@ class LstmLayer(RnnLayerBase):
 
 # rnnSelector(inputSize, hiddenSize, stateful, returnSequence, returnState) -> RnnLayerBase
 class StackRnnLayer(AggregateNetModule):
-    def __init__(self, inputSize : int, hiddenSize : int, rnnSelector : Callable[[int, int, bool, bool, bool], RnnLayerBase], layersNum : int = 2, dropoutRatio : float = 0.0, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, bidirectional : bool = False):
+    def __init__(self, inputSize : int, hiddenSize : int, rnnSelector : Callable[[int, int, bool, bool, bool], RnnLayerBase], normalSelector : Optional[Callable[[int], INetModule]] = None, layersNum : int = 2, dropoutRatio : float = 0.0, stateful : bool = True, returnSequence : bool = True, returnState : bool = False, bidirectional : bool = False):
         if not returnSequence and not returnState:
             raise ValueError("returnSequence and returnState are both false");
 
         modules : List[INetModule] = [];
         self._rnnModules : List[INetModule] = [];
+        self._normalModules : List[INetModule] = [];
         self._dropoutModules : List[INetModule] = [];
 
         for l in range(layersNum):
@@ -3643,6 +3644,10 @@ class StackRnnLayer(AggregateNetModule):
             else:
                 modules.append(rnnSelector(inputSize if l == 0 else hiddenSize, hiddenSize, stateful, True, True));
             self._rnnModules.append(modules[-1]);
+
+            if normalSelector is not None and l < layersNum - 1:
+                modules.append(normalSelector(2 * hiddenSize if bidirectional else hiddenSize));
+                self._normalModules.append(modules[-1]);
 
             if dropoutRatio > 0 and l < layersNum - 1:
                 modules.append(VariationalDropoutLayer(dropoutRatio));
@@ -3653,6 +3658,7 @@ class StackRnnLayer(AggregateNetModule):
         self._inputSize = inputSize;
         self._hiddenSize = hiddenSize;
         self._layersNum = layersNum;
+        self._normalsNum = len(self._normalModules);
         self._dropoutsNum = len(self._dropoutModules);
         self._stateful = stateful;
         self._returnSequence = returnSequence;
@@ -3688,6 +3694,9 @@ class StackRnnLayer(AggregateNetModule):
             Xs = outputs[0];
             outputStates.extend(outputs[1: ]);
 
+            if l < self._normalsNum:
+                Xs, = self._normalModules[l].forward(Xs);
+
             if l < self._dropoutsNum:
                 Xs, = self._dropoutModules[l].forward(Xs);
 
@@ -3720,6 +3729,9 @@ class StackRnnLayer(AggregateNetModule):
 
             if l < self._dropoutsNum:
                 dXs, = self._dropoutModules[l].backward(dXs);
+            
+            if l < self._normalsNum:
+                dXs, = self._normalModules[l].backward(dXs);
 
             dInputs = layer.backward(*((dXs, ) + tuple(item[l] for item in dOutputStates)));
             dXs = dInputs[0];
