@@ -5023,6 +5023,37 @@ class StandardScaler(ScalerBase):
         return self._sigma * Y + self._mu if index is None else self._sigma[index] * Y + self._mu[index];
 
 
+class RobustScaler(ScalerBase):
+    def __init__(self):
+        super().__init__();
+
+        self._mu = np.empty(0);
+        self._iqr = np.empty(0);
+
+
+    def _getParams(self) -> List:
+        return [self._mu, self._iqr];
+
+
+    def _setParams(self, value: Tuple):
+        self._mu, self._iqr = value;
+
+
+    def _fit(self, X: np.ndarray):
+        self._mu = np.median(X, axis = 0);
+        self._iqr = np.quantile(X, 0.75, axis = 0) -np.quantile(X, 0.25, axis = 0);
+
+        return X;
+
+
+    def _transform(self, X : np.ndarray) -> np.ndarray:
+        return (X - self._mu) / self._iqr;
+
+
+    def _inverse(self, Y : np.ndarray, *args, **kwargs) -> np.ndarray:
+        return self._iqr * Y + self._mu;
+
+
 class DiffScaler(ScalerBase):
     INDEX_ARGUMENT_NAME = "index";
 
