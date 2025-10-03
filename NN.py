@@ -3670,9 +3670,11 @@ class StackRnnLayer(AggregateNetModule):
         self._foreignState = False;
 
         if bidirectional:
-            self._name = f"StackBiRnnLayer {inputSize}*{'*'.join([str(2 * hiddenSize)] * layersNum)}";
+            # self._name = f"StackBiRnnLayer {inputSize}*{'*'.join([str(2 * hiddenSize)] * layersNum)}";
+            self._name = f"StackBiRnnLayer({self._name})";
         else:
-            self._name = f"StackRnnLayer {inputSize}*{'*'.join([str(hiddenSize)] * layersNum)}";
+            # self._name = f"StackRnnLayer {inputSize}*{'*'.join([str(hiddenSize)] * layersNum)}";
+            self._name = f"StackRnnLayer({self._name})";
 
 
     # input X, states: [L, N, H]
@@ -6234,9 +6236,10 @@ class PartitionedDataIterator(IDataIterator):
 
 
 class MaeAccuracyEvaluator(INetAccuracyEvaluator):
-    def __init__(self):
+    def __init__(self, scaler : Optional[IDataScaler] = None):
         self._rss = 0.0;
         self._totalCount = 0.0;
+        self._scaler = scaler;
 
 
     @property
@@ -6264,6 +6267,9 @@ class MaeAccuracyEvaluator(INetAccuracyEvaluator):
             Y, W, T = data;
         else:
             Y, T = data; # type: ignore
+        
+        if self._scaler is not None:
+            Y, T = self._scaler.inverse(Y), self._scaler.inverse(T);
 
         self._rss += float(np.sum(np.abs(Y - T)));
         self._totalCount += T.size;
