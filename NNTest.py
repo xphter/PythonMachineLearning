@@ -2121,6 +2121,10 @@ def unitTest():
     # testIdentityWithMeanAbsoluteLossGradient1();
     # testIdentityWithMeanAbsoluteLossGradient2();
     # testIdentityWithMeanAbsoluteLossGradient3();
+    # testIdentityWithMeanAbsolutePercentLossGradient1();
+    # testIdentityWithMeanAbsolutePercentLossGradient2();
+    # testIdentityWithMeanAbsolutePercentLossGradient3();
+    # testIdentityWithMeanAbsolutePercentLossGradient4();
     # testCrossEntropyLossGradient1();
     # testCrossEntropyLossGradient2();
     # testCrossEntropyLossGradient3();
@@ -2808,6 +2812,50 @@ def testIdentityWithMeanAbsoluteLossGradient3():
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
     print(f"IdentityWithMeanAbsoluteLoss, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testIdentityWithMeanAbsolutePercentLossGradient1():
+    N = 32;
+    X, T = np.random.randn(N), np.fabs(np.random.randn(N));
+    m = IdentityWithMeanAbsolutePercentLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"IdentityWithMeanAbsolutePercentLoss, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testIdentityWithMeanAbsolutePercentLossGradient2():
+    N, D = 32, 24;
+    X, T = np.random.randn(N, D), np.fabs(np.random.randn(N, D));
+    m = IdentityWithMeanAbsolutePercentLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"IdentityWithMeanAbsolutePercentLoss, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testIdentityWithMeanAbsolutePercentLossGradient3():
+    N, C, D = 32, 24, 10;
+    X, T = np.random.randn(N, C, D), np.fabs(np.random.randn(N, C, D));
+    m = IdentityWithMeanAbsolutePercentLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"IdentityWithMeanAbsolutePercentLoss, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testIdentityWithMeanAbsolutePercentLossGradient4():
+    N, C, D = 32, 24, 10;
+    X, W, T = np.random.randn(N, C, D), np.fabs(np.random.randn(N, C, D)), np.fabs(np.random.randn(N, C, D));
+    m = IdentityWithMeanAbsolutePercentLoss();
+    loss = m.forward(X, W, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, W, T), X);
+    print(f"IdentityWithMeanAbsolutePercentLoss, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 

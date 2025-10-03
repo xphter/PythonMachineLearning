@@ -4299,6 +4299,39 @@ class IdentityWithMeanAbsoluteLoss(NetLossBase):
         return dY, ;
 
 
+class IdentityWithMeanAbsolutePercentLoss(NetLossBase):
+    def __init__(self):
+        super().__init__();
+
+        self._Y = np.empty(0);
+        self._T = np.empty(0);
+        self._W = np.empty(0);
+
+
+    def forward(self, *data: np.ndarray) -> float:
+        if len(data) > 2:
+            self._Y, self._W, self._T = data;
+        else:
+            self._Y, self._T = data; # type: ignore
+            self._W = None;
+
+        self._loss = meanAbsolutePercentError(self._Y, self._T, W = self._W);
+
+        return self._loss;
+
+
+    def backward(self) -> Tuple[np.ndarray, ...]:
+        ML = self._Y < self._T;
+        MH = self._Y > self._T;
+
+        if self._W is not None:
+            dY = self._W * (MH * 1 - ML * 1).astype(self._Y.dtype) / np.fabs(self._T) / float(np.sum(self._W));
+        else:
+            dY = (MH * 1 - ML * 1).astype(self._Y.dtype) / np.fabs(self._T) / self._T.size;
+
+        return dY, ;
+
+
 class IdentityWithHuberLoss(NetLossBase):
     def __init__(self, delta : float = 1.0):
         super().__init__();
@@ -6335,6 +6368,50 @@ class MseAccuracyEvaluator(INetAccuracyEvaluator):
             T = np.log(T);
 
         self._rss += float(np.sum(np.square(Y - T)));
+        self._totalCount += T.size;
+
+
+    def reset(self):
+        self._rss = 0.0;
+        self._totalCount = 0.0;
+
+
+class MapeAccuracyEvaluator(INetAccuracyEvaluator):
+    def __init__(self, scaler : Optional[IDataScaler] = None):
+        self._rss = 0.0;
+        self._totalCount = 0.0;
+        self._scaler = scaler;
+
+
+    @property
+    def name(self) -> str:
+        return "MAPE";
+
+
+    @property
+    def high(self) -> bool:
+        return False;
+
+
+    @property
+    def accuracy(self) -> float:
+        return (self._rss / self._totalCount) * 100 if self._totalCount > 0 else 0.0;
+
+
+    def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
+        return False;
+
+
+    def update(self, loss : float, *data: np.ndarray):
+        if len(data) > 2:
+            Y, W, T = data;
+        else:
+            Y, T = data; # type: ignore
+        
+        if self._scaler is not None:
+            Y, T = self._scaler.inverse(Y), self._scaler.inverse(T);
+
+        self._rss += float(np.sum(np.abs((T - Y) / T)));
         self._totalCount += T.size;
 
 
