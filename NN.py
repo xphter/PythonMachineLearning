@@ -5150,7 +5150,7 @@ class AdditiveAttentionModule(AggregateNetModule, INetAttentionModule):
 
         self._Q, self._K, self._V, self._A = np.empty(0), np.empty(0), np.empty(0), np.empty(0);
         self._attentionWeight, self._dropoutWeight = np.empty(0), np.empty(0);
-        self._name = f"AdditiveAttention {hiddenSize}";
+        self._name = f"AdditiveAttention {hiddenSize}" if dropoutRatio <= 0 else f"AdditiveAttention {hiddenSize}*{dropoutRatio}";
 
         self._weightQ = math.sqrt(2.0 / querySize) * np.random.randn(querySize, hiddenSize).astype(defaultDType) if Wq is None else Wq;
         self._weightK = math.sqrt(2.0 / keySize) * np.random.randn(keySize, hiddenSize).astype(defaultDType) if Wk is None else Wk;
@@ -5228,7 +5228,7 @@ class DotProductAttentionModule(AggregateNetModule, INetAttentionModule):
 
         self._Q, self._K, self._V, self._A, self._scale = None, None, np.empty(0), None, 1;
         self._attentionWeight, self._dropoutWeight = np.empty(0), np.empty(0);
-        self._name = f"DotProductAttention";
+        self._name = f"DotProductAttention" if dropoutRatio <= 0 else f"DotProductAttention {dropoutRatio}";
 
 
     @property
