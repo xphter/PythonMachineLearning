@@ -280,7 +280,7 @@ def logitsCrossEntropyError(Y : np.ndarray, T : np.ndarray) -> float:
     return float(np.sum(Y * (1 - T) + np.log(1 + np.exp(-Y)))) / lengthExceptLastDimension(T);
 
 
-def huberError(Y : np.ndarray, T : np.ndarray, delta : Union[float, np.ndarray] = 1.0) -> float:
+def huberError(Y : np.ndarray, T : np.ndarray, delta : Union[float, np.ndarray] = 1.0, W : Optional[np.ndarray] = None) -> float:
     if Y.shape != T.shape:
         raise ValueError("the shapes is not same.");
 
@@ -294,7 +294,10 @@ def huberError(Y : np.ndarray, T : np.ndarray, delta : Union[float, np.ndarray] 
     EH = delta * (Y - T) - b;
     E = ML * EL + MM * EM + MH * EH;
 
-    return float(np.sum(E)) / T.size;
+    if W is not None:
+        return float(np.sum(W * E)) / float(np.sum(W));
+    else:
+        return float(np.sum(E)) / T.size;
 
 
 def getDropoutMask(inputs : np.ndarray, dropoutRatio : float):

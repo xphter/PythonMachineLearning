@@ -4348,11 +4348,17 @@ class IdentityWithHuberLoss(NetLossBase):
 
         self._delta = np.array(max(0.0, float(delta)), dtype = defaultDType);
         self._Y, self._T = np.empty(0), np.empty(0);
+        self._W = np.empty(0);
 
 
     def forward(self, *data: np.ndarray) -> float:
-        self._Y, self._T = data;
-        self._loss = huberError(self._Y, self._T, self._delta);
+        if len(data) > 2:
+            self._Y, self._W, self._T = data;
+        else:
+            self._Y, self._T = data; # type: ignore
+            self._W = None;
+
+        self._loss = huberError(self._Y, self._T, self._delta, W = self._W);
 
         return self._loss;
 
@@ -4361,7 +4367,11 @@ class IdentityWithHuberLoss(NetLossBase):
         ML, MH = self._Y < self._T - self._delta, self._Y > self._T + self._delta;
         MM = np.logical_and(~ML, ~MH);
         dY = ML * (-self._delta) + MM * (self._Y - self._T) + MH * self._delta;
-        dY /= self._T.size;
+
+        if self._W is not None:
+            dY *= self._W / float(np.sum(self._W));
+        else:
+            dY /= self._T.size;
 
         return dY, ;
 

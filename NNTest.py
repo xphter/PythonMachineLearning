@@ -2179,6 +2179,7 @@ def unitTest():
     # testIdentityWithHuberLossGradient1();
     # testIdentityWithHuberLossGradient2();
     # testIdentityWithHuberLossGradient3();
+    # testIdentityWithHuberLossGradient4();
     # testAffineLayerGradient1();
     # testAffineLayerGradient2();
     # testAffineLayerGradient3();
@@ -3547,6 +3548,19 @@ def testIdentityWithHuberLossGradient3():
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
     print(f"IdentityWithHuberLoss, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testIdentityWithHuberLossGradient4():
+    N, C, D = 32, 24, 10;
+    X = np.random.randn(N, C, D);
+    W = np.fabs(np.random.randn(N, C, D));
+    T = np.random.randn(N, C, D);
+    m = IdentityWithHuberLoss();
+    loss = m.forward(X, W, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, W, T), X);
+    print(f"IdentityWithHuberLoss, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
