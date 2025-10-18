@@ -191,11 +191,14 @@ def meanSquareError(Y : np.ndarray, T : np.ndarray, W : Optional[np.ndarray] = N
         return float(np.sum(np.square(Y - T))) / T.size;
 
 
-def meanAbsoluteError(Y : np.ndarray, T : np.ndarray):
+def meanAbsoluteError(Y : np.ndarray, T : np.ndarray, W : Optional[np.ndarray] = None):
     if Y.shape != T.shape:
         raise ValueError("the shapes is not same.");
-
-    return float(np.sum(np.abs(Y - T))) / T.size;
+    
+    if W is not None:
+        return float(np.sum(W * np.abs(Y - T))) / float(np.sum(W));
+    else:
+        return float(np.sum(np.abs(Y - T))) / T.size;
 
 
 # W is a weight array, the shape is as same as Y

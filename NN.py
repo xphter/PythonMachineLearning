@@ -4282,11 +4282,17 @@ class IdentityWithMeanAbsoluteLoss(NetLossBase):
         super().__init__();
 
         self._Y, self._T = np.empty(0), np.empty(0);
+        self._W = np.empty(0);
 
 
     def forward(self, *data: np.ndarray) -> float:
-        self._Y, self._T = data;
-        self._loss = meanAbsoluteError(self._Y, self._T);
+        if len(data) > 2:
+            self._Y, self._W, self._T = data;
+        else:
+            self._Y, self._T = data; # type: ignore
+            self._W = None;
+
+        self._loss = meanAbsoluteError(self._Y, self._T, W = self._W);
 
         return self._loss;
 
@@ -4294,7 +4300,11 @@ class IdentityWithMeanAbsoluteLoss(NetLossBase):
     def backward(self) -> Tuple[np.ndarray, ...]:
         ML = self._Y < self._T;
         MH = self._Y > self._T;
-        dY = (MH * 1 - ML * 1).astype(self._Y.dtype) / self._T.size;
+
+        if self._W is not None:
+            dY = self._W * (MH * 1 - ML * 1).astype(self._Y.dtype) / float(np.sum(self._W));
+        else:
+            dY = (MH * 1 - ML * 1).astype(self._Y.dtype) / self._T.size;
 
         return dY, ;
 
