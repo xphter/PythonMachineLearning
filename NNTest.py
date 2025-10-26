@@ -2116,6 +2116,9 @@ def unitTest():
     # testSoftmaxLayerGradient1();
     # testSoftmaxLayerGradient2();
     # testSoftmaxLayerGradient3();
+    # testLogSoftmax1();
+    # testLogSoftmaxGradient1();
+    # testLogSoftmaxGradient2();
     # testGatedAdditiveLayerGradient1();
     # testGatedAdditiveLayerGradient2();
     # testIdentityWithMeanAbsoluteLossGradient1();
@@ -2749,6 +2752,40 @@ def testSoftmaxLayerGradient3():
     dX1, = m.backward(dY);
     dXN = numericGradient(lambda x: np.sum(m.forward(x, M)[0] * dY), X);
     print(f"SoftmaxLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testLogSoftmax1():
+    N, C = 32, 256;
+    X = np.random.randn(N, C);
+
+    Y1 = logSoftmax(X);
+
+    Y2 = np.log(softmax(X));
+
+    print(f"LogSoftmax, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print("\n");
+
+
+def testLogSoftmaxGradient1():
+    N, C = 64, 24;
+    X = np.random.randn(N, C);
+    dY = np.random.randn(N, C);
+    Y, Z = logSoftmax(X, returnSoftmax = True);
+    dX1 = logSoftmaxGradient(Z, dY);
+    dXN = numericGradient(lambda x: np.sum(logSoftmax(x) * dY), X);
+    print(f"LogSoftmax, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testLogSoftmaxGradient2():
+    N, T, C = 32, 24, 12;
+    X = np.random.randn(N, T, C);
+    dY = np.random.randn(N, T, C);
+    Y, Z = logSoftmax(X, returnSoftmax = True);
+    dX1 = logSoftmaxGradient(Z, dY);
+    dXN = numericGradient(lambda x: np.sum(logSoftmax(x) * dY), X);
+    print(f"LogSoftmax, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 

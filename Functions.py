@@ -159,19 +159,38 @@ def softmax(X : np.ndarray, M : Optional[np.ndarray] = None) -> np.ndarray:
     if M is not None:
         putArrayMask(X, ~M.astype(bool), -1e10);
 
-    Y = np.exp(X - np.amax(X, -1, keepdims = True));
+    Y = np.exp(X - np.amax(X, axis = -1, keepdims = True));
 
     if M is not None:
         Y *= M;
 
     # the row of M can not be all zero!
-    return Y / np.sum(Y, -1, keepdims = True);
+    return Y / np.sum(Y, axis = -1, keepdims = True);
 
 
 # Y = softmax(X), dX = Y * (dY - ∑(dY * Y))
 def softmaxGradient(Y : np.ndarray, dY : np.ndarray) -> np.ndarray:
     Z = dY * Y;
     dX = Z - Y * np.sum(Z, axis = -1, keepdims = True);
+
+    return dX;
+
+
+def logSoftmax(X : np.ndarray, returnSoftmax : bool = False) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
+    X_ = X - np.amax(X, axis = -1, keepdims = True);
+    E = np.exp(X_);
+    S = np.sum(E, axis = -1, keepdims = True);
+    Y =  X_ - np.log(S);
+
+    if returnSoftmax:
+        return Y, E / S;
+    else:
+        return Y;
+
+
+# Z = softmax(X), dX = dY - Z*∑dY
+def logSoftmaxGradient(Z : np.ndarray, dY : np.ndarray) -> np.ndarray:
+    dX = dY - Z * np.sum(dY, axis = -1, keepdims = True);
 
     return dX;
 
