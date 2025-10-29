@@ -23,13 +23,14 @@ DeviceConfig.floatLength = 32;
 # DeviceConfig.enableGPU = True;
 
 import DataHelper;
-from IsolationForest import *;
+# from IsolationForest import *;
 from ImportNumpy import *;
-from GMM import *;
+# from GMM import *;
 from NN import *;
-from MNIST import *;
-from PTB import *;
+# from MNIST import *;
+# from PTB import *;
 import torch;
+import torch.nn as nn;
 
 
 def preprocess(text : str) -> (np.ndarray, dict, dict):
@@ -2366,6 +2367,9 @@ def unitTest():
     # testAttentionPoolingLayerGradient2();
     # testAttentionPoolingLayerGradient3();
     # testAttentionPoolingLayerGradient4();
+
+    testRnnWithCupy();
+    testRnnWithTorch();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
@@ -7325,6 +7329,51 @@ def testAttentionPoolingLayerGradient4():
     print(f"AttentionPoolingLayer, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "AttentionPoolingLayer, numericGradient4", X, M);
     print("\n");
+
+
+def testRnnWithCupy():
+    inputSize, rnnHiddenSize, layerNum = 32, 64, 2;
+    rnnSelector = lambda ds, hs, sf, rq, rs: LstmLayer(ds, hs, sf, rq, rs);
+    # model = StackRnnLayer(inputSize, rnnHiddenSize, rnnSelector, normalSelector = LayerNormalizationLayer, layersNum = layerNum, stateful = False, returnSequence = True, returnState = False);
+    model = RnnLayer(inputSize, rnnHiddenSize, stateful = False, returnSequence = True, returnState = False);
+
+    batchSize, sequenceLength = 32, 240;
+    data = np.random.randn(batchSize * 100, sequenceLength, inputSize).astype(defaultDType);
+    dataIterator = SequentialDataIterator([data], batchSize = batchSize, shuffle = True);
+
+    print(f"dtype: {data.dtype}, device: {data.device}");
+
+    t1 = time.time();
+    for _ in range(10):
+        for X in dataIterator:
+            Y = model.forward(X[0].transpose(1, 0, 2));
+    t2 = time.time();
+    
+    print(f"time: {t2 - t1}s");
+
+
+def testRnnWithTorch():
+    device = torch.device("cpu");
+    # device = torch.device("cuda:0");
+
+    inputSize, rnnHiddenSize, layerNum = 32, 64, 2;
+    rnnSelector = lambda ds, hs, sf, rq, rs: LstmLayer(ds, hs, sf, rq, rs);
+    model = nn.RNN(inputSize, rnnHiddenSize, device = device);
+
+    batchSize, sequenceLength = 32, 240;
+    data = torch.randn(batchSize * 100, sequenceLength, inputSize, device = device);
+    dataIterator = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data), batch_size = batchSize, shuffle = True);
+
+    print(f"dtype: {data.dtype}, device: {data.device}");
+
+    t1 = time.time();
+    for _ in range(10):
+        for X in dataIterator:
+            H = torch.zeros(1, batchSize, rnnHiddenSize, device = device);
+            Y = model(X[0].transpose(1, 0), H);
+    t2 = time.time();
+    
+    print(f"time: {t2 - t1}s");
 
 
 def testSelectByWeightModuleGradient():
