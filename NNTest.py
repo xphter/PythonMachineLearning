@@ -2161,9 +2161,9 @@ def unitTest():
     # testIdentityWithMeanSquareLossGradient4();
     # testSumWithMeanSquareLossGradient1();
     # testSumWithMeanSquareLossGradient2();
-    # testPReluLayerGradient1();
-    # testPReluLayerGradient2();
-    # testPReluLayerGradient3();
+    testPReluLayerGradient1();
+    testPReluLayerGradient2();
+    testPReluLayerGradient3();
     # testSoftplus1();
     # testSoftplusLayerGradient1();
     # testSoftplusLayerGradient2();
@@ -2368,8 +2368,8 @@ def unitTest():
     # testAttentionPoolingLayerGradient3();
     # testAttentionPoolingLayerGradient4();
 
-    testRnnWithCupy();
-    testRnnWithTorch();
+    # testRnnWithCupy();
+    # testRnnWithTorch();
 
     # testSelectByWeightModuleGradient();
     # testAdditiveAttentionWeight1TModuleGradient();
