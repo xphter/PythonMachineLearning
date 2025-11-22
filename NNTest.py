@@ -19,7 +19,7 @@ import mpl_toolkits.mplot3d as p3d;
 from typing import List, Tuple, Dict, Callable, Any;
 
 import DeviceConfig;
-DeviceConfig.floatLength = 32;
+DeviceConfig.floatLength = 64;
 # DeviceConfig.enableGPU = True;
 
 import DataHelper;
@@ -2161,6 +2161,8 @@ def unitTest():
     # testIdentityWithMeanSquareLossGradient4();
     # testSumWithMeanSquareLossGradient1();
     # testSumWithMeanSquareLossGradient2();
+    testPReluLayer1();
+    testPReluLayer2();
     testPReluLayerGradient1();
     testPReluLayerGradient2();
     testPReluLayerGradient3();
@@ -3295,9 +3297,49 @@ def testSumWithMeanSquareLossGradient2():
     print("\n");
 
 
-def testPReluLayerGradient1():
+def testPReluLayer1():
     N, T, D = 32, 24, 16;
-    X = np.random.randn(N, T, D);
+    X = np.random.randn(N, T, D).astype(defaultDType);
+
+    X1 = torch.tensor(X, dtype = torch.float32, requires_grad = True);
+    m1 = nn.PReLU();
+    Y1 = m1(X1);
+    torch.sum(Y1).backward();
+    Y1 = Y1.detach().numpy();
+    dX1 = X1.grad.detach().numpy();
+
+    X2 = X;
+    m2 = PReluLayer(beta = m1.weight.detach().numpy());
+    Y2, = m2.forward(X2);
+    dX2, = m2.backward(np.ones_like(Y2));
+
+    print(f"PReluLayer, value1 {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)} {getErrorText('dBeta error', m1.weight.grad.detach().numpy(), m2.params[0].grad)}");
+    print("\n");
+
+
+def testPReluLayer2():
+    N, C, D = 32, 24, 16;
+    X = np.random.randn(N, C, D).astype(defaultDType);
+
+    X1 = torch.tensor(X, dtype = torch.float32, requires_grad = True);
+    m1 = nn.PReLU(C);
+    Y1 = m1(X1);
+    torch.sum(Y1).backward();
+    Y1 = Y1.detach().numpy();
+    dX1 = X1.grad.detach().numpy();
+
+    X2 = X;
+    m2 = PRelu1DLayer(C, beta = m1.weight.detach().numpy());
+    Y2, = m2.forward(X2);
+    dX2, = m2.backward(np.ones_like(Y2));
+
+    print(f"PRelu1DLayer, value2 {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)} {getErrorText('dBeta error', m1.weight.grad.detach().numpy(), m2.params[0].grad)}");
+    print("\n");
+
+
+def testPReluLayerGradient1():
+    N, D = 32, 16;
+    X = np.random.randn(N, D).astype(defaultDType);
     m = PReluLayer();
     beta = m.beta;
     Y = m.forward(X)[0];
@@ -3310,30 +3352,30 @@ def testPReluLayerGradient1():
 
 
 def testPReluLayerGradient2():
-    N, T, D = 32, 24, 16;
-    X = np.random.randn(N, T, D);
-    m = PReluLayer(outputSize = D);
+    N, C, D = 32, 24, 16;
+    X = np.random.randn(N, C, D).astype(defaultDType);
+    m = PRelu1DLayer(C);
     beta = m.beta;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dBetaN = numericGradient(lambda x: np.sum(PReluLayer(beta = x).forward(X)[0]), beta);
-    print(f"PReluLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
+    dBetaN = numericGradient(lambda x: np.sum(PRelu1DLayer(C, beta = x).forward(X)[0]), beta);
+    print(f"PRelu1DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
 def testPReluLayerGradient3():
-    N, D = 256, 256;
-    X = np.random.randn(N, D);
-    m = PReluLayer(outputSize = D);
+    N, C, H, W = 32, 24, 16, 8
+    X = np.random.randn(N, C, H, W).astype(defaultDType);
+    m = PRelu2DLayer(C);
     beta = m.beta;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dBetaN = numericGradient(lambda x: np.sum(PReluLayer(beta = x).forward(X)[0]), beta);
-    print(f"PReluLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
+    dBetaN = numericGradient(lambda x: np.sum(PRelu2DLayer(C, beta = x).forward(X)[0]), beta);
+    print(f"PRelu2DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
