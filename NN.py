@@ -1295,7 +1295,7 @@ class SoftplusLayer(NetModuleBase):
 
 
 class SwishLayer(NetModuleBase):
-    def __init__(self, beta : Optional[Union[float, np.ndarray]] = None, outputSize : Optional[int] = None):
+    def __init__(self, outputSize : Optional[int] = None, beta : Optional[Union[float, np.ndarray]] = None):
         super().__init__();
 
         self._X = np.empty(0);
@@ -1344,6 +1344,62 @@ class SwishLayer(NetModuleBase):
         self._params[0].grad[...] = dBeta;
 
         return dX, ;
+
+
+class SwishNDLayer(SwishLayer):
+    def __init__(self, dimensionNum : int, channelNum : int, beta : Optional[Union[float, np.ndarray]] = None):
+        self._channelAxis = -(max(1, int(dimensionNum)) + 1);
+
+        super().__init__(outputSize = channelNum, beta = beta);
+
+        self._name = f"Swish{dimensionNum}D {channelNum}";
+    
+
+    def _checkInput(self, X : np.ndarray):
+        pass;
+
+
+    # 1D X shape: (batch_size, input_size) or (batch_size, channel_num, sequence_length)
+    # 2D X shape: (batch_size, channel_num, image_height, image_width)
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
+        X = data[0];
+
+        self._checkInput(X);
+        
+        if X.ndim > 2:
+            Y, = super().forward(X.swapaxes(self._channelAxis, -1));
+            Y = Y.swapaxes(self._channelAxis, -1);
+        else:
+            Y, = super().forward(X);
+        
+        return Y, ;
+    
+
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
+        dY = dout[0];
+
+        if dY.ndim > 2:
+            dX, = super().backward(dY.swapaxes(self._channelAxis, -1));
+            dX = dX.swapaxes(self._channelAxis, -1);
+        else:
+            dX, = super().backward(dY);
+        
+        return dX, ;
+
+
+class Swish1DLayer(SwishNDLayer):
+    def __init__(self, channelNum : int, beta : Optional[Union[float, np.ndarray]] = None):
+        super().__init__(1, channelNum = channelNum, beta = beta);
+
+
+class Swish2DLayer(SwishNDLayer):
+    def __init__(self, channelNum : int, beta : Optional[Union[float, np.ndarray]] = None):
+        super().__init__(2, channelNum = channelNum, beta = beta);
+    
+
+    def _checkInput(self, X : np.ndarray):
+        if X.ndim < 4:
+            raise ValueError("the input shape of Swish2D should be 4 at least");
 
 
 class SiluLayer(NetModuleBase):

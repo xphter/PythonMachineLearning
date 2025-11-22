@@ -2161,18 +2161,18 @@ def unitTest():
     # testIdentityWithMeanSquareLossGradient4();
     # testSumWithMeanSquareLossGradient1();
     # testSumWithMeanSquareLossGradient2();
-    testPReluLayer1();
-    testPReluLayer2();
-    testPReluLayerGradient1();
-    testPReluLayerGradient2();
-    testPReluLayerGradient3();
+    # testPReluLayer1();
+    # testPReluLayer2();
+    # testPReluLayerGradient1();
+    # testPReluLayerGradient2();
+    # testPReluLayerGradient3();
     # testSoftplus1();
     # testSoftplusLayerGradient1();
     # testSoftplusLayerGradient2();
     # testSoftplusLayerGradient3();
-    # testSwishLayerGradient1();
-    # testSwishLayerGradient2();
-    # testSwishLayerGradient3();
+    testSwishLayerGradient1();
+    testSwishLayerGradient2();
+    testSwishLayerGradient3();
     # testSiluLayerGradient1();
     # testSiluLayerGradient2();
     # testGeluLayerGradient1();
@@ -3425,8 +3425,8 @@ def testSoftplusLayerGradient3():
 
 
 def testSwishLayerGradient1():
-    N, T, D = 32, 24, 16;
-    X = np.random.randn(N, T, D);
+    N, D = 32, 16;
+    X = np.random.randn(N, D).astype(defaultDType);
     m = SwishLayer();
     beta = m.beta;
     Y = m.forward(X)[0];
@@ -3439,30 +3439,30 @@ def testSwishLayerGradient1():
 
 
 def testSwishLayerGradient2():
-    N, T, D = 32, 24, 16;
-    X = np.random.randn(N, T, D);
-    m = SwishLayer(outputSize = D);
+    N, C, D = 32, 24, 16;
+    X = np.random.randn(N, C, D).astype(defaultDType);
+    m = Swish1DLayer(C);
     beta = m.beta;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = x).forward(X)[0]), beta);
-    print(f"SwishLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
+    dBetaN = numericGradient(lambda x: np.sum(Swish1DLayer(C, beta = x).forward(X)[0]), beta);
+    print(f"Swish1DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
 def testSwishLayerGradient3():
-    N, D = 256, 256;
-    X = np.random.randn(N, D);
-    m = SwishLayer(outputSize = D);
+    N, C, H, W = 32, 24, 16, 8;
+    X = np.random.randn(N, C, H, W).astype(defaultDType);
+    m = Swish2DLayer(C);
     beta = m.beta;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
     dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dBetaN = numericGradient(lambda x: np.sum(SwishLayer(beta = x).forward(X)[0]), beta);
-    print(f"SwishLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
+    dBetaN = numericGradient(lambda x: np.sum(Swish2DLayer(C, beta = x).forward(X)[0]), beta);
+    print(f"Swish2DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
     print("\n");
 
 
@@ -5010,10 +5010,10 @@ def testRnnLayerGradient5_Foreign_Sequence_State():
     dbx1, dbh1 = m.params[2].grad, m.params[3].grad;
     dXN = numericGradient(lambda x: sumAll(*m.forward(x, H)), X);
     dHN = numericGradient(lambda x: sumAll(*m.forward(X, x)), H);
-    dWxN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = x, Wh = Wh, bx = bx, bh = bh, activationFuncSelector = lambda size: SwishLayer(beta = beta, outputSize = size)).forward(X, H)), Wx);
-    dWhN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh, activationFuncSelector = lambda size: SwishLayer(beta = beta, outputSize = size)).forward(X, H)), Wh);
-    dbxN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh, activationFuncSelector = lambda size: SwishLayer(beta = beta, outputSize = size)).forward(X, H)), bx);
-    dbhN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x, activationFuncSelector = lambda size: SwishLayer(beta = beta, outputSize = size)).forward(X, H)), bh);
+    dWxN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = x, Wh = Wh, bx = bx, bh = bh, activationFuncSelector = lambda size: SwishLayer(outputSize = size, beta = beta)).forward(X, H)), Wx);
+    dWhN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = x, bx = bx, bh = bh, activationFuncSelector = lambda size: SwishLayer(outputSize = size, beta = beta)).forward(X, H)), Wh);
+    dbxN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = x, bh = bh, activationFuncSelector = lambda size: SwishLayer(outputSize = size, beta = beta)).forward(X, H)), bx);
+    dbhN = numericGradient(lambda x: sumAll(*RnnLayer(inputSize, hiddenSize, stateful = False, returnSequence = True, returnState = True, Wx = Wx, Wh = Wh, bx = bx, bh = x, activationFuncSelector = lambda size: SwishLayer(outputSize = size, beta = beta)).forward(X, H)), bh);
     print(f"RnnLayer, numericGradient5 {getErrorText('dX error', dX1, dXN)} {getErrorText('dH error', dH1, dHN)} {getErrorText('dWx error', dWx1, dWxN)} {getErrorText('dWh error', dWh1, dWhN)} {getErrorText('dbx error', dbx1, dbxN)} {getErrorText('dbh error', dbh1, dbhN)}");
     print("\n");
 
