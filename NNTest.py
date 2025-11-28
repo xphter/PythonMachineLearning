@@ -2170,9 +2170,9 @@ def unitTest():
     # testSoftplusLayerGradient1();
     # testSoftplusLayerGradient2();
     # testSoftplusLayerGradient3();
-    testSwishLayerGradient1();
-    testSwishLayerGradient2();
-    testSwishLayerGradient3();
+    # testSwishLayerGradient1();
+    # testSwishLayerGradient2();
+    # testSwishLayerGradient3();
     # testSiluLayerGradient1();
     # testSiluLayerGradient2();
     # testGeluLayerGradient1();
@@ -2186,6 +2186,8 @@ def unitTest():
     # testIdentityWithHuberLossGradient2();
     # testIdentityWithHuberLossGradient3();
     # testIdentityWithHuberLossGradient4();
+    # testAffineLayer1();
+    # testAffineLayer2();
     # testAffineLayerGradient1();
     # testAffineLayerGradient2();
     # testAffineLayerGradient3();
@@ -2248,6 +2250,7 @@ def unitTest():
     # testAdditiveResidualBlockGradient3();
     # testRepeatedWrapperOfAffineLayerGradient();
     # testRnnCell1();
+    # testRnnCell2();
     # testRnnCellGradient1();
     # testRnnLayer1();
     # testRnnLayerGradient1_Sequence();
@@ -2256,6 +2259,7 @@ def unitTest():
     # testRnnLayerGradient4_Sequence_State();
     # testRnnLayerGradient5_Foreign_Sequence_State();
     # testGruCell1();
+    # testGruCell2();
     # testGruCellGradient1();
     # testGruLayer1();
     # testGruLayerGradient1_Sequence();
@@ -2263,6 +2267,7 @@ def unitTest():
     # testGruLayerGradient3_Sequence_State();
     # testGruLayerGradient4_Foreign_Sequence_State();
     # testLstmCell1();
+    # testLstmCell2();
     # testLstmCellGradient1();
     # testLstmCellGradient2();
     # testLstmCellGradient_Dropout();
@@ -2406,6 +2411,35 @@ def sumAll(*X : np.ndarray) -> float:
 
 def getErrorText(title : str, x1 : np.ndarray, x2 : np.ndarray) -> str:
     return f", {title}: {np.sum(np.fabs(x1 - x2))}({np.linalg.norm(x1 - x2) / (np.linalg.norm(x1) + np.linalg.norm(x2))})";
+
+
+def testModuleGradient(m : INetModule, title: str, *data : np.ndarray):
+    numGradients = [];
+
+    for p in m.params:
+        v = p.value;
+        numGradients.append(numericGradient(lambda x : sumAll(*m.copy(True).forward(*data)), v));
+
+    message = '\n'.join([f'param {m.params[i].name}{i}{m.params[i].value.shape} error value: {np.sum(np.fabs(m.params[i].grad - numGradients[i]))}, error ratio: {np.linalg.norm(m.params[i].grad - numGradients[i]) / (np.linalg.norm(m.params[i].grad) + np.linalg.norm(numGradients[i]))}' for i in range(len(m.params))]);
+    print(f"{title}\n{message}");
+
+
+def injectTorchParams(m1 : nn.Module, m2 : INetModule):
+    for p1, p2 in zip(list(m1.parameters()), m2.params):
+        p1Value = p1.data.detach().numpy();
+        p2.value[...] = p1Value if p1Value.shape == p2.value.shape else p1Value.T;
+    m2.params = m2.params;
+
+
+def testTorchGradient(m1 : nn.Module, m2 : INetModule):
+    for p1, p2 in zip(list(m1.parameters()), m2.params):
+        p1Grad = p1.grad.detach().numpy();
+        print(getErrorText(p2.name, p1Grad if p1Grad.shape == p2.grad.shape else p1Grad.T, p2.grad));
+
+
+def testParamsGradient(m : INetModule, *grads : torch.Tensor):
+    for g1, p2 in zip(grads, m.params):
+        print(getErrorText(p2.name, g1.detach().numpy(), p2.grad));
 
 
 def testSGD_Numba():
@@ -2582,17 +2616,6 @@ def testLabelSmoothing():
     Y2 = 1 / (1 + np.exp(-X2));
 
     print(Y - np.concatenate((Y1, Y2)));
-
-
-def testModuleGradient(m : INetModule, title: str, *data : np.ndarray):
-    numGradients = [];
-
-    for p in m.params:
-        v = p.value;
-        numGradients.append(numericGradient(lambda x : sumAll(*m.copy(True).forward(*data)), v));
-
-    message = '\n'.join([f'param {m.params[i].name}{i}{m.params[i].value.shape} error value: {np.sum(np.fabs(m.params[i].grad - numGradients[i]))}, error ratio: {np.linalg.norm(m.params[i].grad - numGradients[i]) / (np.linalg.norm(m.params[i].grad) + np.linalg.norm(numGradients[i]))}' for i in range(len(m.params))]);
-    print(f"{title}\n{message}");
 
 
 def testMinMaxScaler():
@@ -3338,16 +3361,14 @@ def testPReluLayer2():
 
 
 def testPReluLayerGradient1():
-    N, D = 32, 16;
-    X = np.random.randn(N, D).astype(defaultDType);
-    m = PReluLayer();
-    beta = m.beta;
+    N, T, D = 32, 24, 16;
+    X = np.random.randn(N, T, D).astype(defaultDType);
+    m = PReluLayer(outputSize = D);
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
-    dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dBetaN = numericGradient(lambda x: np.sum(PReluLayer(beta = x).forward(X)[0]), beta);
-    print(f"PReluLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
+    print(f"PReluLayer, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
+    testModuleGradient(m, "PReluLayer, numericGradient1", X);
     print("\n");
 
 
@@ -3355,13 +3376,11 @@ def testPReluLayerGradient2():
     N, C, D = 32, 24, 16;
     X = np.random.randn(N, C, D).astype(defaultDType);
     m = PRelu1DLayer(C);
-    beta = m.beta;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
-    dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dBetaN = numericGradient(lambda x: np.sum(PRelu1DLayer(C, beta = x).forward(X)[0]), beta);
-    print(f"PRelu1DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
+    print(f"PRelu1DLayer, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
+    testModuleGradient(m, "PRelu1DLayer, numericGradient2", X);
     print("\n");
 
 
@@ -3369,13 +3388,11 @@ def testPReluLayerGradient3():
     N, C, H, W = 32, 24, 16, 8
     X = np.random.randn(N, C, H, W).astype(defaultDType);
     m = PRelu2DLayer(C);
-    beta = m.beta;
     Y = m.forward(X)[0];
     dX1 = m.backward(np.ones_like(Y))[0];
-    dBeta1 = m.params[0].grad;
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
-    dBetaN = numericGradient(lambda x: np.sum(PRelu2DLayer(C, beta = x).forward(X)[0]), beta);
-    print(f"PRelu2DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}{getErrorText('dBeta error', dBeta1, dBetaN)}");
+    print(f"PRelu2DLayer, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
+    testModuleGradient(m, "PRelu2DLayer, numericGradient3", X);
     print("\n");
 
 
@@ -3644,6 +3661,50 @@ def testIdentityWithHuberLossGradient4():
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, W, T), X);
     print(f"IdentityWithHuberLoss, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testAffineLayer1():
+    N, inputSie, outputSize = 32, 16, 18;
+    X = np.random.randn(N, inputSie).astype(defaultDType);
+
+    X1 = torch.tensor(X, dtype = torch.float32, requires_grad = True);
+    m1 = nn.Linear(inputSie, outputSize);
+    Y1 = m1(X1);
+    torch.sum(Y1).backward();
+    Y1 = Y1.detach().numpy();
+    dX1 = X1.grad.detach().numpy();
+
+    X2 = X;
+    m2 = AffineLayer(inputSie, outputSize);
+    injectTorchParams(m1, m2);
+    Y2, = m2.forward(X2);
+    dX2, = m2.backward(np.ones_like(Y2));
+
+    print(f"AffineLayer, value1 {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)}");
+    testTorchGradient(m1, m2);
+    print("\n");
+
+
+def testAffineLayer2():
+    N, T, inputSie, outputSize = 32, 120, 16, 18;
+    X = np.random.randn(N, T, inputSie).astype(defaultDType);
+
+    X1 = torch.tensor(X, dtype = torch.float32, requires_grad = True);
+    m1 = nn.Linear(inputSie, outputSize);
+    Y1 = m1(X1);
+    torch.sum(Y1).backward();
+    Y1 = Y1.detach().numpy();
+    dX1 = X1.grad.detach().numpy();
+
+    X2 = X;
+    m2 = AffineLayer(inputSie, outputSize);
+    injectTorchParams(m1, m2);
+    Y2, = m2.forward(X2);
+    dX2, = m2.backward(np.ones_like(Y2));
+
+    print(f"AffineLayer, value2 {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)}");
+    testTorchGradient(m1, m2);
     print("\n");
 
 
@@ -4568,7 +4629,7 @@ def testLayerNormalizationLayer1():
     m2 = torch.nn.LayerNorm(C, eps = 1e-8, dtype = torch.float64);
     Y2 = m2.forward(torch.tensor(X));
     Y2 = Y2.detach().numpy();
-    print(f"LayerNormalizationLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"LayerNormalizationLayer, value1 {getErrorText('Y error', Y1, Y2)}");
 
     X = np.random.randn(N, L, C);
     m1 = LayerNormalizationLayer(C);
@@ -4576,15 +4637,25 @@ def testLayerNormalizationLayer1():
     m2 = torch.nn.LayerNorm(C, eps = 1e-8, dtype = torch.float64);
     Y2 = m2.forward(torch.tensor(X));
     Y2 = Y2.detach().numpy();
-    print(f"LayerNormalizationLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    print(f"LayerNormalizationLayer, value1 {getErrorText('Y error', Y1, Y2)}");
 
     X = np.random.randn(N, C, H, W);
+    Z = np.random.randn(N, C, H, W);
+
+    X1 = torch.tensor(X, requires_grad = True);
+    Z1 = torch.tensor(Z, requires_grad = False);
+    m2 = torch.nn.LayerNorm((C, H, W), eps = 1e-8, dtype = torch.float64);
+    Y2 = m2.forward(X1);
+    torch.sum(Y2 * Z1).backward();
+    Y2 = Y2.detach().numpy();
+    dX1 = X1.grad.detach().numpy();
+
     m1 = LayerNormalizationLayer((C, H, W));
     Y1, = m1.forward(X);
-    m2 = torch.nn.LayerNorm((C, H, W), eps = 1e-8, dtype = torch.float64);
-    Y2 = m2.forward(torch.tensor(X));
-    Y2 = Y2.detach().numpy();
-    print(f"LayerNormalizationLayer, value1, Y error: {np.sum(np.abs(Y1 - Y2))}");
+    dX2, = m1.backward(Z);
+    
+    print(f"LayerNormalizationLayer, value1 {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)}");
+    testTorchGradient(m2, m1);
 
     print("\n");
 
@@ -4874,7 +4945,33 @@ def testRnnCell1():
     m = RnnCell(inputSize, hiddenSize, Wx = Wx, Wh = Wh, bx = bx, bh = bh);
     Y2, = m.forward(X, H);
 
-    print(f"RnnCell1, value1 {getErrorText('Y error', Y1, Y2)}");
+    print(f"RnnCell, value1 {getErrorText('Y error', Y1, Y2)}");
+    print("\n");
+
+
+def testRnnCell2():
+    N, inputSize, hiddenSize = 32, 100, 64;
+    X, H = np.random.randn(N, inputSize).astype(defaultDType), np.random.randn(N, hiddenSize).astype(defaultDType);
+
+    X1 = torch.tensor(X, dtype = torch.float32, requires_grad = True);
+    H1 = torch.tensor(H, dtype = torch.float32, requires_grad = True);
+    m1 = nn.RNNCell(inputSize, hiddenSize);
+    Y1 = m1(X1, H1);
+    torch.sum(Y1).backward();
+    Y1 = Y1.detach().numpy();
+    dX1 = X1.grad.detach().numpy();
+    dH1 = H1.grad.detach().numpy();
+
+    m2 = RnnCell(inputSize, hiddenSize,
+                 Wx = m1.weight_ih.T.detach().numpy(),
+                 Wh = m1.weight_hh.T.detach().numpy(),
+                 bx = m1.bias_ih.detach().numpy(),
+                 bh = m1.bias_hh.detach().numpy());
+    Y2, = m2.forward(X, H);
+    dX2, dH2 = m2.backward(np.ones_like(Y2));
+
+    print(f"RnnCell, value2 {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)} {getErrorText('dH error', dH1, dH2)}");
+    testParamsGradient(m2, m1.weight_ih.grad.T, m1.weight_hh.grad.T, m1.bias_ih.grad, m1.bias_hh.grad);
     print("\n");
 
 
@@ -5036,7 +5133,30 @@ def testGruCell1():
                 bx = np.concatenate((bxr, bxz, bxh), axis = -1), bh = np.concatenate((bhr, bhz, bhh), axis = -1));
     Y2, = m.forward(X, H);
 
-    print(f"GruCell1, value1 {getErrorText('Y error', Y1, Y2)}");
+    print(f"GruCell, value1 {getErrorText('Y error', Y1, Y2)}");
+    print("\n");
+
+
+def testGruCell2():
+    N, inputSize, hiddenSize = 32, 100, 64;
+    X, H = np.random.randn(N, inputSize).astype(defaultDType), np.random.randn(N, hiddenSize).astype(defaultDType);
+
+    X1 = torch.tensor(X, dtype = torch.float32, requires_grad = True);
+    H1 = torch.tensor(H, dtype = torch.float32, requires_grad = True);
+    m1 = nn.GRUCell(inputSize, hiddenSize);
+    Y1 = m1(X1, H1);
+    torch.sum(Y1).backward();
+    Y1 = Y1.detach().numpy();
+    dX1 = X1.grad.detach().numpy();
+    dH1 = H1.grad.detach().numpy();
+
+    m2 = GruCell(inputSize, hiddenSize);
+    injectTorchParams(m1, m2);
+    Y2, = m2.forward(X, H);
+    dX2, dH2 = m2.backward(np.ones_like(Y2));
+
+    print(f"GruCell, value2 {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)} {getErrorText('dH error', dH1, dH2)}");
+    testTorchGradient(m1, m2);
     print("\n");
 
 
@@ -5205,6 +5325,32 @@ def testLstmCell1():
     YH2, YC2 = m.forward(X, H, C);
 
     print(f"LstmCell, value1 {getErrorText('H error', YH1, YH2)} {getErrorText('C error', YC1, YC2)}");
+    print("\n");
+
+
+def testLstmCell2():
+    N, inputSize, hiddenSize = 32, 24, 48;
+    X, H, C = np.random.randn(N, inputSize).astype(defaultDType), np.random.randn(N, hiddenSize).astype(defaultDType), np.random.randn(N, hiddenSize).astype(defaultDType);
+
+    X1 = torch.tensor(X, dtype = torch.float32, requires_grad = True);
+    H1 = torch.tensor(H, dtype = torch.float32, requires_grad = True);
+    C1 = torch.tensor(C, dtype = torch.float32, requires_grad = True);
+    m1 = nn.LSTMCell(inputSize, hiddenSize);
+    YH1, YC1 = m1(X1, (H1, C1));
+    torch.sum(YH1 + YC1).backward();
+    YH1 = YH1.detach().numpy();
+    YC1 = YC1.detach().numpy();
+    dX1 = X1.grad.detach().numpy();
+    dH1 = H1.grad.detach().numpy();
+    dC1 = C1.grad.detach().numpy();
+
+    m2 = LstmCell(inputSize, hiddenSize);
+    injectTorchParams(m1, m2);
+    YH2, YC2 = m2.forward(X, H, C);
+    dX2, dH2, dC2 = m2.backward(np.ones_like(YH2), np.ones_like(YC2));
+
+    print(f"LstmCell, value2 {getErrorText('YH error', YH1, YH2)} {getErrorText('YC error', YC1, YC2)} {getErrorText('dX error', dX1, dX2)} {getErrorText('dH error', dH1, dH2)} {getErrorText('dC error', dC1, dC2)}");
+    testTorchGradient(m1, m2);
     print("\n");
 
 
@@ -6213,7 +6359,7 @@ def testAdditiveAttentionModule1():
 
 
 def testAdditiveAttentionModuleGradient1():
-    batchSize, queryNum, keyNum = 32, 20, 21;
+    batchSize, queryNum, keyNum = 16, 20, 21;
     querySize, keySize, valueSize, hiddenSize = 22, 23, 24, 25;
     Q = np.random.randn(batchSize, queryNum, querySize);
     K = np.random.randn(batchSize, keyNum, keySize);
@@ -6242,7 +6388,7 @@ def testAdditiveAttentionModuleGradient2():
 
         return np.arange(keyNum, dtype = np.int32) < validLen;
 
-    batchSize, queryNum, keyNum = 32, 20, 21;
+    batchSize, queryNum, keyNum = 16, 20, 21;
     querySize, keySize, valueSize, hiddenSize = 22, 23, 24, 25;
     Q = np.random.randn(batchSize, queryNum, querySize);
     K = np.random.randn(batchSize, keyNum, keySize);
@@ -6272,7 +6418,7 @@ def testAdditiveAttentionModuleGradient3():
 
         return np.arange(keyNum, dtype = np.int32) < validLen;
 
-    batchSize, queryNum, keyNum = 32, 20, 21;
+    batchSize, queryNum, keyNum = 16, 20, 21;
     querySize, keySize, valueSize, hiddenSize = 22, 23, 24, 25;
     Q = np.random.randn(batchSize, queryNum, querySize);
     K = np.random.randn(batchSize, keyNum, keySize);
@@ -6295,7 +6441,7 @@ def testAdditiveAttentionModuleGradient3():
 
 
 def testAdditiveAttentionModuleGradient4():
-    batchSize, sequenceNum, queryNum, keyNum = 2, 3, 4, 5;
+    batchSize, sequenceNum, queryNum, keyNum = 16, 3, 4, 5;
     querySize, keySize, valueSize, hiddenSize = 6, 7, 8, 9;
     Q = np.random.randn(batchSize, sequenceNum, queryNum, querySize);
     K = np.random.randn(batchSize, sequenceNum, keyNum, keySize);
@@ -6318,7 +6464,7 @@ def testAdditiveAttentionModuleGradient4():
 
 
 def testDotProductAttentionModuleGradient1():
-    batchSize, queryNum, keyNum = 32, 20, 21;
+    batchSize, queryNum, keyNum = 16, 20, 21;
     querySize, keySize, valueSize = 22, 22, 23;
     Q = np.random.randn(batchSize, queryNum, querySize);
     K = np.random.randn(batchSize, keyNum, keySize);
@@ -6342,7 +6488,7 @@ def testDotProductAttentionModuleGradient2():
 
         return np.arange(keyNum, dtype = np.int32) < validLen;
 
-    batchSize, queryNum, keyNum = 32, 20, 21;
+    batchSize, queryNum, keyNum = 16, 20, 21;
     querySize, keySize, valueSize = 22, 22, 23;
     Q = np.random.randn(batchSize, queryNum, querySize);
     K = np.random.randn(batchSize, keyNum, keySize);
@@ -6367,7 +6513,7 @@ def testDotProductAttentionModuleGradient3():
 
         return np.arange(keyNum, dtype = np.int32) < validLen;
 
-    batchSize, queryNum, keyNum = 32, 20, 21;
+    batchSize, queryNum, keyNum = 16, 20, 21;
     querySize, keySize, valueSize = 22, 22, 23;
     Q = np.random.randn(batchSize, queryNum, querySize);
     K = np.random.randn(batchSize, keyNum, keySize);
@@ -6385,7 +6531,7 @@ def testDotProductAttentionModuleGradient3():
 
 
 def testDotProductAttentionModuleGradient4():
-    batchSize, sequenceNum, queryNum, keyNum = 2, 3, 4, 5;
+    batchSize, sequenceNum, queryNum, keyNum = 16, 3, 4, 5;
     querySize, keySize, valueSize = 6, 6, 7;
     Q = np.random.randn(batchSize, sequenceNum, queryNum, querySize);
     K = np.random.randn(batchSize, sequenceNum, keyNum, keySize);
@@ -6629,7 +6775,7 @@ def testSelfAttentionModuleGradient1():
 
         return np.arange(keyNum, dtype = np.int32) < validLen;
 
-    batchSize, sequenceLength, sequenceDimension, hiddenSize = 32, 10, 11, 12;
+    batchSize, sequenceLength, sequenceDimension, hiddenSize = 16, 10, 11, 12;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     M = getLenMask(sequenceLength, sequenceLength, np.random.randint(1, sequenceLength + 1, batchSize));
     m = SelfAttentionModule(AdditiveAttentionModule(sequenceDimension, sequenceDimension, hiddenSize));
@@ -6650,7 +6796,7 @@ def testSelfAttentionModuleGradient2():
         return np.arange(keyNum, dtype = np.int32) < validLen;
 
 
-    batchSize, sequenceLength, sequenceDimension = 32, 10, 11;
+    batchSize, sequenceLength, sequenceDimension = 16, 10, 11;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     M = getLenMask(sequenceLength, sequenceLength, np.random.randint(1, sequenceLength + 1, (batchSize, sequenceLength)));
     m = SelfAttentionModule(DotProductAttentionModule());
@@ -6663,7 +6809,7 @@ def testSelfAttentionModuleGradient2():
 
 
 def testSelfAttentionModuleGradient3():
-    batchSize, sequenceLength, sequenceDimension = 32, 10, 11;
+    batchSize, sequenceLength, sequenceDimension = 16, 10, 11;
     headNum, queryHiddenSize, keyHiddenSize, valueHiddenSize, additiveHiddenSize = 8, 12, 13, 14, 15;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     M = np.random.randint(0, 2, (batchSize, sequenceLength, sequenceLength));
@@ -6677,7 +6823,7 @@ def testSelfAttentionModuleGradient3():
 
 
 def testSelfAttentionModuleGradient4():
-    batchSize, sequenceLength, sequenceDimension = 32, 10, 11;
+    batchSize, sequenceLength, sequenceDimension = 16, 10, 11;
     headNum, queryHiddenSize, keyHiddenSize, valueHiddenSize = 8, 12, 12, 12;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     M = np.random.randint(0, 2, (batchSize, sequenceLength, sequenceLength));
@@ -6692,7 +6838,7 @@ def testSelfAttentionModuleGradient4():
 
 
 def testSelfAttentionModuleGradient5():
-    batchSize, sequenceNum, sequenceLength, sequenceDimension = 2, 3, 4, 5;
+    batchSize, sequenceNum, sequenceLength, sequenceDimension = 16, 3, 4, 5;
     headNum, queryHiddenSize, keyHiddenSize, valueHiddenSize = 6, 7, 7, 7;
     X = np.random.randn(batchSize, sequenceNum, sequenceLength, sequenceDimension);
     M = getAttentionMaskByValidLength(sequenceLength, sequenceLength, np.random.randint(1, sequenceLength + 1, (batchSize, sequenceNum, sequenceLength)));
@@ -6707,7 +6853,7 @@ def testSelfAttentionModuleGradient5():
 
 
 def testSinePositionalEncodingModuleGradient1():
-    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    batchSize, sequenceLength, sequenceDimension = 16, 10, 21;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     m = SinePositionalEncodingModule(sequenceDimension);
 
@@ -6719,7 +6865,7 @@ def testSinePositionalEncodingModuleGradient1():
 
 
 def testSinePositionalEncodingModuleGradient2():
-    batchSize, headNum, sequenceLength, sequenceDimension = 32, 8, 10, 21;
+    batchSize, headNum, sequenceLength, sequenceDimension = 16, 8, 10, 21;
     X = np.random.randn(batchSize, headNum, sequenceLength, sequenceDimension);
     m = SinePositionalEncodingModule(sequenceDimension);
 
@@ -6731,7 +6877,7 @@ def testSinePositionalEncodingModuleGradient2():
 
 
 def testSinePositionalEncodingModuleGradient3():
-    batchSize, headNum, sequenceLength, sequenceDimension = 32, 8, 10, 21;
+    batchSize, headNum, sequenceLength, sequenceDimension = 16, 8, 10, 21;
     X = np.random.randn(batchSize, headNum, sequenceLength, sequenceDimension);
     startIndex = np.array(13);
     m = SinePositionalEncodingModule(sequenceDimension);
@@ -6757,7 +6903,7 @@ def testSinePositionalEncodingModuleGradient4():
 
 
 def testTransformerAddNormalizationModuleGradient1():
-    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    batchSize, sequenceLength, sequenceDimension = 16, 10, 21;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     F = np.random.randn(*X.shape);
     C = np.random.randn(*X.shape); # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
@@ -6795,7 +6941,9 @@ def testTransformerAddNormalizationModuleGradient2():
 
 
 def testTransformerPositionwiseFFNModuleGradient1():
-    batchSize, sequenceNum, sequenceLength, sequenceDimension, hiddenSize = 2, 3, 4, 5, 6;
+    np.random.seed(13131313);
+
+    batchSize, sequenceNum, sequenceLength, sequenceDimension, hiddenSize = 16, 10, 24, 8, 9;
     X = np.random.randn(batchSize, sequenceNum, sequenceLength, sequenceDimension);
     m = TransformerPositionwiseFFNModule(sequenceDimension, hiddenSize, activationFuncSelector = lambda size: PReluLayer(outputSize = size));
 
@@ -6808,7 +6956,7 @@ def testTransformerPositionwiseFFNModuleGradient1():
 
 
 def testTransformerEncoderBlockGradient1():
-    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    batchSize, sequenceLength, sequenceDimension = 16, 10, 21;
     attentionHiddenSize, ffnHiddenSize, headNum = 22, 23, 8;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     C = np.random.randn(*X.shape); # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
@@ -6826,7 +6974,7 @@ def testTransformerEncoderBlockGradient1():
 
 
 def testTransformerEncoderBlockGradient2():
-    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    batchSize, sequenceLength, sequenceDimension = 16, 10, 21;
     attentionHiddenSize, ffnHiddenSize, headNum = 22, 23, 8;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     M = np.random.randint(0, 2, (batchSize, sequenceLength, sequenceLength));
@@ -6845,7 +6993,7 @@ def testTransformerEncoderBlockGradient2():
 
 
 def testTransformerEncoderBlockGradient3():
-    batchSize, sequenceLength, sequenceDimension = 32, 20, 16;
+    batchSize, sequenceLength, sequenceDimension = 16, 20, 16;
     attentionHiddenSize, ffnHiddenSize, headNum = 17, 18, 8;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     validLength = np.random.randint(1, sequenceLength + 1, batchSize);
@@ -6885,7 +7033,7 @@ def testTransformerEncoderBlockGradient4():
 
 
 def testTransformerEncoderGradient1():
-    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    batchSize, sequenceLength, sequenceDimension = 16, 10, 21;
     attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 22, 23, 8, 2;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     C = np.random.randn(*X.shape);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
@@ -6903,7 +7051,7 @@ def testTransformerEncoderGradient1():
 
 
 def testTransformerEncoderGradient2():
-    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    batchSize, sequenceLength, sequenceDimension = 16, 10, 21;
     attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 22, 23, 8, 2;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     M = np.random.randint(0, 2, (batchSize, sequenceLength, sequenceLength));
@@ -6962,7 +7110,7 @@ def testTransformerEncoderGradient4():
 
 
 def testTransformerDecoderBlockGradient1():
-    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    batchSize, sequenceLength, sequenceDimension = 16, 10, 21;
     attentionHiddenSize, ffnHiddenSize, headNum = 22, 23, 8;
     Q = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     K = np.random.randn(batchSize, sequenceLength, sequenceDimension);
@@ -6987,7 +7135,7 @@ def testTransformerDecoderBlockGradient1():
 
 
 def testTransformerDecoderBlockGradient2():
-    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    batchSize, sequenceLength, sequenceDimension = 16, 10, 21;
     attentionHiddenSize, ffnHiddenSize, headNum = 22, 23, 8;
     Q = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     K = np.random.randn(batchSize, sequenceLength, sequenceDimension);
@@ -7013,7 +7161,7 @@ def testTransformerDecoderBlockGradient2():
 
 
 def testTransformerDecoderBlockGradient3():
-    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    batchSize, sequenceLength, sequenceDimension = 16, 10, 21;
     attentionHiddenSize, ffnHiddenSize, headNum = 22, 23, 8;
     Q = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     K = np.random.randn(batchSize, sequenceLength, sequenceDimension);
@@ -7106,7 +7254,7 @@ def testTransformerDecoder2():
 
 
 def testTransformerDecoderGradient1():
-    batchSize, sequenceLength, sequenceDimension = 32, 10, 21;
+    batchSize, sequenceLength, sequenceDimension = 16, 10, 21;
     attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 22, 23, 8, 3;
     X = np.random.randn(batchSize, sequenceLength, sequenceDimension);
     encoderY = np.random.randn(batchSize, sequenceLength + 1, sequenceDimension + 2);
@@ -7134,7 +7282,7 @@ def testTransformerDecoderGradient2():
     encoderM = np.random.randint(0, 2, (batchSize, sequenceLength, sequenceLength + 1));
     C = np.random.randn(*X.shape);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
     m = SequentialContainer(
-        TransformerDecoder(sequenceDimension, sequenceDimension + 2, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum, blockNum = blockNum),
+        TransformerDecoder(sequenceDimension, sequenceDimension + 2, attentionHiddenSize, ffnHiddenSize, sequenceDimension, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda size: SwishLayer(outputSize = size)),
         FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
     );
     m.context.isTrainingMode = True;
@@ -7143,7 +7291,7 @@ def testTransformerDecoderGradient2():
     dX1, dEncoderY1 = m.backward(np.ones_like(Y));
     dXN = numericGradient(lambda x: np.sum(m.forward(x, encoderY, encoderM)[0]), X);
     dEncoderYN = numericGradient(lambda x: np.sum(m.forward(X, x, encoderM)[0]), encoderY);
-    print(f"TransformerDecoder, numericGradient1 {getErrorText('dX error', dX1, dXN)}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
+    print(f"TransformerDecoder, numericGradient2 {getErrorText('dX error', dX1, dXN)}, dEncoderY error: {np.sum(np.abs(dEncoderY1 - dEncoderYN))}");
     testModuleGradient(m, "TransformerDecoder, numericGradient2", X, encoderY, encoderM);
     print("\n");
 
@@ -7172,12 +7320,15 @@ def testTransformerDecoderGradient3():
 
 
 def testTransformerEmbeddingEncoderGradient1():
-    batchSize, sequenceLength = 32, 20;
+    np.random.seed(13131313);
+
+    batchSize, sequenceLength = 16, 20;
     vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 120, 16, 17, 18, 8, 2;
     X = np.random.randint(0, vocabSize, (batchSize, sequenceLength));
     C = np.random.randn(batchSize, sequenceLength, embeddingSize);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
+
     m = SequentialContainer(
-        TransformerEmbeddingEncoder(vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum),
+        TransformerEmbeddingEncoder(vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda size: ReluLayer()),
         FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
     );
 
@@ -7188,13 +7339,15 @@ def testTransformerEmbeddingEncoderGradient1():
 
 
 def testTransformerEmbeddingEncoderGradient2():
-    batchSize, sequenceLength = 32, 20;
+    np.random.seed(13131313);
+
+    batchSize, sequenceLength = 16, 20;
     vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 120, 16, 17, 18, 8, 2;
     X = np.random.randint(0, vocabSize, (batchSize, sequenceLength));
     validLength = np.random.randint(1, sequenceLength + 1, batchSize);
     C = np.random.randn(batchSize, sequenceLength, embeddingSize);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
     m = SequentialContainer(
-        TransformerEmbeddingEncoder(vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum),
+        TransformerEmbeddingEncoder(vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda size: SwishLayer(outputSize = size)),
         FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
     );
 
@@ -7205,13 +7358,15 @@ def testTransformerEmbeddingEncoderGradient2():
 
 
 def testTransformerEmbeddingEncoderGradient3():
-    batchSize, sequenceNum, sequenceLength = 2, 3, 4;
-    vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 5, 6, 7, 8, 9, 10;
+    np.random.seed(13131313);
+
+    batchSize, sequenceNum, sequenceLength = 16, 3, 20;
+    vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 120, 16, 17, 18, 8, 2;
     X = np.random.randint(0, vocabSize, (batchSize, sequenceNum, sequenceLength));
     validLength = np.random.randint(1, sequenceLength + 1, (batchSize, sequenceNum));
     C = np.random.randn(batchSize, sequenceNum, sequenceLength, embeddingSize);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
     m = SequentialContainer(
-        TransformerEmbeddingEncoder(vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda size: SwishLayer(outputSize = size)),
+        TransformerEmbeddingEncoder(vocabSize, embeddingSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda size: GeluLayer()),
         FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
     );
 
@@ -7261,7 +7416,9 @@ def testTransformerEmbeddingDecoder2():
 
 
 def testTransformerEmbeddingDecoderGradient1():
-    batchSize, sequenceLength = 32, 20;
+    np.random.seed(13131313);
+
+    batchSize, sequenceLength = 16, 20;
     vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 120, 16, 17, 18, 19, 8, 2;
     X = np.random.randint(0, vocabSize, (batchSize, sequenceLength));
     encoderY = np.random.randn(batchSize, sequenceLength + 1, encoderSize);
@@ -7280,14 +7437,16 @@ def testTransformerEmbeddingDecoderGradient1():
 
 
 def testTransformerEmbeddingDecoderGradient2():
-    batchSize, sequenceLength = 32, 20;
+    np.random.seed(13131313);
+
+    batchSize, sequenceLength = 16, 20;
     vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 120, 16, 17, 18, 19, 8, 2;
     X = np.random.randint(0, vocabSize, (batchSize, sequenceLength));
     encoderY = np.random.randn(batchSize, sequenceLength + 1, encoderSize);
     encoderValidLength = np.random.randint(1, sequenceLength + 2, batchSize);
     C = np.random.randn(batchSize, sequenceLength, embeddingSize);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
     m = SequentialContainer(
-        TransformerEmbeddingDecoder(vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda size: GeluLayer()),
+        TransformerEmbeddingDecoder(vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda size: SwishLayer(outputSize = size)),
         FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
     );
 
@@ -7300,14 +7459,16 @@ def testTransformerEmbeddingDecoderGradient2():
 
 
 def testTransformerEmbeddingDecoderGradient3():
-    batchSize, sequenceNum, sequenceLength = 2, 3, 4;
-    vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 5, 6, 7, 8, 9, 10, 11;
+    np.random.seed(13131313);
+
+    batchSize, sequenceNum, sequenceLength = 16, 3, 20;
+    vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, headNum, blockNum = 120, 16, 17, 18, 19, 8, 2;
     X = np.random.randint(0, vocabSize, (batchSize, sequenceNum, sequenceLength));
     encoderY = np.random.randn(batchSize, sequenceNum, sequenceLength + 1, encoderSize);
     encoderValidLength = np.random.randint(1, sequenceLength + 2, (batchSize, sequenceNum));
     C = np.random.randn(batchSize, sequenceNum, sequenceLength, embeddingSize);  # if not multiple C, np.sum(Y) is always zero, dX1 will be zero too.
     m = SequentialContainer(
-        TransformerEmbeddingDecoder(vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda size: SwishLayer(outputSize = size)),
+        TransformerEmbeddingDecoder(vocabSize, embeddingSize, encoderSize, attentionHiddenSize, ffnHiddenSize, embeddingSize, headNum = headNum, blockNum = blockNum, ffnActivationFuncSelector = lambda size: GeluLayer()),
         FunctionalNetModule("*C", lambda x: x * C, lambda x, y, dy: dy * C),
     );
 

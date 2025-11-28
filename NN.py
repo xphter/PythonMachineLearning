@@ -1211,7 +1211,7 @@ class PReluLayer(NetModuleBase):
         else:
             dBeta = np.sum(dBeta, axis = tuple(range(len(dBeta.shape) - 1)));
 
-        self._params[0].grad[...] = dBeta;
+        self._params[0].grad[...] += dBeta;
 
         return dX, ;
 
@@ -1341,7 +1341,7 @@ class SwishLayer(NetModuleBase):
         else:
             dBeta = np.sum(dBeta, axis = tuple(range(len(dBeta.shape) - 1)));
 
-        self._params[0].grad[...] = dBeta;
+        self._params[0].grad[...] += dBeta;
 
         return dX, ;
 
@@ -1768,11 +1768,11 @@ class AffineLayer(NetModuleBase):
             dY = np.reshape(dY, (-1, dY.shape[-1]));
 
         dW = self._X.T @ dY;
-        self._params[0].grad[...] = dW;
+        self._params[0].grad[...] += dW;
 
         if self._bias is not None:
             db = np.sum(dY, 0);
-            self._params[1].grad[...] = db;
+            self._params[1].grad[...] += db;
 
         dX = dY @ self._weight.T;
         if self._shape is not None:
@@ -1903,8 +1903,8 @@ class BatchNormalizationLayer(NetModuleBase):
         dBeta = np.sum(dY, axis = 0);
         dX = dXC - np.sum(dXC, axis = 0) / self._n;
 
-        self._params[0].grad[...] = dGamma;
-        self._params[1].grad[...] = dBeta;
+        self._params[0].grad[...] += dGamma;
+        self._params[1].grad[...] += dBeta;
 
         if shape is not None:
             dX = dX.reshape(*shape);
@@ -2035,8 +2035,8 @@ class LayerNormalizationLayer(NetModuleBase):
         dBeta = np.sum(dY, axis = batchShape);
         dX = dXC - np.sum(dXC, axis = self._layerAxis, keepdims = True) / self._layerSize;
 
-        self._params[0].grad[...] = dGamma;
-        self._params[1].grad[...] = dBeta;
+        self._params[0].grad[...] += dGamma;
+        self._params[1].grad[...] += dBeta;
 
         return dX, ;
 
@@ -2142,8 +2142,8 @@ class Convolution1DLayer(NetModuleBase):
         dX = colDY @ self._colW.T;
         dX = col2seq(dX, self._shape, FW, self._stride, self._padding, dilation = self._dilation, inDiff = True);
 
-        self._params[0].grad[...] = dW.T.reshape(FN, C, FW);
-        self._params[1].grad[...] = db;
+        self._params[0].grad[...] += dW.T.reshape(FN, C, FW);
+        self._params[1].grad[...] += db;
 
         return dX, ;
 
@@ -2309,8 +2309,8 @@ class Convolution2DLayer(NetModuleBase):
         dX = colDY @ self._colW.T;
         dX = col2im(dX, self._shape, FH, FW, self._stride, self._padding, dilation = self._dilation, inDiff = True);
 
-        self._params[0].grad[...] = dW.T.reshape(FN, C, FH, FW);
-        self._params[1].grad[...] = db;
+        self._params[0].grad[...] += dW.T.reshape(FN, C, FH, FW);
+        self._params[1].grad[...] += db;
 
         return dX, ;
 
@@ -2611,10 +2611,10 @@ class RnnCell(RnnCellBase):
         dX, dH = tuple(np.split(dX, self._xi, axis = -1));
         dWx, dWh = tuple(np.split(dW, self._xi, axis = 0));
 
-        self._params[0].grad[...] = dWx;
-        self._params[1].grad[...] = dWh;
-        self._params[2].grad[...] = db;
-        self._params[3].grad[...] = db;
+        self._params[0].grad[...] += dWx;
+        self._params[1].grad[...] += dWh;
+        self._params[2].grad[...] += db;
+        self._params[3].grad[...] += db;
 
         return dX, dH;
 
@@ -2688,10 +2688,10 @@ class GruCell(RnnCellBase):
         db = np.concatenate((dbg, dba), axis = -1);
         dWx, dWh = tuple(np.split(dW, self._xi, axis = 0));
 
-        self._params[0].grad[...] = dWx;
-        self._params[1].grad[...] = dWh;
-        self._params[2].grad[...] = db;
-        self._params[3].grad[...] = db;
+        self._params[0].grad[...] += dWx;
+        self._params[1].grad[...] += dWh;
+        self._params[2].grad[...] += db;
+        self._params[3].grad[...] += db;
 
         return dX, dH;
 
@@ -2753,10 +2753,10 @@ class LstmCell(RnnCellBase):
 
         dX, dH = np.split(dX, self._xi, axis = -1);
         dWx, dWh = np.split(dW, self._xi, axis = 0);
-        self._params[0].grad[...] = dWx;
-        self._params[1].grad[...] = dWh;
-        self._params[2].grad[...] = db;
-        self._params[3].grad[...] = db;
+        self._params[0].grad[...] += dWx;
+        self._params[1].grad[...] += dWh;
+        self._params[2].grad[...] += db;
+        self._params[3].grad[...] += db;
 
         return dX, dH, dC;
 
@@ -2917,10 +2917,10 @@ class RnnLayer(RnnLayerBase):
 
         self._dH = dH;
         dXs = np.array(dXs);
-        self._params[0].grad[...] = dWx;
-        self._params[1].grad[...] = dWh;
-        self._params[2].grad[...] = db;
-        self._params[3].grad[...] = db;
+        self._params[0].grad[...] += dWx;
+        self._params[1].grad[...] += dWh;
+        self._params[2].grad[...] += db;
+        self._params[3].grad[...] += db;
 
         return (dXs, self._dH) if self._foreignState else (dXs, );
 
@@ -3077,10 +3077,10 @@ class GruLayer(RnnLayerBase):
 
         self._dH = dH;
         dXs = np.array(dXs);
-        self._params[0].grad[...] = dWx;
-        self._params[1].grad[...] = dWh;
-        self._params[2].grad[...] = db;
-        self._params[3].grad[...] = db;
+        self._params[0].grad[...] += dWx;
+        self._params[1].grad[...] += dWh;
+        self._params[2].grad[...] += db;
+        self._params[3].grad[...] += db;
 
         return (dXs, self._dH) if self._foreignState else (dXs, );
 
@@ -3235,10 +3235,10 @@ class LstmLayer(RnnLayerBase):
         self._dH = dH;
         self._dC = dC;
         dXs = np.array(dXs);
-        self._params[0].grad[...] = dWx;
-        self._params[1].grad[...] = dWh;
-        self._params[2].grad[...] = db;
-        self._params[3].grad[...] = db;
+        self._params[0].grad[...] += dWx;
+        self._params[1].grad[...] += dWh;
+        self._params[2].grad[...] += db;
+        self._params[3].grad[...] += db;
 
         return (dXs, self._dH, self._dC) if self._foreignState else (dXs, );
 
@@ -4216,8 +4216,8 @@ class GatedAdditiveLayer(NetModuleBase):
         dX1 += dX1_;
         dX2 += dX2_;
 
-        self._params[0].grad[...] = dW;
-        self._params[1].grad[...] = db;
+        self._params[0].grad[...] += dW;
+        self._params[1].grad[...] += db;
 
         return dX1, dX2;
 
@@ -5346,9 +5346,9 @@ class AdditiveAttentionModule(AggregateNetModule, INetAttentionModule):
         dQ = np.sum(dQ, axis = -2);
         dK = np.sum(dK, axis = -3);
 
-        self._params[0].grad[...] = dWeightQ;
-        self._params[1].grad[...] = dWeightK;
-        self._params[2].grad[...] = dWeightV;
+        self._params[0].grad[...] += dWeightQ;
+        self._params[1].grad[...] += dWeightK;
+        self._params[2].grad[...] += dWeightV;
 
         return dQ, dK, dV;
 
@@ -5490,10 +5490,10 @@ class MultiHeadAttentionModule(AggregateNetModule, INetAttentionModule):
         dV = dVH @ self._weightV.T;
         dWeightV = np.sum(np.swapaxes(self._V, -1, -2) @ dVH, axis = tuple(range(self._V.ndim - 2)));
 
-        self._params[0].grad[...] = dWeightQ;
-        self._params[1].grad[...] = dWeightK;
-        self._params[2].grad[...] = dWeightV;
-        self._params[3].grad[...] = dWeightO;
+        self._params[0].grad[...] += dWeightQ;
+        self._params[1].grad[...] += dWeightK;
+        self._params[2].grad[...] += dWeightV;
+        self._params[3].grad[...] += dWeightO;
 
         return dQ, dK, dV;
 
