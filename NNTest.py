@@ -2094,6 +2094,8 @@ def unitTest():
     print(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} start to unit test\n");
 
     # testSGD_Numba();
+    testAveragedWeightNetOptimizer1();
+    testAveragedWeightNetOptimizer2();
     # testSeq2col_Numba();
 
     # testPerformance();
@@ -2456,6 +2458,55 @@ def testSGD_Numba():
     et = time.time();
 
     print(f"time: {et - st} s.");
+
+
+def testAveragedWeightNetOptimizer1():
+    m = nn.LSTM(32, 48, 2);
+    optimizer1 = torch.optim.swa_utils.AveragedModel(m);
+    optimizer2 = AveragedWeightNetOptimizer(SGD());
+    
+    context = NetContext();
+
+    for i in range(10):
+        for p in m.parameters():
+            p.data += torch.randn_like(p.data);
+
+        modelParams = [NetParamDefinition(f"p{j}",  p.data.detach().numpy()) for j, p in enumerate(m.parameters())];
+
+        optimizer1.update_parameters(m);
+        optimizer2.updateStep(modelParams, context);
+
+        for p1, p2 in zip(optimizer1.parameters(), optimizer2.shadowParams):
+            print(f"iteration {i} {getErrorText(p2.name, p1.data.detach().numpy(), p2.value)}")
+        print("\n");
+
+    print(f"AveragedWeightNetOptimizer, value1");
+    print("\n");
+
+
+def testAveragedWeightNetOptimizer2():
+    m = nn.LSTM(32, 48, 2);
+    decay = 0.9;
+    optimizer1 = torch.optim.swa_utils.AveragedModel(m, avg_fn = lambda sp, mp, num: decay * sp + (1 - decay) * mp);
+    optimizer2 = ExponentialAvgWeightNetOptimizer(SGD(), decay = decay);
+    
+    context = NetContext();
+
+    for i in range(10):
+        for p in m.parameters():
+            p.data += torch.randn_like(p.data);
+
+        modelParams = [NetParamDefinition(f"p{j}",  p.data.detach().numpy()) for j, p in enumerate(m.parameters())];
+
+        optimizer1.update_parameters(m);
+        optimizer2.updateStep(modelParams, context);
+
+        for p1, p2 in zip(optimizer1.parameters(), optimizer2.shadowParams):
+            print(f"iteration {i} {getErrorText(p2.name, p1.data.detach().numpy(), p2.value)}")
+        print("\n");
+
+    print(f"ExponentialAvgWeightNetOptimizer, value2");
+    print("\n");
 
 
 def testSeq2col_Numba():

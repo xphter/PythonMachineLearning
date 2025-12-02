@@ -4851,6 +4851,75 @@ class AdamW(Adam):
         super().__init__(lr, beta1, beta2, yogi, epsilon, weightDecay, True);
 
 
+class AveragedWeightNetOptimizer(INetOptimizer):
+    def __init__(self, optimizer : INetOptimizer, avgFunc : Optional[Callable[[np.ndarray, np.ndarray, int], np.ndarray]] = None):
+        if optimizer is None:
+            raise ValueError("optimizer is None");
+
+        self._avgFunc = avgFunc if avgFunc is not None else AveragedWeightNetOptimizer._defaultAvgFunc;
+        self._shadowParams : List[INetParamDefinition] = [];
+        self._optimizer = optimizer;
+        self._averagedNum = 0;
+        
+
+    @staticmethod
+    def _defaultAvgFunc(shadowValue : np.ndarray, modelValue : np.ndarray, averagedNum : int) -> np.ndarray:
+        return (shadowValue * averagedNum + modelValue) / (averagedNum + 1);
+
+
+    def _initParams(self, params : List[INetParamDefinition], context : INetContext):
+        self._averagedNum = 0;
+        self._shadowParams = [p.copy(False) for p in params];
+
+
+    def _averageParams(self, params : List[INetParamDefinition], context : INetContext):
+        for shadowParam, modelParam in zip(self._shadowParams, params):
+            shadowParam.value[...] = self._avgFunc(shadowParam.value, modelParam.value, self._averagedNum);
+        
+        self._averagedNum += 1;
+
+
+    @property
+    def learningRate(self) -> float:
+        return self._optimizer.learningRate;
+
+
+    @learningRate.setter
+    def learningRate(self, value : float):
+        self._optimizer.learningRate = value;
+    
+
+    @property
+    def shadowParams(self) -> List[INetParamDefinition]:
+        return self._shadowParams;
+
+
+    def epochStep(self, epoch : int):
+        self._optimizer.epochStep(epoch);
+
+
+    def updateStep(self, params : List[INetParamDefinition], context : INetContext):
+        self._optimizer.updateStep(params, context);
+
+        if len(self._shadowParams) != len(params):
+            self._initParams(params, context);
+
+        self._averageParams(params, context);
+
+
+class ExponentialAvgWeightNetOptimizer(AveragedWeightNetOptimizer):
+    def __init__(self, optimizer : INetOptimizer, decay : float = 0.99):
+        super().__init__(optimizer);
+
+        self._decay = max(0, min(1, float(decay)));
+        self._1_Decay = 1 - self._decay;
+        self._avgFunc = self._emaAvgFunc;
+
+
+    def _emaAvgFunc(self, shadowValue : np.ndarray, modelValue : np.ndarray, averagedNum : int) -> np.ndarray:
+        return self._decay * shadowValue + self._1_Decay * modelValue;
+
+
 class NetOptimizerWithLrScheduler(INetOptimizer):
     def __init__(self, optimizer : INetOptimizer, scheduler : INetLrScheduler):
         if optimizer is None:
