@@ -325,8 +325,28 @@ class TS2VecModel(NetModelBase):
         return np.zeros_like(self._X), ;
 
 
-    def encode(self, X : np.ndarray) -> np.ndarray:
+    # pooling: max(MaxPooling1D), mean(AvgPooling1D)
+    def encode(self, X : np.ndarray, pooling : Optional[str] = None) -> np.ndarray:
+        self.context.isTrainingMode = False;
+
         Y, = self._encoder1.forward(X);
 
-        return Y;
+        if pooling is not None:
+            poolingLayer : Optional[INetModule] = None;
+            
+            if pooling == "max":
+                poolingLayer = MaxPooling1DLayer(Y.shape[-2]);
+            elif pooling == "mean":
+                poolingLayer = AvgPooling1DLayer(Y.shape[-2]);
+            elif isinstance(pooling, INetModule):
+                poolingLayer = pooling;
+            else:
+                raise ValueError(f"{pooling} is not a valid pooling method");
 
+            if poolingLayer is not None:
+                poolingLayer.context = self.context;
+
+                Y, = poolingLayer.forward(np.swapaxes(Y, -2, -1));
+                Y = np.squeeze(Y, axis = -1);
+
+        return Y;

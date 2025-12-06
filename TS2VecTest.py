@@ -988,10 +988,28 @@ def testTS2VecModel2():
 
     m2 = TS2VecModel(intputSize, outputSize, hiddenSize, blockNum = blockNum, representationDropout = 0.0);
     m2.context.isTrainingMode = False;
-    injectTorchParams(m1._net, m2);
+    injectTorchParams(m1.net, m2);
 
     Y1 = m1.encode(X);
     Y2 = m2.encode(X);
+
+    print(f"TS2VecModel, value2 {getErrorText('Y error', Y1, Y2)}");
+    print("\n");
+
+
+def testTS2VecModel3():
+    batchSize, sequenceLength = 32, 120;
+    intputSize, outputSize, hiddenSize, blockNum = 7, 8, 9, 2;
+    X = np.random.randn(batchSize, sequenceLength, intputSize).astype(defaultDType);
+
+    m1 = TS2Vec(intputSize, outputSize, hiddenSize, depth = blockNum, device = "cpu", batch_size = batchSize);
+
+    m2 = TS2VecModel(intputSize, outputSize, hiddenSize, blockNum = blockNum, representationDropout = 0.0);
+    m2.context.isTrainingMode = False;
+    injectTorchParams(m1.net, m2);
+
+    Y1 = m1.encode(X, encoding_window = "full_series");
+    Y2 = m2.encode(X, pooling = "max");
 
     print(f"TS2VecModel, value2 {getErrorText('Y error', Y1, Y2)}");
     print("\n");
@@ -1041,6 +1059,7 @@ def unitTest():
     
     # testTS2VecModel1();
     # testTS2VecModel2();
+    # testTS2VecModel3();
     # testTS2VecModelGradient1();
 
     print(f"\n{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} end to unit test\n");
