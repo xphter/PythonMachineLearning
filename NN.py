@@ -422,10 +422,12 @@ class NetUtility:
 
         ax0.set_xlabel("iteration");
         ax0.set_ylabel('loss');
+        ax0.set_title(f"total {len(result.trainingIterationLoss)} iterations");
         ax0.plot(result.trainingIterationLoss, "-k", label = "training iteration loss");
 
         ax1.set_xlabel("epoch");
         ax1.set_ylabel('loss');
+        ax1.set_title(f"total {len(result.trainingEpochLoss)} epochs");
         if result.trainingEpochLoss is not None and len(result.trainingEpochLoss) > 0:
             ax1.plot(result.trainingEpochLoss, "o-g", label = "training epoch loss");
         if result.testEpochLoss is not None and len(result.testEpochLoss) > 0:
@@ -439,6 +441,7 @@ class NetUtility:
             ax2.plot(result.testEpochAccuracy, "D-r", label = f"test epoch {result.accuracyName}");
 
         fig.legend(loc = "upper right", bbox_to_anchor = (1, 1), bbox_transform = ax0.transAxes);
+        fig.tight_layout();
         plt.show(block = True);
         plt.close();
 
