@@ -2094,8 +2094,8 @@ def unitTest():
     print(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} start to unit test\n");
 
     # testSGD_Numba();
-    testAveragedWeightNetOptimizer1();
-    testAveragedWeightNetOptimizer2();
+    # testAveragedWeightNetOptimizer1();
+    # testAveragedWeightNetOptimizer2();
     # testSeq2col_Numba();
 
     # testPerformance();
@@ -2487,7 +2487,7 @@ def testAveragedWeightNetOptimizer1():
 def testAveragedWeightNetOptimizer2():
     m = nn.LSTM(32, 48, 2);
     decay = 0.9;
-    optimizer1 = torch.optim.swa_utils.AveragedModel(m, avg_fn = lambda sp, mp, num: decay * sp + (1 - decay) * mp);
+    optimizer1 = torch.optim.swa_utils.AveragedModel(m, avg_fn = torch.optim.swa_utils.get_ema_avg_fn(decay));
     optimizer2 = ExponentialAvgWeightNetOptimizer(SGD(), decay = decay);
     
     context = NetContext();
