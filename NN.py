@@ -160,8 +160,9 @@ class INetOptimizer(metaclass = abc.ABCMeta):
         pass;
 
 
+    # return the shadow parameters
     @abc.abstractmethod
-    def updateStep(self, params : List[INetParamDefinition], context : INetContext):
+    def updateStep(self, params : List[INetParamDefinition], context : INetContext) -> Optional[List[INetParamDefinition]]:
         pass;
 
 
@@ -868,6 +869,8 @@ class NetFitResult(INetFitResult):
 class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
     def __init__(self, *modules : INetModule):
         super().__init__(*modules);
+        
+        self._shadowParams : Optional[List[INetParamDefinition]] = None;
 
 
     def getFinalTag(self, T : np.ndarray) -> Optional[np.ndarray]:
@@ -876,6 +879,11 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
     def eval(self, lossFunc : INetLoss, evaluator : INetAccuracyEvaluator, lossValues : Optional[List[float]] = None, iterator : Optional[Iterable] = None) -> Tuple[float, float]:
         self.context.isTrainingMode = False;
+
+        backupParams : Optional[List[INetParamDefinition]] = None;
+        if self._shadowParams is not None:
+            backupParams = self.params;
+            self.params = self._shadowParams;
 
         try:
             evaluator.reset();
@@ -893,6 +901,9 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
                 evaluator.fromLoss(lossValues);
         finally:
+            if backupParams is not None:
+                self.params = backupParams;
+
             self.reset();
             self.context.isTrainingMode = True;
 
@@ -913,6 +924,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         paramsData, statesData = [], [];
 
         startTime = time.time();
+        self._shadowParams = None;
         print(f"[{datetime.datetime.now()}] start to train model {self}");
 
         self.clean();
@@ -944,7 +956,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                     evaluator.update(loss, *Y, T) if T is not None else evaluator.update(loss, *Y);
 
                 self.backward(*lossFunc.backward());
-                optimizer.updateStep(self.params, self.context);
+                self._shadowParams = optimizer.updateStep(self.params, self.context);
                 self.clearGrads();
 
                 if evaluator is not None and evalIterations is not None and len(lossValues) % evalIterations == 0:
@@ -969,7 +981,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                     loss, accuracy = self.eval(lossFunc, evaluator, None, testIterator);
                     testEpochLoss.append(loss);
                     testEpochAccuracy.append(accuracy);
-                    paramsData.append([p.copy(False) for p in self.params]);
+                    paramsData.append([p.copy(False) for p in (self._shadowParams if self._shadowParams is not None else self.params)]);
                     statesData.append([s.copy() for s in self.states]);
 
             trainingMessage = f", training {evaluator.name}: {trainingEpochAccuracy[-1]}" if len(trainingEpochAccuracy) > 0 and evaluator is not None else "";
@@ -982,6 +994,8 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
             self.params = paramsData[minEpoch + int(index)];
             self.states = statesData[minEpoch + int(index)];
+        elif self._shadowParams is not None:
+            self.params = self._shadowParams;
 
         if evaluator is not None:
             print("evaluating final training data...");
@@ -1099,10 +1113,12 @@ class NetOptimizerBase(INetOptimizer, metaclass = abc.ABCMeta):
         pass;
 
 
-    def updateStep(self, params : List[INetParamDefinition], context : INetContext):
+    def updateStep(self, params : List[INetParamDefinition], context : INetContext) -> Optional[List[INetParamDefinition]]:
         self._onPreUpdate(params);
         self._onUpdate(params);
         self._onPostUpdate(params);
+
+        return None;
 
 
 class NetLrSchedulerBase(INetLrScheduler, metaclass = abc.ABCMeta):
@@ -1137,8 +1153,8 @@ class NetLrSchedulerBase(INetLrScheduler, metaclass = abc.ABCMeta):
         return (self._minEpoch <= epoch <= self._maxEpoch) if self._maxEpoch is not None else (self._minEpoch <= epoch);
 
 
-    def updateStep(self, params: List[INetParamDefinition], context: INetContext):
-        pass;
+    def updateStep(self, params: List[INetParamDefinition], context: INetContext) -> Optional[List[INetParamDefinition]]:
+        return None;
 
 
 class FunctionalNetModule(NetModuleBase):
@@ -4704,7 +4720,7 @@ class GradientsClipping(INetOptimizer):
         pass;
 
 
-    def updateStep(self, params : List[INetParamDefinition], context : INetContext):
+    def updateStep(self, params : List[INetParamDefinition], context : INetContext) -> Optional[List[INetParamDefinition]]:
         totalL2 = sum([float(np.sum(p.grad ** 2)) for p in params]);
         ratio = self._maxL2 / math.sqrt(totalL2 + self._epsilon);
 
@@ -4713,7 +4729,7 @@ class GradientsClipping(INetOptimizer):
                 grad = p.grad;
                 grad *= ratio;
 
-        self._optimizer.updateStep(params, context);
+        return self._optimizer.updateStep(params, context);
 
 
 class SGD(NetOptimizerBase):
@@ -4918,13 +4934,15 @@ class AveragedWeightNetOptimizer(INetOptimizer):
         self._optimizer.epochStep(epoch);
 
 
-    def updateStep(self, params : List[INetParamDefinition], context : INetContext):
+    def updateStep(self, params : List[INetParamDefinition], context : INetContext) -> Optional[List[INetParamDefinition]]:
         self._optimizer.updateStep(params, context);
 
         if len(self._shadowParams) != len(params):
             self._initParams(params, context);
 
         self._averageParams(params, context);
+        
+        return self._shadowParams;
 
 
 class ExponentialAvgWeightNetOptimizer(AveragedWeightNetOptimizer):
@@ -4970,8 +4988,8 @@ class NetOptimizerWithLrScheduler(INetOptimizer):
         print(f"the learning rate of epoch {epoch} is {self._scheduler.learningRate}");
 
 
-    def updateStep(self, params: List[INetParamDefinition], context: INetContext):
-        self._optimizer.updateStep(params, context);
+    def updateStep(self, params: List[INetParamDefinition], context: INetContext) -> Optional[List[INetParamDefinition]]:
+        return self._optimizer.updateStep(params, context);
 
 
 class ConstantNetLrScheduler(NetLrSchedulerBase):
