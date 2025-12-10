@@ -68,6 +68,12 @@ class INetContext(metaclass = abc.ABCMeta):
 class INetLoss(metaclass = abc.ABCMeta):
     @property
     @abc.abstractmethod
+    def name(self) -> str:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
     def loss(self) -> float:
         pass;
 
@@ -409,6 +415,12 @@ class INetFitResult(metaclass = abc.ABCMeta):
     @abc.abstractmethod
     def accuracyName(self) -> Optional[str]:
         pass;
+    
+
+    @property
+    @abc.abstractmethod
+    def lossName(self) -> Optional[str]:
+        pass;
 
 
     @property
@@ -458,12 +470,12 @@ class NetUtility:
         fig, (ax0, ax1) = plt.subplots(2, 1, figsize=(10, 8))
 
         ax0.set_xlabel("iteration");
-        ax0.set_ylabel('loss');
+        ax0.set_ylabel(result.lossName);
         ax0.set_title(f"total {len(result.trainingIterationLoss)} iterations");
         ax0.plot(result.trainingIterationLoss, "-k", label = "training iteration loss");
 
         ax1.set_xlabel("epoch");
-        ax1.set_ylabel('loss');
+        ax1.set_ylabel(result.lossName);
         ax1.set_title(f"total {len(result.trainingEpochLoss)} epochs");
         if result.trainingEpochLoss is not None and len(result.trainingEpochLoss) > 0:
             ax1.plot(result.trainingEpochLoss, "o-g", label = "training epoch loss");
@@ -471,11 +483,11 @@ class NetUtility:
             ax1.plot(result.testEpochLoss, "o-b", label = "test epoch loss");
 
         ax2 = ax1.twinx();
-        ax2.set_ylabel('accuracy');
+        ax2.set_ylabel(result.accuracyName);
         if result.trainingEpochAccuracy is not None and  len(result.trainingEpochAccuracy) > 0:
-            ax2.plot(result.trainingEpochAccuracy, "D-m", label = f"training epoch {result.accuracyName}");
+            ax2.plot(result.trainingEpochAccuracy, "D-m", label = f"training epoch accuracy");
         if result.testEpochAccuracy is not None and len(result.testEpochAccuracy) > 0:
-            ax2.plot(result.testEpochAccuracy, "D-r", label = f"test epoch {result.accuracyName}");
+            ax2.plot(result.testEpochAccuracy, "D-r", label = f"test epoch accuracy");
 
         fig.legend(loc = "upper right", bbox_to_anchor = (1, 1), bbox_transform = ax0.transAxes);
         fig.tight_layout();
@@ -839,7 +851,7 @@ class NetFitResult(INetFitResult):
                  testEpochLoss : List[float], testEpochAccuracy : List[float],
                  finalTrainingLoss : Optional[float] = None, finalTrainingAccuracy : Optional[float] = None,
                  finalTestLoss : Optional[float] = None, finalTestAccuracy : Optional[float] = None,
-                 accuracyName : Optional[str] = None, checkpoints : Optional[List[NetFitCheckpointInfo]] = None):
+                 accuracyName : Optional[str] = None, lossName : Optional[str] = None, checkpoints : Optional[List[NetFitCheckpointInfo]] = None):
         self._trainingIterationLoss = trainingIterationLoss;
         self._trainingEpochLoss = trainingEpochLoss;
         self._trainingEpochAccuracy = trainingEpochAccuracy;
@@ -850,6 +862,7 @@ class NetFitResult(INetFitResult):
         self._finalTestLoss = finalTestLoss;
         self._finalTestAccuracy = finalTestAccuracy;
         self._accuracyName = accuracyName;
+        self._lossName = lossName;
         self._checkpoints = checkpoints if checkpoints is not None else [];
     
 
@@ -901,6 +914,11 @@ class NetFitResult(INetFitResult):
     @property
     def accuracyName(self) -> Optional[str]:
         return self._accuracyName;
+
+
+    @property
+    def lossName(self) -> Optional[str]:
+        return self._lossName;
 
 
     @property
@@ -1059,7 +1077,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
         result = NetFitResult(trainingIterationLoss, trainingEpochLoss, trainingEpochAccuracy, testEpochLoss, testEpochAccuracy,
                               finalTrainingLoss, finalTrainingAccuracy, finalTestLoss, finalTestAccuracy,
-                              evaluator.name if evaluator is not None else None,
+                              evaluator.name if evaluator is not None else None, lossFunc.name,
                               [item for item in checkpointData if item is not None and item.epoch in checkpoints] if checkpoints is not None else None);
 
         if plot:
@@ -4314,6 +4332,11 @@ class CrossEntropyLoss(NetLossBase):
         self._T = np.empty(0);
         self._M = None;
         self._reductionType = reductionType;
+    
+
+    @property
+    def name(self) -> str:
+        return "Cross Entropy Loss";
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -4340,6 +4363,11 @@ class SoftmaxWithCrossEntropyLoss(NetLossBase):
         self._T = np.empty(0);
         self._M = None;
         self._reductionType = reductionType;
+    
+
+    @property
+    def name(self) -> str:
+        return "Cross Entropy Loss";
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -4367,6 +4395,11 @@ class SoftmaxWithCrossEntropy1DLoss(NetLossBase):
         self._T = np.empty(0);
         self._M = None;
         self._reductionType = reductionType;
+    
+
+    @property
+    def name(self) -> str:
+        return "Cross Entropy Loss";
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -4420,6 +4453,11 @@ class SigmoidWithCrossEntropyLoss(NetLossBase):
         self._T = np.empty(0);
         self._M = None;
         self._reductionType = reductionType;
+    
+
+    @property
+    def name(self) -> str:
+        return "Cross Entropy Loss";
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -4450,6 +4488,11 @@ class IdentityWithMeanSquareLoss(NetLossBase):
         self._Y = np.empty(0);
         self._T = np.empty(0);
         self._W = np.empty(0);
+    
+
+    @property
+    def name(self) -> str:
+        return "MSE";
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -4479,6 +4522,11 @@ class IdentityWithMeanAbsoluteLoss(NetLossBase):
 
         self._Y, self._T = np.empty(0), np.empty(0);
         self._W = np.empty(0);
+    
+
+    @property
+    def name(self) -> str:
+        return "MAE";
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -4512,6 +4560,11 @@ class IdentityWithMeanAbsolutePercentLoss(NetLossBase):
         self._Y = np.empty(0);
         self._T = np.empty(0);
         self._W = np.empty(0);
+    
+
+    @property
+    def name(self) -> str:
+        return "MAPE";
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -4547,6 +4600,11 @@ class IdentityWithHuberLoss(NetLossBase):
         self._W = np.empty(0);
 
         self._ML, self._MM, self._MH = np.empty(0), np.empty(0), np.empty(0);
+    
+
+    @property
+    def name(self) -> str:
+        return "Huber Loss";
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -4580,6 +4638,11 @@ class SumWithMeanSquareLoss(NetLossBase):
         self._Y = np.empty(0);
         self._T = np.empty(0);
         # self._shape = None;
+
+    
+    @property
+    def name(self) -> str:
+        return "MSE";
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -6885,6 +6948,11 @@ class GaussianVAELoss(NetLossBase):
         self._V = None;
         self._E = None;
         self._U = None;
+    
+
+    @property
+    def name(self) -> str:
+        return "GaussianVAE Loss";
 
 
     '''
@@ -7027,6 +7095,11 @@ class BernoulliVAELoss(NetLossBase):
         self._M = None;
         self._V = None;
         self._Y = None;
+    
+
+    @property
+    def name(self) -> str:
+        return "BernoulliVAE Loss";
 
 
     '''

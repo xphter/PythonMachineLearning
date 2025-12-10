@@ -214,6 +214,11 @@ class TS2VecLoss(NetLossBase):
         self._d : int = 0;
         self._contrastiveLosses : List[_ContrastiveLoss] = [];
         self._maxPooling1DLayers : List[MaxPooling1DLayer] = [];
+    
+
+    @property
+    def name(self) -> str:
+        return "Hierarchical Contrastive Loss";
 
 
     def forward(self, *data: np.ndarray) -> float:
