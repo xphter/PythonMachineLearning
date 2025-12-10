@@ -320,6 +320,36 @@ class INetModule(metaclass = abc.ABCMeta):
         pass;
 
 
+class NetFitCheckpointInfo:
+    def __init__(self, epoch : int, params : List[INetParamDefinition], states : List[INetState]):
+        self._epoch = epoch;
+        self._params = params;
+        self._states = states;
+    
+
+    def __repr__(self) -> str:
+        return self.__str__();
+
+
+    def __str__(self) -> str:
+        return f"epoch {self._epoch}";
+
+
+    @property
+    def epoch(self) -> int:
+        return self._epoch;
+
+
+    @property
+    def params(self) -> List[INetParamDefinition]:
+        return self._params;
+
+
+    @property
+    def states(self) -> List[INetState]:
+        return self._states;
+
+
 class INetFitResult(metaclass = abc.ABCMeta):
     @property
     @abc.abstractmethod
@@ -381,6 +411,12 @@ class INetFitResult(metaclass = abc.ABCMeta):
         pass;
 
 
+    @property
+    @abc.abstractmethod
+    def checkpoints(self) -> List[NetFitCheckpointInfo]:
+        pass;
+
+
 class INetModel(INetModule, metaclass = abc.ABCMeta):
     @abc.abstractmethod
     def getFinalTag(self, T : np.ndarray) -> Optional[np.ndarray]:
@@ -395,7 +431,7 @@ class INetModel(INetModule, metaclass = abc.ABCMeta):
     @abc.abstractmethod
     def fit(self, trainingIterator : IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch : int, testIterator : Optional[IDataIterator] = None,
             evaluator: Optional[INetAccuracyEvaluator] = None, evalEpoch : bool = True, evalIterations : Optional[int] = None, evalTrainingData : bool = False, evalTestData : bool = True,
-            minEpoch : Optional[int] = None, plot = False) -> INetFitResult:
+            checkpoints : Optional[List[int]] = None, minEpoch : Optional[int] = None, plot = False) -> INetFitResult:
         pass;
 
 
@@ -803,7 +839,7 @@ class NetFitResult(INetFitResult):
                  testEpochLoss : List[float], testEpochAccuracy : List[float],
                  finalTrainingLoss : Optional[float] = None, finalTrainingAccuracy : Optional[float] = None,
                  finalTestLoss : Optional[float] = None, finalTestAccuracy : Optional[float] = None,
-                 accuracyName : Optional[str] = None):
+                 accuracyName : Optional[str] = None, checkpoints : Optional[List[NetFitCheckpointInfo]] = None):
         self._trainingIterationLoss = trainingIterationLoss;
         self._trainingEpochLoss = trainingEpochLoss;
         self._trainingEpochAccuracy = trainingEpochAccuracy;
@@ -814,6 +850,7 @@ class NetFitResult(INetFitResult):
         self._finalTestLoss = finalTestLoss;
         self._finalTestAccuracy = finalTestAccuracy;
         self._accuracyName = accuracyName;
+        self._checkpoints = checkpoints if checkpoints is not None else [];
     
 
     @property
@@ -866,6 +903,11 @@ class NetFitResult(INetFitResult):
         return self._accuracyName;
 
 
+    @property
+    def checkpoints(self) -> List[NetFitCheckpointInfo]:
+        return self._checkpoints;
+
+
 class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
     def __init__(self, *modules : INetModule):
         super().__init__(*modules);
@@ -912,7 +954,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
     def fit(self, trainingIterator: IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch: int, testIterator: Optional[IDataIterator] = None,
             evaluator: Optional[INetAccuracyEvaluator] = None, evalEpoch: bool = True, evalIterations: Optional[int] = None, evalTrainingData: bool = False, evalTestData: bool = True,
-            minEpoch : Optional[int] = None, plot = False) -> INetFitResult:
+            checkpoints : Optional[List[int]] = None, minEpoch : Optional[int] = None, plot = False) -> INetFitResult:
         lossValues = [];
         trainingIterationLoss = [];
         trainingEpochLoss = [];
@@ -921,7 +963,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         testEpochAccuracy : List[float] = [];
         finalTrainingLoss, finalTrainingAccuracy = None, None;
         finalTestLoss, finalTestAccuracy = None, None;
-        paramsData, statesData = [], [];
+        checkpointData : List[Optional[NetFitCheckpointInfo]] = [None] * maxEpoch;
 
         startTime = time.time();
         self._shadowParams = None;
@@ -981,19 +1023,24 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                     loss, accuracy = self.eval(lossFunc, evaluator, None, testIterator);
                     testEpochLoss.append(loss);
                     testEpochAccuracy.append(accuracy);
-                    paramsData.append([p.copy(False) for p in (self._shadowParams if self._shadowParams is not None else self.params)]);
-                    statesData.append([s.copy() for s in self.states]);
+            
+            if checkpoints is not None and epoch in checkpoints or minEpoch is not None and len(testEpochAccuracy) > 0:
+                checkpointData[epoch] = NetFitCheckpointInfo(
+                    epoch,
+                    [p.copy(False) for p in (self._shadowParams if self._shadowParams is not None else self.params)],
+                    [s.copy() for s in self.states]);
 
             trainingMessage = f", training {evaluator.name}: {trainingEpochAccuracy[-1]}" if len(trainingEpochAccuracy) > 0 and evaluator is not None else "";
             testMessage = f", test loss: {testEpochLoss[-1]}, test {evaluator.name}: {testEpochAccuracy[-1]}" if len(testEpochAccuracy) > 0 and evaluator is not None else "";
             print(f"epoch {epoch}, training loss: {trainingEpochLoss[-1]}{trainingMessage}{testMessage}, elapsed time: {int(time.time() - startTime)}s");
 
-        if minEpoch is not None and len(paramsData) > 0 and evaluator is not None:
+        if minEpoch is not None and len(testEpochAccuracy) > 0 and evaluator is not None:
             index = np.argmax(np.array(testEpochAccuracy[minEpoch:])) if evaluator.high else np.argmin(np.array(testEpochAccuracy[minEpoch:]));
             print(f"the final params were training on epoch {minEpoch + int(index)}");
 
-            self.params = paramsData[minEpoch + int(index)];
-            self.states = statesData[minEpoch + int(index)];
+            checkpointInfo : NetFitCheckpointInfo = checkpointData[minEpoch + int(index)]; # type: ignore
+            self.params = checkpointInfo.params;
+            self.states = checkpointInfo.states;
         elif self._shadowParams is not None:
             self.params = self._shadowParams;
 
@@ -1012,7 +1059,8 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
         result = NetFitResult(trainingIterationLoss, trainingEpochLoss, trainingEpochAccuracy, testEpochLoss, testEpochAccuracy,
                               finalTrainingLoss, finalTrainingAccuracy, finalTestLoss, finalTestAccuracy,
-                              evaluator.name if evaluator is not None else None);
+                              evaluator.name if evaluator is not None else None,
+                              [item for item in checkpointData if item is not None and item.epoch in checkpoints] if checkpoints is not None else None);
 
         if plot:
             NetUtility.plotFitResult(result);
