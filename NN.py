@@ -1069,6 +1069,8 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
             self.states = checkpointInfo.states;
         elif self._shadowParams is not None:
             self.params = self._shadowParams;
+        
+        self._shadowParams = None;
 
         if evaluator is not None:
             print("evaluating final training data...");
