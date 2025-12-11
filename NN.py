@@ -560,6 +560,14 @@ class NetParamDefinition(NetParam, INetParamDefinition):
         self._name = name;
         self._handler = handler;
         self._canDecay = canDecay;
+    
+
+    def __repr__(self) -> str:
+        return self.__str__();
+
+
+    def __str__(self) -> str:
+        return f"{self._name}({'*'.join([str(item) for item in self._value.shape])})";
 
 
     @property
