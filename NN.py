@@ -2,7 +2,7 @@
 #
 # Copyright (C) 2024 XphteR, Inc. All Rights Reserved
 #
-# @Time    : 2025-09-09
+# @Time    : 2025-12-13
 # @Author  : Du Peng
 # @Email   : 278770518@qq.com
 # @File    : NN.py
@@ -409,6 +409,12 @@ class INetFitResult(metaclass = abc.ABCMeta):
     @abc.abstractmethod
     def finalTestAccuracy(self) -> Optional[float]:
         pass;
+    
+
+    @property
+    @abc.abstractmethod
+    def accuracyHigh(self) -> bool:
+        pass;
 
 
     @property
@@ -429,6 +435,18 @@ class INetFitResult(metaclass = abc.ABCMeta):
         pass;
 
 
+class INetFitMonitor(metaclass = abc.ABCMeta):
+    @property
+    @abc.abstractmethod
+    def optimalCheckpoint(self) -> Optional[NetFitCheckpointInfo]:
+        pass;
+
+
+    @abc.abstractmethod
+    def epochStep(self, epoch : int, checkpointInfo : NetFitCheckpointInfo, learningRate : float, fitResult : INetFitResult) -> bool:
+        pass;
+
+
 class INetModel(INetModule, metaclass = abc.ABCMeta):
     @abc.abstractmethod
     def getFinalTag(self, T : np.ndarray) -> Optional[np.ndarray]:
@@ -443,7 +461,7 @@ class INetModel(INetModule, metaclass = abc.ABCMeta):
     @abc.abstractmethod
     def fit(self, trainingIterator : IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch : int, testIterator : Optional[IDataIterator] = None,
             evaluator: Optional[INetAccuracyEvaluator] = None, evalEpoch : bool = True, evalIterations : Optional[int] = None, evalTrainingData : bool = False, evalTestData : bool = True,
-            checkpoints : Optional[List[int]] = None, minEpoch : Optional[int] = None, plot = False) -> INetFitResult:
+            checkpoints : Optional[List[int]] = None, minEpoch : Optional[int] = None, fitMonitor : Optional[INetFitMonitor] = None, plot = False) -> INetFitResult:
         pass;
 
 
@@ -859,7 +877,7 @@ class NetFitResult(INetFitResult):
                  testEpochLoss : List[float], testEpochAccuracy : List[float],
                  finalTrainingLoss : Optional[float] = None, finalTrainingAccuracy : Optional[float] = None,
                  finalTestLoss : Optional[float] = None, finalTestAccuracy : Optional[float] = None,
-                 accuracyName : Optional[str] = None, lossName : Optional[str] = None, checkpoints : Optional[List[NetFitCheckpointInfo]] = None):
+                 evaluator : Optional[INetAccuracyEvaluator] = None, lossName : Optional[str] = None, checkpoints : Optional[List[NetFitCheckpointInfo]] = None):
         self._trainingIterationLoss = trainingIterationLoss;
         self._trainingEpochLoss = trainingEpochLoss;
         self._trainingEpochAccuracy = trainingEpochAccuracy;
@@ -869,7 +887,12 @@ class NetFitResult(INetFitResult):
         self._finalTrainingAccuracy = finalTrainingAccuracy;
         self._finalTestLoss = finalTestLoss;
         self._finalTestAccuracy = finalTestAccuracy;
-        self._accuracyName = accuracyName;
+        if evaluator is not None:
+            self._accuracyHigh = evaluator.high;
+            self._accuracyName = evaluator.name;
+        else:
+            self._accuracyHigh = True;
+            self._accuracyName = None;
         self._lossName = lossName;
         self._checkpoints = checkpoints if checkpoints is not None else [];
     
@@ -917,6 +940,11 @@ class NetFitResult(INetFitResult):
     @property
     def finalTestAccuracy(self) -> Optional[float]:
         return self._finalTestAccuracy;
+    
+
+    @property
+    def accuracyHigh(self) -> bool:
+        return self._accuracyHigh;
 
 
     @property
@@ -980,7 +1008,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
     def fit(self, trainingIterator: IDataIterator, lossFunc: INetLoss, optimizer: INetOptimizer, maxEpoch: int, testIterator: Optional[IDataIterator] = None,
             evaluator: Optional[INetAccuracyEvaluator] = None, evalEpoch: bool = True, evalIterations: Optional[int] = None, evalTrainingData: bool = False, evalTestData: bool = True,
-            checkpoints : Optional[List[int]] = None, minEpoch : Optional[int] = None, plot = False) -> INetFitResult:
+            checkpoints : Optional[List[int]] = None, minEpoch : Optional[int] = None, fitMonitor : Optional[INetFitMonitor] = None, plot = False) -> INetFitResult:
         lossValues = [];
         trainingIterationLoss = [];
         trainingEpochLoss = [];
@@ -1050,15 +1078,21 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                     testEpochLoss.append(loss);
                     testEpochAccuracy.append(accuracy);
             
+            checkpointInfo = NetFitCheckpointInfo(
+                epoch,
+                [p.copy(False) for p in (self._shadowParams if self._shadowParams is not None else self.params)],
+                [s.copy() for s in self.states]);
+
             if checkpoints is not None and epoch in checkpoints or minEpoch is not None and len(testEpochAccuracy) > 0:
-                checkpointData[epoch] = NetFitCheckpointInfo(
-                    epoch,
-                    [p.copy(False) for p in (self._shadowParams if self._shadowParams is not None else self.params)],
-                    [s.copy() for s in self.states]);
+                checkpointData[epoch] = checkpointInfo;
 
             trainingMessage = f", training {evaluator.name}: {trainingEpochAccuracy[-1]}" if len(trainingEpochAccuracy) > 0 and evaluator is not None else "";
             testMessage = f", test loss: {testEpochLoss[-1]}, test {evaluator.name}: {testEpochAccuracy[-1]}" if len(testEpochAccuracy) > 0 and evaluator is not None else "";
             print(f"epoch {epoch}, training loss: {trainingEpochLoss[-1]}{trainingMessage}{testMessage}, elapsed time: {int(time.time() - startTime)}s");
+        
+            if fitMonitor is not None and fitMonitor.epochStep(epoch, checkpointInfo, optimizer.learningRate, NetFitResult(trainingIterationLoss, trainingEpochLoss, trainingEpochAccuracy, testEpochLoss, testEpochAccuracy, evaluator = evaluator)):
+                print(f"early stopping at epoch {epoch}");
+                break;
 
         if minEpoch is not None and len(testEpochAccuracy) > 0 and evaluator is not None:
             index = np.argmax(np.array(testEpochAccuracy[minEpoch:])) if evaluator.high else np.argmin(np.array(testEpochAccuracy[minEpoch:]));
@@ -1067,6 +1101,12 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
             checkpointInfo : NetFitCheckpointInfo = checkpointData[minEpoch + int(index)]; # type: ignore
             self.params = checkpointInfo.params;
             self.states = checkpointInfo.states;
+        elif fitMonitor is not None and fitMonitor.optimalCheckpoint is not None:
+            checkpointInfo = fitMonitor.optimalCheckpoint;
+            self.params = checkpointInfo.params;
+            self.states = checkpointInfo.states;
+
+            print(f"the optimal params were training on epoch {checkpointInfo.epoch}");
         elif self._shadowParams is not None:
             self.params = self._shadowParams;
         
@@ -1086,9 +1126,10 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         print(f"[{datetime.datetime.now()}] complete to train model, elapsed time: {int(time.time() - startTime)}s");
 
         result = NetFitResult(trainingIterationLoss, trainingEpochLoss, trainingEpochAccuracy, testEpochLoss, testEpochAccuracy,
-                              finalTrainingLoss, finalTrainingAccuracy, finalTestLoss, finalTestAccuracy,
-                              evaluator.name if evaluator is not None else None, lossFunc.name,
-                              [item for item in checkpointData if item is not None and item.epoch in checkpoints] if checkpoints is not None else None);
+                              finalTrainingLoss = finalTrainingLoss, finalTrainingAccuracy = finalTrainingAccuracy,
+                              finalTestLoss = finalTestLoss, finalTestAccuracy = finalTestAccuracy,
+                              evaluator = evaluator, lossName = lossFunc.name,
+                              checkpoints = [item for item in checkpointData if item is not None and item.epoch in checkpoints] if checkpoints is not None else None);
 
         if plot:
             NetUtility.plotFitResult(result);
@@ -6861,6 +6902,153 @@ class PerplexityAccuracyEvaluator(INetAccuracyEvaluator):
 
     def reset(self):
         self._perplexity = 0.0;
+
+
+@enum.unique
+class EarlyStoppingTargetType(enum.Enum):
+    TestLoss = 0x0001;
+    TestAccuracy = 0x0002;
+    TrainingLoss = 0x0100;
+    TrainingAccuracy = 0x0200;
+
+
+class OptimalAccuracyNetFiltMonitor(INetFitMonitor):
+    def __init__(self, checkOptimal : bool = True):
+        self._checkOptimal = checkOptimal;
+        self._optimalAccuracy : Optional[float] = None;
+        self._optimalCheckpoint : Optional[NetFitCheckpointInfo] = None;
+    
+
+    @property
+    def optimalCheckpoint(self) -> Optional[NetFitCheckpointInfo]:
+        return self._optimalCheckpoint;
+    
+
+    def _onEpochStep(self, epoch: int, checkpointInfo: NetFitCheckpointInfo, learningRate: float, fitResult: INetFitResult) -> bool:
+        return False;
+    
+
+    def epochStep(self, epoch: int, checkpointInfo: NetFitCheckpointInfo, learningRate: float, fitResult: INetFitResult) -> bool:
+        if self._checkOptimal:
+            if len(fitResult.testEpochAccuracy) > 0:
+                currentAccuracy = fitResult.testEpochAccuracy[-1];
+
+                if self._optimalAccuracy is None or fitResult.accuracyHigh and self._optimalAccuracy < currentAccuracy or not fitResult.accuracyHigh and self._optimalAccuracy > currentAccuracy:
+                    self._optimalAccuracy = currentAccuracy;
+                    self._optimalCheckpoint = checkpointInfo;
+            elif len(fitResult.testEpochLoss) > 0:
+                currentLoss = fitResult.testEpochLoss[-1];
+
+                if self._optimalAccuracy is None or self._optimalAccuracy > currentLoss:
+                    self._optimalAccuracy = currentLoss;
+                    self._optimalCheckpoint = checkpointInfo;
+
+        return self._onEpochStep(epoch, checkpointInfo, learningRate, fitResult);
+
+
+class PatienceNetFiltMonitor(OptimalAccuracyNetFiltMonitor):
+    def __init__(self, patienceNum : int = 5, minDelta : float = 0, targetType : EarlyStoppingTargetType = EarlyStoppingTargetType.TestAccuracy, checkOptimal : bool = True):
+        super().__init__(checkOptimal = checkOptimal);
+
+        self._patienceNum = max(1, int(patienceNum));
+        self._minDelta = max(0, float(minDelta));
+        self._targetType = targetType;
+
+        self._bestValue : Optional[float] = None;
+        self._count = 0;
+    
+
+    def _getCurrentValue(self, fitResult: INetFitResult) -> Tuple[Optional[float], bool]:
+        direction  = False;
+        currentValue : Optional[float] = None;
+
+        if self._targetType == EarlyStoppingTargetType.TestAccuracy and len(fitResult.testEpochAccuracy) > 0:
+            direction = fitResult.accuracyHigh;
+            currentValue = fitResult.testEpochAccuracy[-1];
+
+        elif self._targetType == EarlyStoppingTargetType.TestLoss and len(fitResult.testEpochLoss) > 0:
+            currentValue = fitResult.testEpochLoss[-1];
+
+        elif self._targetType == EarlyStoppingTargetType.TrainingAccuracy and len(fitResult.trainingEpochAccuracy) > 0:
+            direction = fitResult.accuracyHigh;
+            currentValue = fitResult.trainingEpochAccuracy[-1]; 
+
+        elif self._targetType == EarlyStoppingTargetType.TrainingLoss and len(fitResult.trainingEpochLoss) > 0:
+            currentValue = fitResult.trainingEpochLoss[-1];
+        
+        return currentValue, direction;
+    
+
+    def _onEpochStep(self, epoch: int, checkpointInfo: NetFitCheckpointInfo, learningRate: float, fitResult: INetFitResult) -> bool:
+        currentValue, direction = self._getCurrentValue(fitResult);
+        if currentValue is None:
+            return False;
+        
+        if self._bestValue is None:
+            self._bestValue = currentValue;
+            return False;
+
+        if direction and currentValue - self._bestValue < self._minDelta or not direction and self._bestValue - currentValue < self._minDelta:
+            self._count += 1;
+        else:
+            self._count = 0;
+            self._bestValue = currentValue;
+            
+        return self._count > self._patienceNum;
+
+
+# paper: Early Stopping -- but when?
+class GeneralizationLossNetFiltMonitor(OptimalAccuracyNetFiltMonitor):
+    def __init__(self, minDelta : float = 5.0, checkOptimal : bool = True):
+        super().__init__(checkOptimal = checkOptimal);
+
+        self._minDelta = max(0.0, float(minDelta));
+        self._minLoss : Optional[float] = None;
+    
+
+    def _onEpochStep(self, epoch: int, checkpointInfo: NetFitCheckpointInfo, learningRate: float, fitResult: INetFitResult) -> bool:
+        if len(fitResult.testEpochLoss) == 0:
+            return False;
+        
+        currentLoss = fitResult.testEpochLoss[-1];
+        if self._minLoss is None or currentLoss <= self._minLoss:
+            self._minLoss = currentLoss;
+            return False;
+
+        GL = 100 * (currentLoss / self._minLoss - 1);
+        
+        # print(f"GL: {GL}, minLoss: {self._minLoss}");
+
+        return GL > self._minDelta;
+
+
+# paper: Early Stopping -- but when?
+class ProgressQuotientNetFiltMonitor(OptimalAccuracyNetFiltMonitor):
+    def __init__(self, minQuotient : float = 0.5, stripLength : int = 5, checkOptimal : bool = True):
+        super().__init__(checkOptimal = checkOptimal);
+
+        self._minQuotient = max(0, float(minQuotient));
+        self._stripLength = max(1, int(stripLength));
+        self._minLoss : Optional[float] = None;
+    
+
+    def _onEpochStep(self, epoch: int, checkpointInfo: NetFitCheckpointInfo, learningRate: float, fitResult: INetFitResult) -> bool:
+        if len(fitResult.trainingEpochLoss) < self._stripLength or len(fitResult.testEpochLoss) == 0:
+            return False;
+        
+        currentLoss = fitResult.testEpochLoss[-1];
+        if self._minLoss is None or currentLoss <= self._minLoss:
+            self._minLoss = currentLoss;
+            return False;
+        
+        trainingStripLoss = fitResult.trainingEpochLoss[-self._stripLength: ];
+        GL = 100 * (currentLoss / self._minLoss - 1);
+        Pk = 1000 *(sum(trainingStripLoss) / self._stripLength / min(trainingStripLoss) - 1);
+        PQ = GL / Pk;
+
+        # print(f"PQ: {PQ}, GL: {GL}, P{self._stripLength}: {Pk}, minLoss: {self._minLoss}");
+
+        return PQ > self._minQuotient;
 
 
 # the output distribution of VAE is Gaussian
