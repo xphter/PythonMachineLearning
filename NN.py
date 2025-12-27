@@ -13,6 +13,7 @@ import abc;
 import copy;
 import math;
 import time;
+import pickle;
 import datetime;
 import functools;
 import collections;
@@ -472,6 +473,16 @@ class INetModel(INetModule, metaclass = abc.ABCMeta):
 
     @abc.abstractmethod
     def predictOne(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
+        pass;
+
+    
+    @abc.abstractmethod
+    def save(self, filePath : str):
+        pass;
+    
+
+    @abc.abstractmethod
+    def load(self, filePath : str):
         pass;
 
 
@@ -1144,6 +1155,22 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
 
     def predictOne(self, *data : np.ndarray) -> Tuple[np.ndarray, ...]:
         return self.forward(*data);
+    
+
+    def save(self, filePath : str):
+        with open(filePath, "wb") as file:
+            pickle.dump({
+                "params": self.params,
+                "states": self.states,
+            }, file, protocol = pickle.DEFAULT_PROTOCOL);
+    
+
+    def load(self, filePath : str):
+        with open(filePath, "rb") as file:
+            obj = pickle.load(file);
+        
+        self.params = obj["params"];
+        self.states = obj["states"];
 
 
 class NetLossBase(INetLoss, metaclass = abc.ABCMeta):
