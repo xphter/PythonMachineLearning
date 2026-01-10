@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2024 XphteR, Inc. All Rights Reserved
+# Copyright (C) 2026 XphteR, Inc. All Rights Reserved
 #
-# @Time    : 2025-12-13
+# @Time    : 2026-01-05
 # @Author  : Du Peng
 # @Email   : 278770518@qq.com
 # @File    : NN.py
@@ -496,7 +496,7 @@ class INetAttentionModule(INetModule, metaclass = abc.ABCMeta):
 class NetUtility:
     @staticmethod
     def plotFitResult(result : INetFitResult):
-        fig, (ax0, ax1) = plt.subplots(2, 1, figsize=(10, 8))
+        fig, (ax0, ax1) = plt.subplots(2, 1, figsize=(25, 16));
 
         ax0.set_xlabel("iteration");
         ax0.set_ylabel(result.lossName);
@@ -5338,6 +5338,61 @@ class AggregateScaler(IDataScaler):
             X = scaler.inverse(X, *args, **kwargs);
 
         return X;
+
+
+class EmptyScaler(IDataScaler):
+    def __init__(self):
+        pass;
+
+
+    @property
+    def params(self) -> List:
+        return [];
+
+
+    @params.setter
+    def params(self, value: List):
+        pass;
+
+
+    def fit(self, X: np.ndarray) -> np.ndarray:
+        return X;
+
+
+    def transform(self, X : np.ndarray) -> np.ndarray:
+        return X;
+
+
+    def inverse(self, Y : np.ndarray, *args, **kwargs) -> np.ndarray:
+        return Y;
+
+
+class FunctionalScaler(IDataScaler):
+    def __init__(self, transformFunc : Callable[[np.ndarray], np.ndarray], inverseFunc : Callable[[np.ndarray], np.ndarray]):
+        self._transformFunc = transformFunc;
+        self._inverseFunc = inverseFunc;
+
+
+    @property
+    def params(self) -> List:
+        return [];
+
+
+    @params.setter
+    def params(self, value: List):
+        pass;
+
+
+    def fit(self, X: np.ndarray) -> np.ndarray:
+        return self._transformFunc(X);
+
+
+    def transform(self, X : np.ndarray) -> np.ndarray:
+        return self._transformFunc(X);
+
+
+    def inverse(self, Y : np.ndarray, *args, **kwargs) -> np.ndarray:
+        return self._inverseFunc(Y);
 
 
 class ScalerBase(IDataScaler):
