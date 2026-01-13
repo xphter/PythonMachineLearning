@@ -2227,6 +2227,10 @@ def unitTest():
     # testAvgPooling2DLayerGradient2();
     # testAvgPooling2DLayerGradient3();
     # testAvgPooling2DLayerGradient4();
+    # testGlobalAvgPoolingLayerGradient1();
+    # testGlobalAvgPoolingLayerGradient2();
+    # testGlobalAvgPoolingLayerGradient3();
+    # testGlobalAvgPoolingLayerGradient4();
     # testBatchNormalization1DLayer1();
     # testBatchNormalization1DLayer2();
     # testBatchNormalization1DLayerGradient1();
@@ -4448,6 +4452,58 @@ def testAvgPooling2DLayerGradient4():
     dX1 = m.backward(np.ones_like(Y))[0];
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"AvgPooling2DLayer, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testGlobalAvgPoolingLayerGradient1():
+    D1, D2, D3, D4, D5 = 3, 24, 16, 8, 4;
+    X1 = np.random.randn( D1, D2, D3, D4);
+    X2 = np.random.randn( D1, D2, D3, D4, D5);
+    m = GlobalAvgPoolingLayer(1, -1);
+    Y1, Y2 = m.forward(X1, X2);
+    dX1, dX2 = m.backward(np.ones_like(Y1), np.ones_like(Y2));
+    dX1N = numericGradient(lambda x: sumAll(*m.forward(x, X2)), X1);
+    dX2N = numericGradient(lambda x: sumAll(*m.forward(X1, x)), X2);
+    print(f"GlobalAvgPoolingLayer, numericGradient1 {getErrorText('dX1 error', dX1, dX1N)} {getErrorText('dX2 error', dX2, dX2N)}");
+    print("\n");
+
+
+def testGlobalAvgPoolingLayerGradient2():
+    D1, D2, D3, D4, D5 = 3, 24, 16, 8, 4;
+    X1 = np.random.randn( D1, D2, D3, D4);
+    X2 = np.random.randn( D1, D2, D3, D4, D5);
+    m = GlobalAvgPoolingLayer(1, -1, keepdims = True);
+    Y1, Y2 = m.forward(X1, X2);
+    dX1, dX2 = m.backward(np.ones_like(Y1), np.ones_like(Y2));
+    dX1N = numericGradient(lambda x: sumAll(*m.forward(x, X2)), X1);
+    dX2N = numericGradient(lambda x: sumAll(*m.forward(X1, x)), X2);
+    print(f"GlobalAvgPoolingLayer, numericGradient2 {getErrorText('dX1 error', dX1, dX1N)} {getErrorText('dX2 error', dX2, dX2N)}");
+    print("\n");
+
+
+def testGlobalAvgPoolingLayerGradient3():
+    D1, D2, D3, D4, D5 = 3, 24, 16, 8, 4;
+    X1 = np.random.randn( D1, D2, D3, D4);
+    X2 = np.random.randn( D1, D2, D3, D4, D5);
+    m = GlobalAvgPooling1DLayer();
+    Y1, Y2 = m.forward(X1, X2);
+    dX1, dX2 = m.backward(np.ones_like(Y1), np.ones_like(Y2));
+    dX1N = numericGradient(lambda x: sumAll(*m.forward(x, X2)), X1);
+    dX2N = numericGradient(lambda x: sumAll(*m.forward(X1, x)), X2);
+    print(f"GlobalAvgPooling1DLayer, numericGradient3 {getErrorText('dX1 error', dX1, dX1N)} {getErrorText('dX2 error', dX2, dX2N)}");
+    print("\n");
+
+
+def testGlobalAvgPoolingLayerGradient4():
+    D1, D2, D3, D4, D5 = 3, 24, 16, 8, 4;
+    X1 = np.random.randn( D1, D2, D3, D4);
+    X2 = np.random.randn( D1, D2, D3, D4, D5);
+    m = GlobalAvgPooling2DLayer();
+    Y1, Y2 = m.forward(X1, X2);
+    dX1, dX2 = m.backward(np.ones_like(Y1), np.ones_like(Y2));
+    dX1N = numericGradient(lambda x: sumAll(*m.forward(x, X2)), X1);
+    dX2N = numericGradient(lambda x: sumAll(*m.forward(X1, x)), X2);
+    print(f"GlobalAvgPooling2DLayer, numericGradient4 {getErrorText('dX1 error', dX1, dX1N)} {getErrorText('dX2 error', dX2, dX2N)}");
     print("\n");
 
 

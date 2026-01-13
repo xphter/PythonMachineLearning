@@ -2574,6 +2574,51 @@ class AvgPooling2DLayer(NetModuleBase):
         return dX, ;
 
 
+class GlobalAvgPoolingLayer(NetModuleBase):
+    def __init__(self, *dimenions : int, keepdims : bool = False):
+        super().__init__();
+
+        self._dimenions = dimenions;
+        self._keepdims = keepdims;
+        self._shapes : List[Tuple[int, ...]] = [];
+        self._name = f"GlobalAvgPooling({', '.join([str(i) for i in dimenions])})";
+    
+
+    def _getSize(self, shape : Tuple[int, ...]) -> int:
+        return functools.reduce(lambda x, y: x * y, [shape[i] for i in self._dimenions]);
+    
+
+    def _getExpandDims(self, shape : Tuple[int, ...]) -> Tuple[int, ...]:
+        l = len(shape);
+        return tuple([i if i >= 0 else l + i for i in self._dimenions]);
+
+
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
+        self._shapes = [X.shape for X in data];
+        return tuple([np.mean(X, axis = self._dimenions, keepdims = self._keepdims) for X in data]);
+
+
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
+        if self._keepdims:
+            return tuple([np.zeros(shape, dtype = dY.dtype) + dY / self._getSize(shape) for shape, dY in zip(self._shapes, dout)]);
+        else:
+            return tuple([np.zeros(shape, dtype = dY.dtype) + np.expand_dims(dY, axis = self._getExpandDims(shape)) / self._getSize(shape) for shape, dY in zip(self._shapes, dout)]);
+
+
+class GlobalAvgPooling1DLayer(GlobalAvgPoolingLayer):
+    def __init__(self, keepdims : bool = False):
+        super().__init__(-1, keepdims = keepdims);
+
+        self._name = "GlobalAvgPooling1D";
+
+
+class GlobalAvgPooling2DLayer(GlobalAvgPoolingLayer):
+    def __init__(self, keepdims : bool = False):
+        super().__init__(-2, -1, keepdims = keepdims);
+
+        self._name = "GlobalAvgPooling2D";
+
+
 class AdditiveResidualBlock(AggregateNetModule):
     def __init__(self, mainModule : INetModule, adaptiveModule : Optional[INetModule] = None, activationModule : Optional[INetModule] = None):
         self._mainModule = mainModule;
