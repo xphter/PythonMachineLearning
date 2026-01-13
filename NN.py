@@ -2619,6 +2619,55 @@ class GlobalAvgPooling2DLayer(GlobalAvgPoolingLayer):
         self._name = "GlobalAvgPooling2D";
 
 
+class GlobalMaxPoolingLayer(NetModuleBase):
+    def __init__(self, dimenionNum : int, keepdims : bool = False):
+        super().__init__();
+
+        self._dimenionNum = max(1, dimenionNum);
+        self._dimenions = tuple([-i for i in range(1, dimenionNum + 1)]);
+        self._keepdims = keepdims;
+        self._marks : List[np.ndarray] = [];
+        self._name = f"GlobalMaxPooling{dimenionNum}D";
+    
+
+    def _getSize(self, shape : Tuple[int, ...]) -> int:
+        return functools.reduce(lambda x, y: x * y, [shape[i] for i in self._dimenions]);
+
+
+    def forward(self, *data: np.ndarray) -> Tuple[np.ndarray, ...]:
+        Ys = tuple([np.amax(X, axis = self._dimenions, keepdims = self._keepdims) for X in data]);
+
+        if self.context.isTrainingMode:
+            Ms : List[np.ndarray] = [];
+
+            for X in data:
+                X_ = X.reshape(X.shape[: -self._dimenionNum] + (-1, )) if self._dimenionNum > 1 else X;
+                M = np.zeros_like(X_) + np.arange(self._getSize(X.shape) if self._dimenionNum > 1 else X.shape[-1]);
+                M = (M == np.argmax(X_, axis = -1, keepdims = True)).astype(defaultDType);
+                Ms.append(M.reshape(X.shape) if self._dimenionNum > 1 else M);
+            
+            self._marks = Ms;
+        
+        return Ys;
+
+
+    def backward(self, *dout: np.ndarray) -> Tuple[np.ndarray, ...]:
+        if self._keepdims:
+            return tuple([mark * dY for mark, dY in zip(self._marks, dout)]);
+        else:
+            return tuple([mark * np.expand_dims(dY, axis = self._dimenions) for mark, dY in zip(self._marks, dout)]);
+
+
+class GlobalMaxPooling1DLayer(GlobalMaxPoolingLayer):
+    def __init__(self, keepdims : bool = False):
+        super().__init__(1, keepdims = keepdims);
+
+
+class GlobalMaxPooling2DLayer(GlobalMaxPoolingLayer):
+    def __init__(self, keepdims : bool = False):
+        super().__init__(2, keepdims = keepdims);
+
+
 class AdditiveResidualBlock(AggregateNetModule):
     def __init__(self, mainModule : INetModule, adaptiveModule : Optional[INetModule] = None, activationModule : Optional[INetModule] = None):
         self._mainModule = mainModule;
