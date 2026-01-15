@@ -2714,6 +2714,31 @@ class AdditiveResidualBlock(AggregateNetModule):
         return tuple([dx1 + dx2 for dx1, dx2 in zip(dX1, dX2)]);
 
 
+class TcnBlock(AdditiveResidualBlock):
+    def __init__(self, inputChannel : int, outputChannel : int, kernelSize : int, layerIndex : int = 0, dilation : Optional[int] = None, activationFuncSelector : Optional[Callable[[], INetModule]] = None, dropoutRatio : float = 0.0):
+        realDilation = dilation if dilation is not None else 2 ** layerIndex;
+        self._activationFuncSelector = activationFuncSelector if activationFuncSelector is not None else (lambda: ReluLayer());
+
+        super().__init__(
+            SequentialContainer(
+                self._getTcnComponent(inputChannel, outputChannel, kernelSize, layerIndex, dilation, dropoutRatio),
+                self._getTcnComponent(outputChannel, outputChannel, kernelSize, layerIndex, dilation, dropoutRatio),
+            ),
+            adaptiveModule = Convolution1DLayer(inputChannel, outputChannel, 1) if inputChannel != outputChannel else None,
+            activationModule = self._activationFuncSelector(),
+        );
+
+        self._name = f"TcnBlock {outputChannel}*{inputChannel}*{kernelSize}*{realDilation}";
+    
+
+    def _getTcnComponent(self, inputChannel : int, outputChannel : int, kernelSize : int, layerIndex : int, dilation : Optional[int], dropout: float) -> INetModule:
+        return SequentialContainer(
+            TcnLayer(inputChannel, outputChannel, kernelSize, layerIndex = layerIndex, dilation = dilation),
+            self._activationFuncSelector(),
+            Dropout1DLayer(dropoutRatio = dropout)
+        );
+
+
 class EmbeddingLayer(NetModuleBase):
     def __init__(self, embeddingNum : int, embeddingSize : int, W : Optional[np.ndarray] = None):
         super().__init__();

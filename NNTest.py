@@ -19,7 +19,7 @@ import mpl_toolkits.mplot3d as p3d;
 from typing import List, Tuple, Dict, Callable, Any;
 
 import DeviceConfig;
-DeviceConfig.floatLength = 64;
+# DeviceConfig.floatLength = 64;
 # DeviceConfig.enableGPU = True;
 
 import DataHelper;
@@ -2259,6 +2259,10 @@ def unitTest():
     # testAdditiveResidualBlockGradient1();
     # testAdditiveResidualBlockGradient2();
     # testAdditiveResidualBlockGradient3();
+    # testTcnBlock1();
+    # testTcnBlock2();
+    # tesTcnBlockGradient1();
+    # tesTcnBlockGradient2();
     # testRepeatedWrapperOfAffineLayerGradient();
     # testRnnCell1();
     # testRnnCell2();
@@ -5077,6 +5081,146 @@ def testAdditiveResidualBlockGradient3():
     dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
     print(f"AdditiveResidualBlock, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     testModuleGradient(m, "AdditiveResidualBlock, numericGradient3", X);
+    print("\n");
+
+
+class Chomp1d(torch.nn.Module):
+    def __init__(self, chomp_size):
+        super(Chomp1d, self).__init__()
+        self.chomp_size = chomp_size
+
+    def forward(self, x):
+        return x[:, :, :-self.chomp_size].contiguous()
+
+
+class TemporalBlock(torch.nn.Module):
+    def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.2):
+        super(TemporalBlock, self).__init__()
+        self.conv1 = torch.nn.Conv1d(n_inputs, n_outputs, kernel_size,
+                                           stride=stride, padding=padding, dilation=dilation)
+        self.chomp1 = Chomp1d(padding)
+        self.relu1 = torch.nn.ReLU()
+        self.dropout1 = torch.nn.Dropout(dropout)
+
+        self.conv2 = torch.nn.Conv1d(n_outputs, n_outputs, kernel_size,
+                                           stride=stride, padding=padding, dilation=dilation)
+        self.chomp2 = Chomp1d(padding)
+        self.relu2 = torch.nn.ReLU()
+        self.dropout2 = torch.nn.Dropout(dropout)
+
+        self.net = torch.nn.Sequential(self.conv1, self.chomp1, self.relu1, self.dropout1,
+                                 self.conv2, self.chomp2, self.relu2, self.dropout2)
+        self.downsample = torch.nn.Conv1d(n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
+        self.relu = torch.nn.ReLU()
+        self.init_weights()
+
+    def init_weights(self):
+        self.conv1.weight.data.normal_(0, 0.01)
+        self.conv2.weight.data.normal_(0, 0.01)
+        if self.downsample is not None:
+            self.downsample.weight.data.normal_(0, 0.01)
+
+    def forward(self, x):
+        out = self.net(x)
+        res = x if self.downsample is None else self.downsample(x)
+        return self.relu(out + res)
+
+
+class TemporalConvNet(nn.Module):
+    def __init__(self, num_inputs, num_channels, kernel_size=2, dropout=0.2):
+        super(TemporalConvNet, self).__init__()
+        layers = []
+        num_levels = len(num_channels)
+        for i in range(num_levels):
+            dilation_size = 2 ** i
+            in_channels = num_inputs if i == 0 else num_channels[i-1]
+            out_channels = num_channels[i]
+            layers += [TemporalBlock(in_channels, out_channels, kernel_size, stride=1, dilation=dilation_size,
+                                     padding=(kernel_size-1) * dilation_size, dropout=dropout)]
+
+        self.network = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.network(x)
+
+
+def testTcnBlock1():
+    batchSize, sequenceLength, kernelSize = 32, 24, 3;
+
+    def innerTest(x : np.ndarray, ic : int, oc : int, ks : int, ds : int):
+        X1 = torch.tensor(x, requires_grad = True);
+        m1 = TemporalBlock(ic, oc, ks, 1, ds, (ks - 1) * ds, 0.0);
+        Y1 = m1(X1);
+        torch.sum(Y1).backward();
+        Y1 = Y1.detach().numpy();
+        dX1 = X1.grad.detach().numpy();
+    
+        X2 = x;
+        m2 = TcnBlock(ic, oc, ks, dilation = ds);
+        injectTorchParams(m1, m2);
+        Y2, = m2.forward(X2);
+        dX2, = m2.backward(np.ones_like(Y2));
+
+        print(f"TcnBlock, value1, inputChannel = {ic}, outputChannel = {oc}, dilationSize = {ds} {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)}");
+        testTorchGradient(m1, m2);
+    
+    inputChannels, outputChannels, dilations = (6, ), (6, 8), (1, 5);
+
+    for inputChannel in inputChannels:
+        for outputChannel in outputChannels:
+            for dilation in dilations:
+                innerTest(np.random.randn(batchSize, inputChannel, sequenceLength).astype(defaultDType), inputChannel, outputChannel, kernelSize, dilation);
+    
+    print("\n");
+
+
+def testTcnBlock2():
+    inputChannel, outputChannels = 6, (8, 8, 8);
+    batchSize, sequenceLength, kernelSize = 32, 24, 3;
+    X = np.random.randn(batchSize, inputChannel, sequenceLength).astype(defaultDType);
+
+    X1 = torch.tensor(X, requires_grad = True);
+    m1 = TemporalConvNet(inputChannel, outputChannels, kernel_size = kernelSize, dropout = 0.0);
+    Y1 = m1(X1);
+    torch.sum(Y1).backward();
+    Y1 = Y1.detach().numpy();
+    dX1 = X1.grad.detach().numpy();
+    
+    X2 = X;
+    channles = (inputChannel, ) + outputChannels;
+    m2 = SequentialContainer(*tuple([TcnBlock(channles[i - 1], channles[i], kernelSize = kernelSize, layerIndex = i - 1) for i in range(1, len(channles))]));
+    injectTorchParams(m1, m2);
+    Y2, = m2.forward(X2);
+    dX2, = m2.backward(np.ones_like(Y2));
+
+    print(f"TcnBlock, value2 {getErrorText('Y error', Y1, Y2)} {getErrorText('dX error', dX1, dX2)}");
+    testTorchGradient(m1, m2);
+    print("\n");
+
+
+def tesTcnBlockGradient1():
+    kernelSize, dilationSize = 3, 1;
+    batchSize, inputChannel, outputChannel, sequenceLength = 32, 6, 6, 24;
+    X = np.random.randn(batchSize, inputChannel, sequenceLength);
+    m = TcnBlock(inputChannel, outputChannel, kernelSize, dilation = dilationSize);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"TcnBlock, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
+    testModuleGradient(m, "TcnBlock, numericGradient1", X);
+    print("\n");
+
+
+def tesTcnBlockGradient2():
+    kernelSize, dilationSize = 3, 2;
+    batchSize, inputChannel, outputChannel, sequenceLength = 32, 6, 8, 24;
+    X = np.random.randn(batchSize, inputChannel, sequenceLength);
+    m = TcnBlock(inputChannel, outputChannel, kernelSize, dilation = dilationSize);
+    Y = m.forward(X)[0];
+    dX1 = m.backward(np.ones_like(Y))[0];
+    dXN = numericGradient(lambda x: np.sum(m.forward(x)[0]), X);
+    print(f"TcnBlock, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
+    testModuleGradient(m, "TcnBlock, numericGradient2", X);
     print("\n");
 
 
