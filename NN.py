@@ -4863,6 +4863,14 @@ class SumWithMeanSquareLoss(NetLossBase):
 class L1Regularization(INetParamHandler):
     def __init__(self, decay : float = 0.01):
         self._decay = max(0.0, decay);
+    
+
+    def __repr__(self) -> str:
+        return super().__str__();
+    
+
+    def __str__(self) -> str:
+        return f"L1Regularization({self._decay})";
 
 
     def onPreUpdate(self, param: INetParam, lr: float):
@@ -4880,6 +4888,14 @@ class L1Regularization(INetParamHandler):
 class L1WeightDecay(INetParamHandler):
     def __init__(self, decay : float = 0.01):
         self._decay = max(0.0, decay);
+    
+
+    def __repr__(self) -> str:
+        return super().__str__();
+    
+
+    def __str__(self) -> str:
+        return f"L1WeightDecay({self._decay})";
 
 
     def onPreUpdate(self, param: INetParam, lr: float):
@@ -4897,6 +4913,14 @@ class L1WeightDecay(INetParamHandler):
 class L2Regularization(INetParamHandler):
     def __init__(self, decay : float = 0.01):
         self._decay = max(0.0, decay);
+    
+
+    def __repr__(self) -> str:
+        return super().__str__();
+    
+
+    def __str__(self) -> str:
+        return f"L2Regularization({self._decay})";
 
 
     def onPreUpdate(self, param: INetParam, lr: float):
@@ -4914,6 +4938,14 @@ class L2Regularization(INetParamHandler):
 class L2WeightDecay(INetParamHandler):
     def __init__(self, decay : float = 0.01):
         self._decay = max(0.0, decay);
+    
+
+    def __repr__(self) -> str:
+        return super().__str__();
+    
+
+    def __str__(self) -> str:
+        return f"L2WeightDecay({self._decay})";
 
 
     def onPreUpdate(self, param: INetParam, lr: float):
