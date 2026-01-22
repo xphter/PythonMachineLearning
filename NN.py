@@ -4896,6 +4896,76 @@ class SumWithMeanSquareLoss(NetLossBase):
         return dX, ;
 
 
+class DifferenceWithNetLoss(NetLossBase):
+    def __init__(self, netLoss : INetLoss):
+        super().__init__();
+
+        self._shape = ();
+        self._netLoss = netLoss;
+    
+
+    @property
+    def name(self) -> str:
+        return f"Diff-{self._netLoss.name}";
+
+
+    def forward(self, *data: np.ndarray) -> float:
+        Y, T = data[0], data[-1];
+
+        self._shape = Y.shape;
+        self._loss = self._netLoss.forward(np.diff(Y, axis = 0), *data[1: -1], np.diff(T, axis = 0));
+
+        return self._loss;
+
+
+    def backward(self) -> Tuple[np.ndarray, ...]:
+        dY_, = self._netLoss.backward();
+        
+        dY = np.zeros(self._shape, dtype = defaultDType);
+        dY[1: ] += dY_;
+        dY[: -1] -= dY_;
+
+        return dY, ;
+
+
+class IdentityWithPearsonCorrLoss(NetLossBase):
+    def __init__(self):
+        super().__init__();
+
+        self._shape = ();
+        self._yc, self._tc = np.empty(0), np.empty(0);
+        self._yts, self._tss, self._ytrss = np.empty(0), np.empty(0), np.empty(0);
+    
+
+    @property
+    def name(self) -> str:
+        return "PearsonCorrLoss";
+
+
+    def forward(self, *data: np.ndarray) -> float:
+        Y, T = data[: 2];
+
+        y, t = Y.flatten(), T.flatten();
+        yc, tc = y - np.mean(y), t - np.mean(t);
+        yts = np.sum(yc * tc);
+        yss, tss = np.sum(np.square(yc)), np.sum(np.square(tc));
+        ytrss = np.sqrt(yss * tss);
+        r = float(yts / ytrss);
+
+        self._shape = Y.shape;
+        self._yc, self._tc = yc, tc;
+        self._yts, self._tss, self._ytrss = yts, tss, ytrss;
+        self._loss = 1 - r;
+        return self._loss;
+
+
+    def backward(self) -> Tuple[np.ndarray, ...]:
+        dy = self._yc * self._yts * self._tss / self._ytrss ** 3 - self._tc / self._ytrss;
+        dY = np.reshape(dy, self._shape);
+
+        return dY, ;
+
+
 class L1Regularization(INetParamHandler):
     def __init__(self, decay : float = 0.01):
         self._decay = max(0.0, decay);

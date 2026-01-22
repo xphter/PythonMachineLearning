@@ -2163,6 +2163,16 @@ def unitTest():
     # testIdentityWithMeanSquareLossGradient4();
     # testSumWithMeanSquareLossGradient1();
     # testSumWithMeanSquareLossGradient2();
+    # testDifferenceWithNetLoss1();
+    # testDifferenceWithNetLoss2();
+    # testDifferenceWithNetLossGradient1();
+    # testDifferenceWithNetLossGradient2();
+    # testDifferenceWithNetLossGradient3();
+    # testDifferenceWithNetLossGradient4();
+    # testIdentityWithPearsonCorrLoss1();
+    # testIdentityWithPearsonCorrLoss2();
+    # testIdentityWithPearsonCorrLossGradient1();
+    # testIdentityWithPearsonCorrLossGradient2();
     # testPReluLayer1();
     # testPReluLayer2();
     # testPReluLayerGradient1();
@@ -3381,6 +3391,142 @@ def testSumWithMeanSquareLossGradient2():
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
     print(f"SumWithMeanSquareLoss, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testDifferenceWithNetLoss1():
+    N = 32;
+    y1, t1 = np.random.randn(N), np.random.randn(N);
+    m = DifferenceWithNetLoss(IdentityWithMeanSquareLoss());
+    loss1 = m.forward(y1, t1);
+    dy1, = m.backward();
+
+    y2, t2 = torch.tensor(y1, requires_grad = True), torch.tensor(t1, requires_grad = True);
+    loss2 = nn.MSELoss()(torch.diff(y2, dim = 0), torch.diff(t2, dim = 0)) / 2;
+    loss2.backward();
+    loss2 = float(loss2.detach().numpy());
+    dy2 = y2.grad.detach().numpy();
+
+    print(f"DifferenceWithNetLoss, value1 {getErrorText('loss error', loss1, loss2)} {getErrorText('dy error', dy1, dy2)}");
+    print("\n");
+
+
+def testDifferenceWithNetLoss2():
+    N, D = 32, 24;
+    Y1, T1 = np.random.randn(N, D), np.random.randn(N, D);
+    m = DifferenceWithNetLoss(IdentityWithMeanSquareLoss());
+    loss1 = m.forward(Y1, T1);
+    dY1, = m.backward();
+
+    Y2, T2 = torch.tensor(Y1, requires_grad = True), torch.tensor(T1, requires_grad = True);
+    loss2 = nn.MSELoss()(torch.diff(Y2, dim = 0), torch.diff(T2, dim = 0)) / 2;
+    loss2.backward();
+    loss2 = float(loss2.detach().numpy());
+    dY2 = Y2.grad.detach().numpy();
+
+    print(f"DifferenceWithNetLoss, value2 {getErrorText('loss error', loss1, loss2)} {getErrorText('dY error', dY1, dY2)}");
+    print("\n");
+
+
+def testDifferenceWithNetLossGradient1():
+    N, D = 32, 1;
+    X, T = np.random.randn(N, D), np.random.randn(N, D);
+    m = DifferenceWithNetLoss(IdentityWithMeanSquareLoss());
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"DifferenceWithNetLoss, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testDifferenceWithNetLossGradient2():
+    N, D = 32, 24;
+    X, T = np.random.randn(N, D), np.random.randn(N, D);
+    m = DifferenceWithNetLoss(IdentityWithMeanAbsoluteLoss());
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"DifferenceWithNetLoss, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testDifferenceWithNetLossGradient3():
+    N, D = 32, 24;
+    X, T = np.random.randn(N, D), np.random.randn(N, D);
+    m = DifferenceWithNetLoss(IdentityWithHuberLoss());
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"DifferenceWithNetLoss, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testDifferenceWithNetLossGradient4():
+    N, D = 32, 1;
+    X, T = np.random.randn(N, D), np.random.randn(N, D);
+    m = DifferenceWithNetLoss(IdentityWithHuberLoss());
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"DifferenceWithNetLoss, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testIdentityWithPearsonCorrLoss1():
+    N = 32;
+    y1, t1 = np.random.randn(N), np.random.randn(N);
+    m = IdentityWithPearsonCorrLoss();
+    loss1 = m.forward(y1, t1);
+    dy1, = m.backward();
+
+    y2, t2 = torch.tensor(y1, requires_grad = True), torch.tensor(t1, requires_grad = True);
+    y2c, t2c = y2 - torch.mean(y2), t2 - torch.mean(t2);
+    loss2 = 1 - torch.sum(y2c * t2c) / torch.sqrt(torch.sum(torch.square(y2c)) * torch.sum(torch.square(t2c)));
+    loss2.backward();
+    loss2 = float(loss2.detach().numpy());
+    dy2 = y2.grad.detach().numpy();
+
+    print(f"IdentityWithPearsonCorrLoss, value1 {getErrorText('loss error', loss1, loss2)} {getErrorText('dy error', dy1, dy2)}");
+    print("\n");
+
+
+def testIdentityWithPearsonCorrLoss2():
+    N, D = 32, 24;
+    Y1, T1 = np.random.randn(N, D), np.random.randn(N, D);
+    m = IdentityWithPearsonCorrLoss();
+    loss1 = m.forward(Y1, T1);
+    dY1, = m.backward();
+
+    y2, t2 = torch.tensor(Y1.flatten(), requires_grad = True), torch.tensor(T1.flatten(), requires_grad = True);
+    y2c, t2c = y2 - torch.mean(y2), t2 - torch.mean(t2);
+    loss2 = 1 - torch.sum(y2c * t2c) / torch.sqrt(torch.sum(torch.square(y2c)) * torch.sum(torch.square(t2c)));
+    loss2.backward();
+    loss2 = float(loss2.detach().numpy());
+    dY2 = np.reshape(y2.grad.detach().numpy(), Y1.shape);
+
+    print(f"IdentityWithPearsonCorrLoss, value2 {getErrorText('loss error', loss1, loss2)} {getErrorText('dY error', dY1, dY2)}");
+    print("\n");
+
+
+def testIdentityWithPearsonCorrLossGradient1():
+    N, D = 32, 1;
+    X, T = np.random.randn(N, D), np.random.randn(N, D);
+    m = IdentityWithPearsonCorrLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"IdentityWithPearsonCorrLoss, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testIdentityWithPearsonCorrLossGradient2():
+    N, D = 32, 24;
+    X, T = np.random.randn(N, D), np.random.randn(N, D);
+    m = IdentityWithPearsonCorrLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"IdentityWithPearsonCorrLoss, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
