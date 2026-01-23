@@ -7008,6 +7008,42 @@ class PartitionedDataIterator(IDataIterator):
         return self._totalIterations;
 
 
+class NetLossAccuracyEvaluator(INetAccuracyEvaluator):
+    def __init__(self, name : str):
+        self._name = name;
+        self._loss = 0.0;
+        self._totalCount = 0.0;
+        
+
+    @property
+    def name(self) -> str:
+        return self._name;
+
+
+    @property
+    def high(self) -> bool:
+        return False;
+
+
+    @property
+    def accuracy(self) -> float:
+        return (self._loss / self._totalCount) if self._totalCount > 0 else 0.0;
+
+
+    def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
+        return False;
+
+
+    def update(self, loss : float, *data: np.ndarray):
+        self._loss += loss;
+        self._totalCount += 1;
+
+
+    def reset(self):
+        self._loss = 0.0;
+        self._totalCount = 0.0;
+
+
 class MaeAccuracyEvaluator(INetAccuracyEvaluator):
     def __init__(self, scaler : Optional[IDataScaler] = None):
         self._rss = 0.0;
