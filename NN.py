@@ -4929,10 +4929,11 @@ class DifferenceWithNetLoss(NetLossBase):
 
 
 class IdentityWithPearsonCorrLoss(NetLossBase):
-    def __init__(self):
+    def __init__(self, epsilon : float = 1e-8):
         super().__init__();
 
         self._shape = ();
+        self._epsilon = epsilon;
         self._yc, self._tc = np.empty(0), np.empty(0);
         self._yts, self._tss, self._ytrss = np.empty(0), np.empty(0), np.empty(0);
     
@@ -4949,7 +4950,7 @@ class IdentityWithPearsonCorrLoss(NetLossBase):
         yc, tc = y - np.mean(y), t - np.mean(t);
         yts = np.sum(yc * tc);
         yss, tss = np.sum(np.square(yc)), np.sum(np.square(tc));
-        ytrss = np.sqrt(yss * tss);
+        ytrss = np.sqrt(yss * tss + self._epsilon);
         r = float(yts / ytrss);
 
         self._shape = Y.shape;

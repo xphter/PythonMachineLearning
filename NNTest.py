@@ -2173,6 +2173,7 @@ def unitTest():
     # testIdentityWithPearsonCorrLoss2();
     # testIdentityWithPearsonCorrLossGradient1();
     # testIdentityWithPearsonCorrLossGradient2();
+    # testIdentityWithPearsonCorrLossGradient3();
     # testPReluLayer1();
     # testPReluLayer2();
     # testPReluLayerGradient1();
@@ -3527,6 +3528,17 @@ def testIdentityWithPearsonCorrLossGradient2():
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
     print(f"IdentityWithPearsonCorrLoss, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testIdentityWithPearsonCorrLossGradient3():
+    N, D = 32, 24;
+    X, T = np.ones((N, D)) * 1.0, np.random.randn(N, D);
+    m = IdentityWithPearsonCorrLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"IdentityWithPearsonCorrLoss, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
