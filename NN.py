@@ -7291,6 +7291,44 @@ class PerplexityAccuracyEvaluator(INetAccuracyEvaluator):
         self._perplexity = 0.0;
 
 
+class TrendAccuracyEvaluator(INetAccuracyEvaluator):
+    def __init__(self):
+        self._rightCount = 0.0;
+        self._totalCount = 0.0;
+
+
+    @property
+    def name(self) -> str:
+        return "TA";
+
+
+    @property
+    def high(self) -> bool:
+        return True;
+
+
+    @property
+    def accuracy(self) -> float:
+        return (self._rightCount / self._totalCount) if self._totalCount > 0 else 0.0;
+
+
+    def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
+        return False;
+
+
+    def update(self, loss : float, *data: np.ndarray):
+        Y, T = data[0], data[-1];
+        diffY, diffT = np.diff(Y, axis = 0), np.diff(T, axis = 0);
+
+        self._rightCount += float(np.sum(np.sign(diffY) == np.sign(diffT)));
+        self._totalCount += diffT.size;
+
+
+    def reset(self):
+        self._rightCount = 0.0;
+        self._totalCount = 0.0;
+
+
 @enum.unique
 class EarlyStoppingTargetType(enum.Enum):
     TestLoss = 0x0001;
