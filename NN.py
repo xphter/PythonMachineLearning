@@ -4897,11 +4897,13 @@ class SumWithMeanSquareLoss(NetLossBase):
 
 
 class DifferenceWithNetLoss(NetLossBase):
-    def __init__(self, netLoss : INetLoss):
+    def __init__(self, netLoss : INetLoss, antidirection : bool = False):
         super().__init__();
 
         self._shape = ();
         self._netLoss = netLoss;
+        self._antidirection = antidirection;
+        self._mask : Optional[np.ndarray] = None;
     
 
     @property
@@ -4911,15 +4913,24 @@ class DifferenceWithNetLoss(NetLossBase):
 
     def forward(self, *data: np.ndarray) -> float:
         Y, T = data[0], data[-1];
+        diffY, diffT = np.diff(Y, axis = 0), np.diff(T, axis = 0);
+
+        if self._antidirection:
+            self._mask = (np.sign(diffY) != np.sign(diffT)).astype(np.int8);
+            diffY *= self._mask;
+            diffT *= self._mask;
 
         self._shape = Y.shape;
-        self._loss = self._netLoss.forward(np.diff(Y, axis = 0), *data[1: -1], np.diff(T, axis = 0));
+        self._loss = self._netLoss.forward(diffY, *data[1: -1], diffT);
 
         return self._loss;
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
         dY_, = self._netLoss.backward();
+
+        if self._mask is not None:
+            dY_ *= self._mask;
         
         dY = np.zeros(self._shape, dtype = defaultDType);
         dY[1: ] += dY_;

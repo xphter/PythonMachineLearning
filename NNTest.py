@@ -2165,10 +2165,14 @@ def unitTest():
     # testSumWithMeanSquareLossGradient2();
     # testDifferenceWithNetLoss1();
     # testDifferenceWithNetLoss2();
+    # testDifferenceWithNetLoss3();
+    # testDifferenceWithNetLoss4();
     # testDifferenceWithNetLossGradient1();
     # testDifferenceWithNetLossGradient2();
     # testDifferenceWithNetLossGradient3();
     # testDifferenceWithNetLossGradient4();
+    # testDifferenceWithNetLossGradient5();
+    # testDifferenceWithNetLossGradient6();
     # testIdentityWithPearsonCorrLoss1();
     # testIdentityWithPearsonCorrLoss2();
     # testIdentityWithPearsonCorrLossGradient1();
@@ -3429,6 +3433,44 @@ def testDifferenceWithNetLoss2():
     print("\n");
 
 
+def testDifferenceWithNetLoss3():
+    N = 32;
+    y1, t1 = np.random.randn(N), np.random.randn(N);
+    m = DifferenceWithNetLoss(IdentityWithMeanSquareLoss(), antidirection = True);
+    loss1 = m.forward(y1, t1);
+    dy1, = m.backward();
+
+    y2, t2 = torch.tensor(y1, requires_grad = True), torch.tensor(t1, requires_grad = True);
+    diffy2, difft2 = torch.diff(y2, dim = 0), torch.diff(t2, dim = 0);
+    mask = torch.sign(diffy2) != torch.sign(difft2);
+    loss2 = nn.MSELoss()(diffy2 * mask, difft2 * mask) / 2;
+    loss2.backward();
+    loss2 = float(loss2.detach().numpy());
+    dy2 = y2.grad.detach().numpy();
+
+    print(f"DifferenceWithNetLoss, value3 {getErrorText('loss error', loss1, loss2)} {getErrorText('dy error', dy1, dy2)}");
+    print("\n");
+
+
+def testDifferenceWithNetLoss4():
+    N, D = 32, 24;
+    Y1, T1 = np.random.randn(N, D), np.random.randn(N, D);
+    m = DifferenceWithNetLoss(IdentityWithMeanSquareLoss(), antidirection = True);
+    loss1 = m.forward(Y1, T1);
+    dY1, = m.backward();
+
+    Y2, T2 = torch.tensor(Y1, requires_grad = True), torch.tensor(T1, requires_grad = True);
+    diffY2, diffT2 = torch.diff(Y2, dim = 0), torch.diff(T2, dim = 0);
+    mask = torch.sign(diffY2) != torch.sign(diffT2);
+    loss2 = nn.MSELoss()(diffY2 * mask, diffT2 * mask) / 2;
+    loss2.backward();
+    loss2 = float(loss2.detach().numpy());
+    dY2 = Y2.grad.detach().numpy();
+
+    print(f"DifferenceWithNetLoss, value4 {getErrorText('loss error', loss1, loss2)} {getErrorText('dY error', dY1, dY2)}");
+    print("\n");
+
+
 def testDifferenceWithNetLossGradient1():
     N, D = 32, 1;
     X, T = np.random.randn(N, D), np.random.randn(N, D);
@@ -3470,6 +3512,28 @@ def testDifferenceWithNetLossGradient4():
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, T), X);
     print(f"DifferenceWithNetLoss, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testDifferenceWithNetLossGradient5():
+    N, D = 32, 24;
+    X, T = np.random.randn(N, D), np.random.randn(N, D);
+    m = DifferenceWithNetLoss(IdentityWithHuberLoss(), antidirection = True);
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"DifferenceWithNetLoss, numericGradient5 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testDifferenceWithNetLossGradient6():
+    N, D = 32, 1;
+    X, T = np.random.randn(N, D), np.random.randn(N, D);
+    m = DifferenceWithNetLoss(IdentityWithHuberLoss(), antidirection = True);
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"DifferenceWithNetLoss, numericGradient6 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
