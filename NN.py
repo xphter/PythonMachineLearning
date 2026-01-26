@@ -227,6 +227,25 @@ class IDataIterator(Iterable, metaclass = abc.ABCMeta):
         pass;
 
 
+class INetAccuracyInfo(metaclass = abc.ABCMeta):
+    @property
+    @abc.abstractmethod
+    def name(self) -> str:
+        pass;
+    
+
+    @property
+    @abc.abstractmethod
+    def high(self) -> bool:
+        pass;
+
+
+    @property
+    @abc.abstractmethod
+    def value(self) -> float:
+        pass;
+
+
 class INetAccuracyEvaluator(metaclass = abc.ABCMeta):
     @property
     @abc.abstractmethod
@@ -242,7 +261,7 @@ class INetAccuracyEvaluator(metaclass = abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def accuracy(self) -> float:
+    def accuracy(self) -> INetAccuracyInfo:
         pass;
 
 
@@ -391,7 +410,7 @@ class INetFitResult(metaclass = abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def trainingEpochAccuracy(self) -> List[float]:
+    def trainingEpochAccuracy(self) -> List[INetAccuracyInfo]:
         pass;
 
 
@@ -403,7 +422,7 @@ class INetFitResult(metaclass = abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def testEpochAccuracy(self) -> List[float]:
+    def testEpochAccuracy(self) -> List[INetAccuracyInfo]:
         pass;
 
 
@@ -415,7 +434,7 @@ class INetFitResult(metaclass = abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def finalTrainingAccuracy(self) -> Optional[float]:
+    def finalTrainingAccuracy(self) -> Optional[INetAccuracyInfo]:
         pass;
 
 
@@ -427,7 +446,7 @@ class INetFitResult(metaclass = abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def finalTestAccuracy(self) -> Optional[float]:
+    def finalTestAccuracy(self) -> Optional[INetAccuracyInfo]:
         pass;
     
 
@@ -474,7 +493,7 @@ class INetModel(INetModule, metaclass = abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def eval(self, lossFunc: INetLoss, evaluator: INetAccuracyEvaluator, lossValues: Optional[List[float]] = None, iterator: Optional[Iterable] = None) -> Tuple[float, float]:
+    def eval(self, lossFunc: INetLoss, evaluator: INetAccuracyEvaluator, lossValues: Optional[List[float]] = None, iterator: Optional[Iterable] = None) -> Tuple[float, INetAccuracyInfo]:
         pass;
 
 
@@ -533,9 +552,9 @@ class NetUtility:
         ax2 = ax1.twinx();
         ax2.set_ylabel(result.accuracyName);
         if result.trainingEpochAccuracy is not None and  len(result.trainingEpochAccuracy) > 0:
-            ax2.plot(result.trainingEpochAccuracy, "D-m", label = f"training epoch accuracy");
+            ax2.plot([item.value for item in result.trainingEpochAccuracy], "D-m", label = f"training epoch accuracy");
         if result.testEpochAccuracy is not None and len(result.testEpochAccuracy) > 0:
-            ax2.plot(result.testEpochAccuracy, "D-r", label = f"test epoch accuracy");
+            ax2.plot([item.value for item in result.testEpochAccuracy], "D-r", label = f"test epoch accuracy");
 
         fig.legend(loc = "upper right", bbox_to_anchor = (1, 1), bbox_transform = ax0.transAxes);
         plt.suptitle("\n".join(textwrap.wrap(result.modelDescription, width = 160)));
@@ -914,10 +933,10 @@ class AggregateNetModule(NetModuleBase):
 
 
 class NetFitResult(INetFitResult):
-    def __init__(self, modelDescription : str, trainingIterationLoss : List[float], trainingEpochLoss : List[float], trainingEpochAccuracy : List[float],
-                 testEpochLoss : List[float], testEpochAccuracy : List[float],
-                 finalTrainingLoss : Optional[float] = None, finalTrainingAccuracy : Optional[float] = None,
-                 finalTestLoss : Optional[float] = None, finalTestAccuracy : Optional[float] = None,
+    def __init__(self, modelDescription : str, trainingIterationLoss : List[float], trainingEpochLoss : List[float], trainingEpochAccuracy : List[INetAccuracyInfo],
+                 testEpochLoss : List[float], testEpochAccuracy : List[INetAccuracyInfo],
+                 finalTrainingLoss : Optional[float] = None, finalTrainingAccuracy : Optional[INetAccuracyInfo] = None,
+                 finalTestLoss : Optional[float] = None, finalTestAccuracy : Optional[INetAccuracyInfo] = None,
                  evaluator : Optional[INetAccuracyEvaluator] = None, lossName : Optional[str] = None, checkpoints : Optional[List[NetFitCheckpointInfo]] = None):
         self._modelDescription = modelDescription;
         self._trainingIterationLoss = trainingIterationLoss;
@@ -955,7 +974,7 @@ class NetFitResult(INetFitResult):
 
 
     @property
-    def trainingEpochAccuracy(self) -> List[float]:
+    def trainingEpochAccuracy(self) -> List[INetAccuracyInfo]:
         return self._trainingEpochAccuracy;
 
 
@@ -965,7 +984,7 @@ class NetFitResult(INetFitResult):
 
 
     @property
-    def testEpochAccuracy(self) -> List[float]:
+    def testEpochAccuracy(self) -> List[INetAccuracyInfo]:
         return self._testEpochAccuracy;
 
 
@@ -975,7 +994,7 @@ class NetFitResult(INetFitResult):
 
 
     @property
-    def finalTrainingAccuracy(self) -> Optional[float]:
+    def finalTrainingAccuracy(self) -> Optional[INetAccuracyInfo]:
         return self._finalTrainingAccuracy;
 
 
@@ -985,7 +1004,7 @@ class NetFitResult(INetFitResult):
 
 
     @property
-    def finalTestAccuracy(self) -> Optional[float]:
+    def finalTestAccuracy(self) -> Optional[INetAccuracyInfo]:
         return self._finalTestAccuracy;
     
 
@@ -1020,7 +1039,7 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         return T;
 
 
-    def eval(self, lossFunc : INetLoss, evaluator : INetAccuracyEvaluator, lossValues : Optional[List[float]] = None, iterator : Optional[Iterable] = None) -> Tuple[float, float]:
+    def eval(self, lossFunc : INetLoss, evaluator : INetAccuracyEvaluator, lossValues : Optional[List[float]] = None, iterator : Optional[Iterable] = None) -> Tuple[float, INetAccuracyInfo]:
         self.context.isTrainingMode = False;
 
         backupParams : Optional[List[INetParamDefinition]] = None;
@@ -1059,9 +1078,9 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
         lossValues = [];
         trainingIterationLoss = [];
         trainingEpochLoss = [];
-        trainingEpochAccuracy = [];
+        trainingEpochAccuracy : List[INetAccuracyInfo] = [];
         testEpochLoss = [];
-        testEpochAccuracy : List[float] = [];
+        testEpochAccuracy : List[INetAccuracyInfo] = [];
         finalTrainingLoss, finalTrainingAccuracy = None, None;
         finalTestLoss, finalTestAccuracy = None, None;
         checkpointData : List[Optional[NetFitCheckpointInfo]] = [None] * maxEpoch;
@@ -1142,7 +1161,8 @@ class NetModelBase(AggregateNetModule, INetModel, metaclass = abc.ABCMeta):
                 break;
 
         if minEpoch is not None and len(testEpochAccuracy) > 0 and evaluator is not None:
-            index = np.argmax(np.array(testEpochAccuracy[minEpoch:])) if evaluator.high else np.argmin(np.array(testEpochAccuracy[minEpoch:]));
+            accuracyValues = [item.value for item in testEpochAccuracy[minEpoch:]];
+            index = np.argmax(np.array(accuracyValues)) if evaluator.high else np.argmin(np.array(accuracyValues));
             print(f"the final params were training on epoch {minEpoch + int(index)}");
 
             checkpointInfo : NetFitCheckpointInfo = checkpointData[minEpoch + int(index)]; # type: ignore
@@ -7020,6 +7040,51 @@ class PartitionedDataIterator(IDataIterator):
         return self._totalIterations;
 
 
+@functools.total_ordering
+class NetAccuracyInfoBase(INetAccuracyInfo, metaclass = abc.ABCMeta):
+    def __init__(self, evaluator: INetAccuracyEvaluator):
+        self._name = evaluator.name;
+        self._high = evaluator.high;
+    
+
+    def __repr__(self) -> str:
+        return self.__str__();
+
+    
+    def __lt__(self, other):
+        return self.value < other.value;
+
+
+    def __eq__(self, other):
+        return self.value == other.value;
+
+
+    @property
+    def name(self) -> str:
+        return self._name;
+    
+
+    @property
+    def high(self) -> bool:
+        return self._high;
+
+
+class FloatNetAccuracyInfo(NetAccuracyInfoBase):
+    def __init__(self, evaluator: INetAccuracyEvaluator, value : float):
+        super().__init__(evaluator);
+
+        self._value = value;
+    
+
+    def __str__(self) -> str:
+        return str(self._value);
+
+
+    @property
+    def value(self) -> float:
+        return self._value;
+
+
 class NetLossAccuracyEvaluator(INetAccuracyEvaluator):
     def __init__(self, name : str):
         self._name = name;
@@ -7038,8 +7103,8 @@ class NetLossAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     @property
-    def accuracy(self) -> float:
-        return (self._loss / self._totalCount) if self._totalCount > 0 else 0.0;
+    def accuracy(self) -> INetAccuracyInfo:
+        return FloatNetAccuracyInfo(self, (self._loss / self._totalCount) if self._totalCount > 0 else 0.0);
 
 
     def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
@@ -7074,9 +7139,9 @@ class MaeAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     @property
-    def accuracy(self) -> float:
+    def accuracy(self) -> INetAccuracyInfo:
         # return math.sqrt(self._rss / self._totalCount) if self._totalCount > 0 else None;
-        return (self._rss / self._totalCount) if self._totalCount > 0 else 0.0;
+        return FloatNetAccuracyInfo(self, (self._rss / self._totalCount) if self._totalCount > 0 else 0.0);
 
 
     def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
@@ -7129,13 +7194,13 @@ class MseAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     @property
-    def accuracy(self) -> float:
+    def accuracy(self) -> INetAccuracyInfo:
         result = (self._rss / self._totalCount) if self._totalCount > 0 else 0.0;
 
         if self._takeRoot:
             result = math.sqrt(result);
 
-        return result;
+        return FloatNetAccuracyInfo(self, result);
 
 
     def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
@@ -7182,8 +7247,8 @@ class MapeAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     @property
-    def accuracy(self) -> float:
-        return (self._rss / self._totalCount) * 100 if self._totalCount > 0 else 0.0;
+    def accuracy(self) -> INetAccuracyInfo:
+        return FloatNetAccuracyInfo(self, (self._rss / self._totalCount) * 100 if self._totalCount > 0 else 0.0);
 
 
     def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
@@ -7226,8 +7291,8 @@ class ClassifierAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     @property
-    def accuracy(self) -> float:
-        return self._rightCount / self._totalCount if self._totalCount > 0 else 0.0;
+    def accuracy(self) -> INetAccuracyInfo:
+        return FloatNetAccuracyInfo(self, self._rightCount / self._totalCount if self._totalCount > 0 else 0.0);
 
 
     def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
@@ -7271,8 +7336,8 @@ class PerplexityAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     @property
-    def accuracy(self) -> float:
-        return self._perplexity;
+    def accuracy(self) -> INetAccuracyInfo:
+        return FloatNetAccuracyInfo(self, self._perplexity);
 
 
     def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
@@ -7308,8 +7373,8 @@ class TrendAccuracyEvaluator(INetAccuracyEvaluator):
 
 
     @property
-    def accuracy(self) -> float:
-        return (self._rightCount / self._totalCount) if self._totalCount > 0 else 0.0;
+    def accuracy(self) -> INetAccuracyInfo:
+        return FloatNetAccuracyInfo(self, (self._rightCount / self._totalCount) if self._totalCount > 0 else 0.0);
 
 
     def fromLoss(self, lossValues : Optional[List[float]] = None) -> bool:
@@ -7356,7 +7421,7 @@ class OptimalAccuracyNetFiltMonitor(INetFitMonitor):
     def epochStep(self, epoch: int, checkpointInfo: NetFitCheckpointInfo, learningRate: float, fitResult: INetFitResult) -> bool:
         if self._checkOptimal:
             if len(fitResult.testEpochAccuracy) > 0:
-                currentAccuracy = fitResult.testEpochAccuracy[-1];
+                currentAccuracy = fitResult.testEpochAccuracy[-1].value;
 
                 if self._optimalAccuracy is None or fitResult.accuracyHigh and self._optimalAccuracy < currentAccuracy or not fitResult.accuracyHigh and self._optimalAccuracy > currentAccuracy:
                     self._optimalAccuracy = currentAccuracy;
@@ -7372,12 +7437,13 @@ class OptimalAccuracyNetFiltMonitor(INetFitMonitor):
 
 
 class PatienceNetFiltMonitor(OptimalAccuracyNetFiltMonitor):
-    def __init__(self, patienceNum : int = 5, minDelta : float = 0, targetType : EarlyStoppingTargetType = EarlyStoppingTargetType.TestAccuracy, checkOptimal : bool = True):
+    def __init__(self, patienceNum : int = 5, minDelta : float = 0, targetType : EarlyStoppingTargetType = EarlyStoppingTargetType.TestAccuracy, accuracyValueSelector : Optional[Callable[[INetAccuracyInfo], Tuple[bool, float]]] = None, checkOptimal : bool = True):
         super().__init__(checkOptimal = checkOptimal);
 
         self._patienceNum = max(1, int(patienceNum));
         self._minDelta = max(0, float(minDelta));
         self._targetType = targetType;
+        self._accuracyValueSelector : Callable[[INetAccuracyInfo], Tuple[bool, float]] = accuracyValueSelector if accuracyValueSelector is not None else (lambda info: (info.high, info.value));
 
         self._bestValue : Optional[float] = None;
         self._count = 0;
@@ -7388,15 +7454,13 @@ class PatienceNetFiltMonitor(OptimalAccuracyNetFiltMonitor):
         currentValue : Optional[float] = None;
 
         if self._targetType == EarlyStoppingTargetType.TestAccuracy and len(fitResult.testEpochAccuracy) > 0:
-            direction = fitResult.accuracyHigh;
-            currentValue = fitResult.testEpochAccuracy[-1];
+            direction, currentValue = self._accuracyValueSelector(fitResult.testEpochAccuracy[-1]);
 
         elif self._targetType == EarlyStoppingTargetType.TestLoss and len(fitResult.testEpochLoss) > 0:
             currentValue = fitResult.testEpochLoss[-1];
 
         elif self._targetType == EarlyStoppingTargetType.TrainingAccuracy and len(fitResult.trainingEpochAccuracy) > 0:
-            direction = fitResult.accuracyHigh;
-            currentValue = fitResult.trainingEpochAccuracy[-1]; 
+            direction, currentValue = self._accuracyValueSelector(fitResult.trainingEpochAccuracy[-1]);
 
         elif self._targetType == EarlyStoppingTargetType.TrainingLoss and len(fitResult.trainingEpochLoss) > 0:
             currentValue = fitResult.trainingEpochLoss[-1];
