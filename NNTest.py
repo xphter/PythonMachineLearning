@@ -2199,10 +2199,13 @@ def unitTest():
     # testMaxoutLayerGradient1();
     # testMaxoutLayerGradient2();
     # testMaxoutLayerGradient3();
+    # testIdentityWithHuberLoss1();
+    # testIdentityWithHuberLoss2();
     # testIdentityWithHuberLossGradient1();
     # testIdentityWithHuberLossGradient2();
     # testIdentityWithHuberLossGradient3();
     # testIdentityWithHuberLossGradient4();
+    # testIdentityWithHuberLossGradient5();
     # testAffineLayer1();
     # testAffineLayer2();
     # testAffineLayerGradient1();
@@ -3901,6 +3904,47 @@ def testMaxoutLayerGradient3():
     print("\n");
 
 
+def testIdentityWithHuberLoss1():
+    N, C, D = 32, 24, 10;
+    X = np.random.randn(N, C, D);
+    T = np.random.randn(N, C, D);
+    
+    m1 = IdentityWithHuberLoss();
+    loss1 = m1.forward(X, T);
+    dX1 = m1.backward()[0];
+
+    X2, T2 = torch.tensor(X, requires_grad = True), torch.tensor(T);
+    m2 = nn.HuberLoss();
+    loss2 = m2(X2, T2);
+    loss2.backward();
+    loss2 = float(loss2.detach().numpy());
+    dX2 = X2.grad.detach().numpy();
+
+    print(f"IdentityWithHuberLoss, value1 {getErrorText('loss error', loss1, loss2)} {getErrorText('dX error', dX1, dX2)}");
+    print("\n");
+
+
+def testIdentityWithHuberLoss2():
+    delta = 0.618;
+    N, C, D = 32, 24, 10;
+    X = np.random.randn(N, C, D);
+    T = np.random.randn(N, C, D);
+    
+    m1 = IdentityWithHuberLoss(delta = delta);
+    loss1 = m1.forward(X, T);
+    dX1 = m1.backward()[0];
+
+    X2, T2 = torch.tensor(X, requires_grad = True), torch.tensor(T);
+    m2 = nn.HuberLoss(delta = delta);
+    loss2 = m2(X2, T2);
+    loss2.backward();
+    loss2 = float(loss2.detach().numpy());
+    dX2 = X2.grad.detach().numpy();
+
+    print(f"IdentityWithHuberLoss, value2 {getErrorText('loss error', loss1, loss2)} {getErrorText('dX error', dX1, dX2)}");
+    print("\n");
+
+
 def testIdentityWithHuberLossGradient1():
     N = 32;
     X = np.random.randn(N);
@@ -3947,6 +3991,19 @@ def testIdentityWithHuberLossGradient4():
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, W, T), X);
     print(f"IdentityWithHuberLoss, numericGradient4 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testIdentityWithHuberLossGradient5():
+    N, C, D = 32, 24, 10;
+    X = np.random.randn(N, C, D);
+    W = np.fabs(np.random.randn(N, C, D));
+    T = np.random.randn(N, C, D);
+    m = IdentityWithHuberLoss(delta = 0.618);
+    loss = m.forward(X, W, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, W, T), X);
+    print(f"IdentityWithHuberLoss, numericGradient5 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 
