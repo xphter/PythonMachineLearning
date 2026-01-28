@@ -2206,6 +2206,11 @@ def unitTest():
     # testIdentityWithHuberLossGradient3();
     # testIdentityWithHuberLossGradient4();
     # testIdentityWithHuberLossGradient5();
+    # testIdentityWithLogCoshLoss1();
+    # testIdentityWithLogCoshLoss2();
+    # testIdentityWithLogCoshLossGradient1();
+    # testIdentityWithLogCoshLossGradient2();
+    # testIdentityWithLogCoshLossGradient3();
     # testAffineLayer1();
     # testAffineLayer2();
     # testAffineLayerGradient1();
@@ -4004,6 +4009,82 @@ def testIdentityWithHuberLossGradient5():
     dX1 = m.backward()[0];
     dXN = numericGradient(lambda x: m.forward(x, W, T), X);
     print(f"IdentityWithHuberLoss, numericGradient5 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testIdentityWithLogCoshLoss1():
+    N, C, D = 32, 24, 10;
+    X = np.random.randn(N, C, D);
+    T = np.random.randn(N, C, D);
+    
+    m1 = IdentityWithLogCoshLoss();
+    loss1 = m1.forward(X, T);
+    dX1 = m1.backward()[0];
+
+    X2, T2 = torch.tensor(X, requires_grad = True), torch.tensor(T);
+    loss2 = torch.sum(torch.log(torch.cosh(X2 - T2))) / T2.numel();
+    loss2.backward();
+    loss2 = float(loss2.detach().numpy());
+    dX2 = X2.grad.detach().numpy();
+
+    print(f"IdentityWithLogCoshLoss, value1 {getErrorText('loss error', loss1, loss2)} {getErrorText('dX error', dX1, dX2)}");
+    print("\n");
+
+
+def testIdentityWithLogCoshLoss2():
+    N, C, D = 32, 24, 10;
+    X = np.random.randn(N, C, D);
+    T = np.random.randn(N, C, D);
+    W = np.fabs(np.random.randn(N, C, D));
+    
+    m1 = IdentityWithLogCoshLoss();
+    loss1 = m1.forward(X, W, T);
+    dX1 = m1.backward()[0];
+
+    X2, W2, T2 = torch.tensor(X, requires_grad = True), torch.tensor(W), torch.tensor(T);
+    loss2 = torch.sum(W2 * torch.log(torch.cosh(X2 - T2))) / torch.sum(W2);
+    loss2.backward();
+    loss2 = float(loss2.detach().numpy());
+    dX2 = X2.grad.detach().numpy();
+
+    print(f"IdentityWithLogCoshLoss, value2 {getErrorText('loss error', loss1, loss2)} {getErrorText('dX error', dX1, dX2)}");
+    print("\n");
+
+
+def testIdentityWithLogCoshLossGradient1():
+    N = 32;
+    X = np.random.randn(N);
+    T = np.random.randn(N);
+    m = IdentityWithLogCoshLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"IdentityWithLogCoshLoss, numericGradient1 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testIdentityWithLogCoshLossGradient2():
+    N, D = 32, 24;
+    X = np.random.randn(N, D);
+    T = np.random.randn(N, D);
+    m = IdentityWithLogCoshLoss();
+    loss = m.forward(X, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, T), X);
+    print(f"IdentityWithLogCoshLoss, numericGradient2 {getErrorText('dX error', dX1, dXN)}");
+    print("\n");
+
+
+def testIdentityWithLogCoshLossGradient3():
+    N, C, D = 32, 24, 10;
+    X = np.random.randn(N, C, D);
+    W = np.fabs(np.random.randn(N, C, D));
+    T = np.random.randn(N, C, D);
+    m = IdentityWithLogCoshLoss();
+    loss = m.forward(X, W, T);
+    dX1 = m.backward()[0];
+    dXN = numericGradient(lambda x: m.forward(x, W, T), X);
+    print(f"IdentityWithLogCoshLoss, numericGradient3 {getErrorText('dX error', dX1, dXN)}");
     print("\n");
 
 

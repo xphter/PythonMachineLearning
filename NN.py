@@ -4589,7 +4589,7 @@ class CrossEntropyLoss(NetLossBase):
 
     @property
     def name(self) -> str:
-        return "Cross Entropy Loss";
+        return "CrossEntropyLoss";
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -4620,7 +4620,7 @@ class SoftmaxWithCrossEntropyLoss(NetLossBase):
 
     @property
     def name(self) -> str:
-        return "Cross Entropy Loss";
+        return "CrossEntropyLoss";
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -4652,7 +4652,7 @@ class SoftmaxWithCrossEntropy1DLoss(NetLossBase):
 
     @property
     def name(self) -> str:
-        return "Cross Entropy Loss";
+        return "CrossEntropyLoss";
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -4710,7 +4710,7 @@ class SigmoidWithCrossEntropyLoss(NetLossBase):
 
     @property
     def name(self) -> str:
-        return "Cross Entropy Loss";
+        return "CrossEntropyLoss";
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -4857,7 +4857,7 @@ class IdentityWithHuberLoss(NetLossBase):
 
     @property
     def name(self) -> str:
-        return "Huber Loss";
+        return "HuberLoss";
 
 
     def forward(self, *data: np.ndarray) -> float:
@@ -4879,6 +4879,41 @@ class IdentityWithHuberLoss(NetLossBase):
             dY *= self._W / float(np.sum(self._W));
         else:
             dY /= self._T.size;
+
+        return dY, ;
+
+
+class IdentityWithLogCoshLoss(NetLossBase):
+    def __init__(self):
+        super().__init__();
+
+        self._Y = np.empty(0);
+        self._T = np.empty(0);
+        self._W = np.empty(0);
+    
+
+    @property
+    def name(self) -> str:
+        return "LogCoshLoss";
+
+
+    def forward(self, *data: np.ndarray) -> float:
+        if len(data) > 2:
+            self._Y, self._W, self._T = data;
+        else:
+            self._Y, self._T = data; # type: ignore
+            self._W = None;
+
+        self._loss = logCoshError(self._Y, self._T, W = self._W);
+
+        return self._loss;
+
+
+    def backward(self) -> Tuple[np.ndarray, ...]:
+        if self._W is not None:
+            dY = self._W * np.tanh(self._Y - self._T) / np.sum(self._W);
+        else:
+            dY = np.tanh(self._Y - self._T) / self._T.size;
 
         return dY, ;
 
