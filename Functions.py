@@ -231,6 +231,17 @@ def meanAbsolutePercentError(Y : np.ndarray, T : np.ndarray, W : Optional[np.nda
         return float(np.sum(np.fabs((T - Y) / T))) / T.size;
 
 
+# W is a weight array, the shape is as same as Y
+def logCoshError(Y : np.ndarray, T : np.ndarray, W : Optional[np.ndarray] = None):
+    if Y.shape != T.shape:
+        raise ValueError("the shapes is not same.");
+    
+    if W is not None:
+        return float(np.sum(W * np.log(np.cosh(Y - T)))) / float(np.sum(W));
+    else:
+        return float(np.sum(np.log(np.cosh(Y - T)))) / T.size;
+
+
 # Y and T has the same shape
 # M is a 0-1 or True-False mask array represents whether each samples in Y are valid
 def crossEntropyError(Y : np.ndarray, T : np.ndarray, M : Optional[np.ndarray] = None, reductionType : LossReductionType = LossReductionType.Mean, epsilon : float = 1e-8) -> Union[float, np.ndarray]:
