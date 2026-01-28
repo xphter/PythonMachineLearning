@@ -6965,28 +6965,50 @@ class GeneratorDataIterator(IDataIterator):
         return self._epochSize;
 
 
+@enum.unique
+class LastShortBatchMethod(enum.IntEnum):
+    Discard = 0x0000;
+    Single = 0x0001;
+    Merge = 0x0002;
+
+
 class SequentialDataIterator(IDataIterator):
-    def __init__(self, data : List[np.ndarray], batchSize : int = 2 ** 8, shuffle : bool = True):
-        self._step = 0;
+    def __init__(self, data : List[np.ndarray], batchSize : int = 2 ** 8, shuffle : bool = True, lastBatchMethod : LastShortBatchMethod = LastShortBatchMethod.Single, maxRandomOffset : Optional[int] = None, shuffleBatch : bool = False):
         self._data = data;
         self._length = len(data[0]);
         self._batchSize = batchSize;
         self._totalIterations = self._length // self._batchSize + int(self._length % self._batchSize > 0);
         self._shuffle = shuffle;
+        self._lastBatchMethod = lastBatchMethod;
+        self._maxRandomOffset = maxRandomOffset;
+        self._shuffleBatch = shuffleBatch;
         self._index = np.arange(self._length);
 
 
     def _iterate(self):
-        while self._step * self._batchSize < self._length:
-            startIndex = self._step * self._batchSize;
-            index = self._index[startIndex: startIndex + self._batchSize];
-            self._step += 1;
+        intervals : List[np.ndarray] = [];
+        offset = int(np.random.randint(0, self._maxRandomOffset + 1)) if self._maxRandomOffset is not None else 0;
 
+        for i in range(offset, self._length, self._batchSize):
+            j = i + self._batchSize;
+            segment = self._index[i: j];
+
+            if j <= self._length:
+                intervals.append(segment);
+            else:
+                if self._lastBatchMethod == LastShortBatchMethod.Single:
+                    intervals.append(segment);
+                elif self._lastBatchMethod == LastShortBatchMethod.Merge:
+                    intervals[-1] = np.concatenate((intervals[-1], segment), axis = 0);
+        
+        if self._shuffleBatch:
+            np.random.shuffle(intervals);
+        
+        for index in intervals:
             yield tuple([d[index] for d in self._data]);
 
 
     def __iter__(self):
-        self._step = 0;
         if self._shuffle:
             np.random.shuffle(self._index);
 
