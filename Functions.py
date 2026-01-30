@@ -310,18 +310,26 @@ def logitsCrossEntropyError(Y : np.ndarray, T : np.ndarray) -> float:
     return float(np.sum(Y * (1 - T) + np.log(1 + np.exp(-Y)))) / lengthExceptLastDimension(T);
 
 
-def huberError(Y : np.ndarray, T : np.ndarray, delta : Union[float, np.ndarray] = 1.0, W : Optional[np.ndarray] = None) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
+def huberError(Y : np.ndarray, T : np.ndarray, delta : Union[float, np.ndarray] = 1.0, epsilon : Union[float, np.ndarray] = 0.0, W : Optional[np.ndarray] = None) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
     if Y.shape != T.shape:
         raise ValueError("the shapes is not same.");
 
     delta = np.abs(delta).astype(Y.dtype);
-    ML, MH = Y < T - delta, Y > T + delta;
-    MM = np.logical_and(~ML, ~MH);
+    epsilon = np.abs(epsilon).astype(Y.dtype);
+
+    ML, MH = Y < T - (delta + epsilon), Y > T + (delta + epsilon);
+    if epsilon > 0:
+        MM = np.logical_and(np.logical_and(~ML, ~MH), np.fabs(Y - T) > epsilon);
+    else:
+        MM = np.logical_and(~ML, ~MH);
 
     b = delta * delta / 2;
-    EL = delta * (T - Y) - b;
-    EM = np.square(Y - T) / 2;
-    EH = delta * (Y - T) - b;
+    EL = delta * (T - Y - epsilon) - b;
+    if epsilon > 0:
+        EM = np.square(np.fabs(Y - T) - epsilon) / 2;
+    else:
+        EM = np.square(Y - T) / 2;
+    EH = delta * (Y - T - epsilon) - b;
     E = ML * EL + MM * EM + MH * EH;
 
     if W is not None:

@@ -4845,10 +4845,11 @@ class IdentityWithMeanAbsolutePercentLoss(NetLossBase):
 
 
 class IdentityWithHuberLoss(NetLossBase):
-    def __init__(self, delta : float = 1.0):
+    def __init__(self, delta : float = 1.0, epsilon : float = 0.0):
         super().__init__();
 
         self._delta = np.array(max(0.0, float(delta)), dtype = defaultDType);
+        self._epsilon = np.array(max(0.0, float(epsilon)), dtype = defaultDType);
         self._Y, self._T = np.empty(0), np.empty(0);
         self._W = np.empty(0);
 
@@ -4867,16 +4868,21 @@ class IdentityWithHuberLoss(NetLossBase):
             self._Y, self._T = data; # type: ignore
             self._W = None;
 
-        self._loss, self._ML, self._MM, self._MH = huberError(self._Y, self._T, self._delta, W = self._W);
+        self._loss, self._ML, self._MM, self._MH = huberError(self._Y, self._T, delta = self._delta, epsilon = self._epsilon, W = self._W);
 
         return self._loss;
 
 
     def backward(self) -> Tuple[np.ndarray, ...]:
-        dY = self._ML * (-self._delta) + self._MM * (self._Y - self._T) + self._MH * self._delta;
+        error = self._Y - self._T;
+
+        if self._epsilon > 0:
+            dY = self._ML * (-self._delta) + self._MM * (error - np.sign(error) * self._epsilon) + self._MH * self._delta;
+        else:
+            dY = self._ML * (-self._delta) + self._MM * error + self._MH * self._delta;
 
         if self._W is not None:
-            dY *= self._W / float(np.sum(self._W));
+            dY *= self._W / np.sum(self._W);
         else:
             dY /= self._T.size;
 
