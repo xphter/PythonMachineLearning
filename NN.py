@@ -5039,6 +5039,29 @@ class IdentityWithPearsonCorrLoss(NetLossBase):
         return dY, ;
 
 
+class AggregateNetParamHandler(INetParamHandler):
+    def __init__(self, *handlers : INetParamHandler):
+        self._handlers = handlers;
+    
+
+    def __repr__(self) -> str:
+        return super().__str__();
+    
+
+    def __str__(self) -> str:
+        return " --> ".join([str(h) for h in self._handlers]);
+
+
+    def onPreUpdate(self, param: INetParam, lr: float):
+        for h in self._handlers:
+            h.onPreUpdate(param, lr);
+
+
+    def onPostUpdate(self, param: INetParam, lr: float):
+        for h in self._handlers:
+            h.onPostUpdate(param, lr);
+
+
 class L1Regularization(INetParamHandler):
     def __init__(self, decay : float = 0.01):
         self._decay = max(0.0, decay);
@@ -5137,6 +5160,38 @@ class L2WeightDecay(INetParamHandler):
 
     def onPostUpdate(self, param: INetParam, lr: float):
         pass;
+
+
+class ElasticRegularization(AggregateNetParamHandler):
+    def __init__(self, decay : float = 0.01, l1Ratio : float = 0.5):
+        self._decay = max(0.0, decay);
+        self._l1Ratio = max(0.0, min(1.0, l1Ratio));
+        
+        super().__init__(L1Regularization(decay = self._decay * self._l1Ratio), L2Regularization(decay = self._decay * (1 - self._l1Ratio)));
+    
+
+    def __repr__(self) -> str:
+        return super().__str__();
+    
+
+    def __str__(self) -> str:
+        return f"ElasticRegularization({self._decay}, {self._l1Ratio})";
+
+
+class ElasticWeightDecay(AggregateNetParamHandler):
+    def __init__(self, decay : float = 0.01, l1Ratio : float = 0.5):
+        self._decay = max(0.0, decay);
+        self._l1Ratio = max(0.0, min(1.0, l1Ratio));
+        
+        super().__init__(L1WeightDecay(decay = self._decay * self._l1Ratio), L2WeightDecay(decay = self._decay * (1 - self._l1Ratio)));
+    
+
+    def __repr__(self) -> str:
+        return super().__str__();
+    
+
+    def __str__(self) -> str:
+        return f"ElasticWeightDecay({self._decay}, {self._l1Ratio})";
 
 
 class _ParametersShareInfo:
